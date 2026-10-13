@@ -385,11 +385,13 @@ export async function buildRun(
   attachmentIds?: unknown,
   conversationRunIds?: unknown,
   embed?: { sessionId: string; maxActiveMs: number },
+  runId?: unknown,
 ) {
   if (typeof input !== "string" || !input.trim() || input.length > 20000)
     throw new FlowError(
       "Envie uma entrada de texto com até 20 mil caracteres.",
     );
+  const id = clientRunId(runId);
   const f = await getFlow(flowId);
   if (published && !f.published)
     throw new FlowError(
@@ -413,7 +415,7 @@ export async function buildRun(
   }
   const now = new Date().toISOString();
   const r: Run = {
-    id: randomUUID(),
+    id: id || randomUUID(),
     flowId,
     name: f.name,
     version: 1,
@@ -434,6 +436,13 @@ export async function buildRun(
     updatedAt: now,
   };
   return r;
+}
+/** Idempotency key chosen by the client: a UUID v4, so a retried request names the same run. */
+export const CLIENT_RUN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export function clientRunId(value: unknown) {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string" || !CLIENT_RUN_ID.test(value)) throw new FlowError("Identificador de execução inválido.");
+  return value.toLowerCase();
 }
 export async function prepareRun(...args: Parameters<typeof buildRun>) {
   const run = await buildRun(...args);

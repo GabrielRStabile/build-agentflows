@@ -7,7 +7,8 @@ export async function POST(
 ) {
   return requestApi(req, async () => {
     const b = await body(req);
-      const { run, job } = await enqueueRun((await c.params).id, b.input, false, b.demo === true, b.attachments, b.conversationRunIds);
+      const { run, job, repeated } = await enqueueRun((await c.params).id, b.input, false, b.demo === true, b.attachments, b.conversationRunIds, undefined, b.runId);
+      if (repeated) return Response.json(run, { status: 200 });
       await notifyJob(job.id);
       return Response.json(run, { status: 202 });
 

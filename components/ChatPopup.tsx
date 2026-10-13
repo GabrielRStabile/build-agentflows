@@ -13,7 +13,7 @@ import { ChatEvidence } from "./ChatEvidence";
 import { formatCost, runCost } from "@/lib/token-usage";
 import { queueExplanation, queueLabel } from "@/lib/queue-status";
 import { TraceDetails, TraceRow } from "./TraceDetails";
-import { Icon, request } from "./StudioUI";
+import { Icon, pollRun, request, RequestError } from "./StudioUI";
 const STATUS: Record<Run["status"], string> = {
   running: "Em execução",
   waiting: "Aguardando sua decisão",
@@ -62,7 +62,10 @@ function BotMessage({
         await request<Run>("/api/runs/" + run.id, "POST", { action, decision }),
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Não foi possível continuar.");
+      // The first click may have landed although its response was lost: show the run as it is now.
+      const latest = e instanceof RequestError && e.status === 409 ? await pollRun<Run>(run.id).catch(() => null) : null;
+      if (latest && latest.status !== run.status) onChange(latest);
+      else setError(e instanceof Error ? e.message : "Não foi possível continuar.");
     } finally {
       setBusy(false);
     }

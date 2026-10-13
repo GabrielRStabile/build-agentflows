@@ -290,6 +290,11 @@ export function IconButton({
     </button>
   );
 }
+/** HTTP failures keep their status so callers can tell a gateway outage (retry) from an answer (show). */
+export class RequestError extends Error {
+  status: number;
+  constructor(message: string, status: number) { super(message); this.status = status; }
+}
 export async function request<T>(
   url: string,
   method = "GET",
@@ -303,8 +308,8 @@ export async function request<T>(
   });
   const data = await readJson(r);
   if (!r.ok && data?.code === "plan_limit") announcePlanLimit(data.error || "Você atingiu o limite do beta.", data.upgradeUrl);
-  if (!r.ok) throw new Error(data?.error || unavailableMessage(r.status));
-  if (data === undefined) throw new Error(unavailableMessage(r.status));
+  if (!r.ok) throw new RequestError(data?.error || unavailableMessage(r.status), r.status);
+  if (data === undefined) throw new RequestError(unavailableMessage(r.status), r.status);
   return data as T;
 }
 /** Polls one run; null means "unchanged since `after`" (HTTP 204), so callers keep what they have. */
@@ -312,8 +317,8 @@ export async function pollRun<T extends { updatedAt: string }>(id: string, after
   const r = await fetch("/api/runs/" + encodeURIComponent(id) + (after ? "?after=" + encodeURIComponent(after) : ""));
   if (r.status === 204) return null;
   const data = await readJson(r);
-  if (!r.ok) throw new Error(data?.error || unavailableMessage(r.status));
-  if (data === undefined) throw new Error(unavailableMessage(r.status));
+  if (!r.ok) throw new RequestError(data?.error || unavailableMessage(r.status), r.status);
+  if (data === undefined) throw new RequestError(unavailableMessage(r.status), r.status);
   return data as T;
 }
 // Proxies and gateways answer with plain text ("no available server") when the app is down.

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Database, Sql } from "./saas-db";
 import { currentTenant } from "./tenant-context";
 import { FlowError } from "./flow-store";
-import { buildRun } from "./flow-runtime";
+import { buildRun, clientRunId } from "./flow-runtime";
 import { getTenantRun, persistTenantRun } from "./tenant-flows";
 import type { QueueStatus } from "./queue-status";
 import { settleChannelDelivery } from "./channel-flows";
@@ -32,7 +32,19 @@ export async function insertJob(sql: Sql, job: Pick<Job, "user_id" | "kind" | "r
   return rows[0];
 }
 export async function enqueueRun(...args: Parameters<typeof buildRun>) {
-  const run = await buildRun(...args), { db, user } = currentTenant();
+  const { db, user } = currentTenant();
+  const requested = clientRunId(args[7]);
+  // A retried request (lost response during a deploy or a proxy timeout) must not start a second execution.
+  if (requested) {
+    const existing = await db.query<{ body: Run }>("SELECT body FROM runs WHERE user_id=$1 AND id=$2", [user.id, requested]);
+    if (existing.rows[0]) {
+      if (existing.rows[0].body.flowId !== args[0]) throw new FlowError("Este identificador pertence a outro fluxo.", 409);
+      const job = (await db.query<Job>("SELECT * FROM jobs WHERE user_id=$1 AND kind='run' AND run_id=$2 ORDER BY created_at DESC LIMIT 1", [user.id, requested])).rows[0];
+      if (!job) throw new FlowError("Esta execução já existe e não está na fila.", 409);
+      return { run: existing.rows[0].body, job, repeated: true as const };
+    }
+  }
+  const run = await buildRun(...args);
   run.queued = true;
   const job = await db.transaction(async (sql) => {
     await capacity(sql, user.id);
@@ -42,7 +54,7 @@ export async function enqueueRun(...args: Parameters<typeof buildRun>) {
     for (const item of run.attachments || []) await sql.query("UPDATE attachments SET used=true WHERE user_id=$1 AND id=$2", [user.id, item.id]);
     return insertJob(sql, { user_id: user.id, kind: "run", resource_id: run.id, run_id: run.id, base_id: null, source_id: null });
   });
-  return { run, job };
+  return { run, job, repeated: false as const };
 }
 export async function enqueueResume(id: string, decision: unknown) {
   if (!["yes", "no"].includes(String(decision))) throw new FlowError("Escolha aprovar ou rejeitar.");

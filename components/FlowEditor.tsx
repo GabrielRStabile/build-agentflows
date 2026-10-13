@@ -31,7 +31,7 @@ import {
   outputLabel,
   outputs,
 } from "@/lib/flow-graph";
-import { Icon, IconButton, Modal, pollRun, request, useDismissMenus } from "./StudioUI";
+import { Icon, IconButton, Modal, pollRun, request, RequestError, useDismissMenus } from "./StudioUI";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
 import { NodeDialog } from "./NodeDialog";
 import { ChatPopup } from "./ChatPopup";
@@ -46,6 +46,7 @@ import { ConnectionLine } from "./flow/ConnectionLine";
 import type { Attachment } from "@/lib/attachment-types";
 import { readEditorChat, writeEditorChat } from "@/lib/editor-chat";
 import { queueLabel } from "@/lib/queue-status";
+import { submitRun } from "@/lib/run-submit";
 const nodeTypes = { block: AgentNode };
 const edgeTypes = { agent: AgentEdge };
 const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 2 };
@@ -545,12 +546,18 @@ export function FlowEditor({ id }: { id: string }) {
           })
           .catch(() => {});
       }, 800);
-      let result = await request<Run>("/api/flows/" + saved.id + "/run", "POST", {
+      // The run id is chosen here: a retry after a lost response adopts the same run instead of starting another.
+      const runId = crypto.randomUUID();
+      let result = await submitRun<Run>({
+        post: () => request<Run>("/api/flows/" + saved.id + "/run", "POST", {
           input,
           demo: false,
           attachments: attachments.map((a) => a.id),
           conversationRunIds: session.filter((r) => r.status === "completed" && !r.demo).map((r) => r.id),
-        });
+          runId,
+        }),
+        find: () => pollRun<Run>(runId).catch((e) => { if (e instanceof RequestError && e.status === 404) return null; throw e; }),
+      });
       if (!lifetime.active) return null;
       updateRun(result);
       if (timer) { clearInterval(timer); timer = undefined; }

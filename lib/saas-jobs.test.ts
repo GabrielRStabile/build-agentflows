@@ -254,3 +254,24 @@ test("posição na fila segue a ordem de reivindicação e informa workers ativo
   await runClaimedJob(db, claimed);
   assert.equal((await asA(() => describeRun(first.run.id))).queue, undefined);
 });
+
+test("identificador de execução do cliente: repetição devolve a mesma execução sem nova tarefa ou consumo", async () => {
+  const flow = await asA(create), other = await asB(create);
+  const runId = "7f0a2d3e-5b6c-4d7e-8f90-1a2b3c4d5e6f";
+  const first = await asA(() => enqueueRun(flow.id, "Primeira", false, true, undefined, undefined, undefined, runId));
+  assert.equal(first.run.id, runId); assert.equal(first.repeated, false); assert.ok(first.job);
+  const again = await asA(() => enqueueRun(flow.id, "Primeira", false, true, undefined, undefined, undefined, runId.toUpperCase()));
+  assert.equal(again.repeated, true); assert.equal(again.job.id, first.job.id); assert.equal(again.run.id, runId);
+  assert.equal((await db.query("SELECT count(*)::int n FROM jobs WHERE user_id=$1", [a])).rows[0].n, 1);
+  assert.equal((await db.query("SELECT count(*)::int n FROM runs WHERE user_id=$1", [a])).rows[0].n, 1);
+  // Same id on another flow of the same account is refused; another account never sees it and gets its own run.
+  await assert.rejects(asA(() => enqueueRun(other.id, "Outro fluxo", false, true, undefined, undefined, undefined, runId)), /pertence a outro fluxo/);
+  const mine = await asB(() => enqueueRun(other.id, "De B", false, true, undefined, undefined, undefined, runId));
+  assert.equal(mine.repeated, false); assert.equal(mine.run.id, runId);
+  await assert.rejects(asA(() => enqueueRun(flow.id, "Inválido", false, true, undefined, undefined, undefined, "nao-e-uuid")), /Identificador de execução inválido/);
+  await assert.rejects(asA(() => enqueueRun(flow.id, "v1", false, true, undefined, undefined, undefined, "7f0a2d3e-5b6c-1d7e-8f90-1a2b3c4d5e6f")), /inválido/);
+  // After the run finishes, a late retry still returns the finished run rather than starting over.
+  await runClaimedJob(db, (await claimJob(db, first.job.id))!);
+  const late = await asA(() => enqueueRun(flow.id, "Primeira", false, true, undefined, undefined, undefined, runId));
+  assert.equal(late.repeated, true); assert.equal(late.run.status, "completed");
+});
