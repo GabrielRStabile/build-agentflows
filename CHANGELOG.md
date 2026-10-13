@@ -1,5 +1,16 @@
 # Histórico de versões
 
+## 0.22.0 — 13/10/2026
+
+- Preparação para turmas grandes (150 pessoas testando ao mesmo tempo): análise, tabela de dimensionamento e perfil de ambiente em DEPLOY-COOLIFY.md ("Prática com 150 pessoas"). O Compose parametriza memória, CPUs, PIDs e tempo de parada do worker e do app; cada vaga ChatGPT custa cerca de 40 PIDs, e o limite anterior de 256 bloqueava a sexta execução simultânea.
+- Posição na fila: enquanto a execução aguarda um worker, o chat, o histórico e o bloco Início mostram "Na fila · N execuções à frente", "começa em instantes" ou "aguardando o processador" (nenhum worker ativo), com a explicação de que não é preciso enviar de novo. `GET /api/runs/[id]` devolve `queue` calculado na leitura.
+- Acompanhamento leve: `GET /api/runs/[id]?after=` responde 204 sem corpo quando nada mudou; a espera pelo POST usa o resumo paginado; reabrir o fluxo busca a conversa em uma requisição (`?ids=`); o painel de execuções pede 30 itens; testar sem alteração não repete o salvamento.
+- Envio idempotente: o editor escolhe o identificador da execução (`runId`) e, em erro de rede ou 502/503/504, repete sem criar uma segunda execução; aprovar duas vezes mostra o estado atual em vez de erro.
+- Limite de execução configurável (`LIMITE_EXECUCAO_SEGUNDOS`, padrão 180 s) aplicado ao motor, ao turno do ChatGPT e à drenagem do worker.
+- ChatGPT: o número de conexões por processo acompanha `EXECUCOES_SIMULTANEAS` (antes fixo em 4, abaixo das 6 vagas padrão); dentro de uma tarefa, a sessão espera até 15 s por uma requisição web curta; tempo limite da etapa explicado como tal; limite de uso, sessão expirada, rede e tarefa grande demais explicados em português com o detalhe original.
+- Worker: reivindica no instante do aviso do Redis (BLPOP de 1 s) em vez de esperar o próximo ciclo; gravações de progresso não revalidam credenciais e bases (uma referência removida durante a execução não a derruba); logs JSON `tarefa_iniciada`/`tarefa_concluida` com espera e duração, sem conteúdo do usuário. `GET /api/health` inclui o estado da fila e `workerAlive`.
+- Validação: testes gerais com PGlite, lint e build sem erros; Redis real não disponível nesta máquina (o script `test:redis` cobre a espera bloqueante quando `REDIS_SERVER` estiver definido).
+
 ## 0.21.0 — 13/10/2026
 
 - LLM com modelo de imagem ou vídeo: o campo Instruções vira PROMPT, já preenchido com `{{input}}`; Mensagem (opcional), memória e bases de conhecimento ficam ocultas e o que foi configurado antes de escolher o modelo é ignorado.

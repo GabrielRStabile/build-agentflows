@@ -12,6 +12,7 @@ x-app-environment: &app-environment
   FILA_LIMITE_USUARIO: ${FILA_LIMITE_USUARIO:-100}
   FILA_LIMITE_TOTAL: ${FILA_LIMITE_TOTAL:-2000}
   EXECUCOES_SIMULTANEAS: ${EXECUCOES_SIMULTANEAS:-6}
+  LIMITE_EXECUCAO_SEGUNDOS: ${LIMITE_EXECUCAO_SEGUNDOS:-180}
   POSTGRES_CONEXOES: ${POSTGRES_CONEXOES:-10}
   LIMITE_EXECUCOES_MES: ${LIMITE_EXECUCOES_MES:-1000}
   LIMITE_FLUXOS: ${LIMITE_FLUXOS:-5}
@@ -45,8 +46,9 @@ services:
       timeout: 10s
       start_period: 60s
       retries: 3
-    mem_limit: 1536m
-    cpus: 1.5
+    # Perfil de turma grande: veja "Prática com 150 pessoas" em DEPLOY-COOLIFY.md.
+    mem_limit: ${APP_MEM_LIMIT:-1536m}
+    cpus: ${APP_CPUS:-1.5}
     pids_limit: 256
     stop_grace_period: 60s
 
@@ -73,10 +75,13 @@ services:
       timeout: 10s
       start_period: 60s
       retries: 3
-    mem_limit: 2048m
-    cpus: 2
-    pids_limit: 256
-    stop_grace_period: 210s
+    # Cada execução ChatGPT abre um lançador Node (~8 threads) e o binário Codex (~30 threads):
+    # cerca de 40 PIDs e 100 a 200 MB por vaga. Dimensione os três limites junto com EXECUCOES_SIMULTANEAS
+    # e mantenha stop_grace_period acima de LIMITE_EXECUCAO_SEGUNDOS + 15 s.
+    mem_limit: ${WORKER_MEM_LIMIT:-2048m}
+    cpus: ${WORKER_CPUS:-2}
+    pids_limit: ${WORKER_PIDS_LIMIT:-512}
+    stop_grace_period: ${WORKER_STOP_GRACE:-210s}
 
   postgres:
     image: postgres:17-alpine
@@ -92,8 +97,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    mem_limit: 768m
-    cpus: 1
+    mem_limit: ${POSTGRES_MEM_LIMIT:-768m}
+    cpus: ${POSTGRES_CPUS:-1}
     stop_grace_period: 60s
 
   redis:

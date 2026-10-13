@@ -54,13 +54,106 @@ uma execução interrompida que possa ter produzido efeitos externos.
 
 Limites configuráveis por ambiente (padrão entre parênteses):
 `EXECUCOES_SIMULTANEAS` (6) tarefas simultâneas no total, `FILA_LIMITE_USUARIO`
-(100) pendentes/ativas por conta, `FILA_LIMITE_TOTAL` (2000) no total e
-`POSTGRES_CONEXOES` (10) por processo. Cada conta executa uma tarefa por vez,
-porque a sessão ChatGPT abre um único processo Codex; cada execução simultânea
-consome cerca de 100 a 200 MB do worker, então aumente `mem_limit` junto com
-`EXECUCOES_SIMULTANEAS`. A autorização do worker expira em
-60 segundos, é renovada a cada dez segundos e a tarefa tem prazo de 15 minutos.
-O worker também entrega a outbox Resend e remove registros expirados.
+(100) pendentes/ativas por conta, `FILA_LIMITE_TOTAL` (2000) no total,
+`LIMITE_EXECUCAO_SEGUNDOS` (180, entre 30 e 900) de tempo por execução comum
+(fluxos com modelo de mídia mantêm 10 minutos) e `POSTGRES_CONEXOES` (10) por
+processo. Cada conta executa uma tarefa por vez, porque a sessão ChatGPT abre um
+único processo Codex; cada execução simultânea consome cerca de 100 a 200 MB e
+cerca de 40 PIDs do worker (lançador Node e binário Codex), então aumente
+`WORKER_MEM_LIMIT` e `WORKER_PIDS_LIMIT` junto com `EXECUCOES_SIMULTANEAS`. O
+limite de conexões ChatGPT por processo acompanha `EXECUCOES_SIMULTANEAS`. A
+autorização do worker expira em 60 segundos, é renovada a cada dez segundos e a
+tarefa tem prazo de 15 minutos. O worker também entrega a outbox Resend e remove
+registros expirados.
+
+`GET /api/health` devolve, além de `ok` (banco), `queue` com pendentes, vagas em
+uso, vagas configuradas, workers com heartbeat recente e a espera mais antiga,
+e `workerAlive`. O worker registra em JSON `worker_pronto`, `tarefa_iniciada`
+(`esperaMs` na fila) e `tarefa_concluida` (`duracaoMs`, `ok`), sem conteúdo do
+usuário, para acompanhar a latência da fila nos logs do Coolify.
+
+## Prática com 150 pessoas
+
+Cenário: 150 contas criam um fluxo, salvam e testam com o Agente ao mesmo tempo,
+acompanhando o chat e a fila. Análise feita em 13/10/2026 sobre a versão 0.22.0.
+
+**O que limita a experiência.** O gargalo não é o bloco Início, é a fila: toda
+execução espera uma das `EXECUCOES_SIMULTANEAS` vagas globais, e o canvas mostrava
+Início "Em execução" enquanto a tarefa só aguardava um worker. Com as 6 vagas
+padrão e execuções de ~30 s (uma etapa ChatGPT simples), a capacidade é de
+cerca de 12 execuções por minuto: se 150 pessoas clicarem no mesmo minuto, a
+última espera perto de 12 minutos. A partir da 0.22.0 o chat e o Início mostram a
+posição na fila, mas a capacidade continua sendo a decisão principal.
+
+| Vagas (`EXECUCOES_SIMULTANEAS`) | Capacidade com execuções de ~30 s | Espera máxima com 150 envios simultâneos | Worker: memória / PIDs |
+| --- | --- | --- | --- |
+| 6 (padrão) | ~12 por minuto | ~12 min | 2 GB / 512 |
+| 16 | ~32 por minuto | ~4,5 min | 4 GB / 1024 |
+| 24 (recomendado) | ~48 por minuto | ~3 min | 6 GB / 1536 |
+| 40 | ~80 por minuto | ~2 min | 9 GB / 2048 |
+
+Na prática os envios se espalham por alguns minutos, então 24 vagas atendem a
+turma com esperas de segundos a poucos minutos. Fluxos com ferramentas ou mais de
+uma etapa de IA duram mais; estime 60 s por execução e dobre as vagas se o
+exercício exigir isso.
+
+**Perfil de ambiente para a prática** (variáveis no Coolify; o Compose usa estes
+nomes):
+
+```sh
+EXECUCOES_SIMULTANEAS=24
+LIMITE_EXECUCAO_SEGUNDOS=180
+POSTGRES_CONEXOES=20
+WORKER_MEM_LIMIT=6g
+WORKER_CPUS=4
+WORKER_PIDS_LIMIT=1536
+WORKER_STOP_GRACE=210s
+APP_MEM_LIMIT=2g
+APP_CPUS=3
+POSTGRES_MEM_LIMIT=1g
+```
+
+Medidas de referência: o processo Codex sobe em ~0,3 s em máquina local (1 a 2 s
+em container compartilhado), com ~46 MB de RSS ocioso no binário mais o lançador
+Node; cada vaga ocupa ~40 PIDs, por isso `pids_limit` de 256 bloqueava a sexta
+ou sétima execução simultânea com "Não foi possível iniciar a conexão ChatGPT".
+O host precisa de memória para a soma dos limites mais sistema e Coolify: com o
+perfil acima, reserve 10 GB.
+
+**Carga no web e no banco.** Cada pessoa acompanha a execução a cada 2 s; com
+150 pessoas são ~75 requisições por segundo, cada uma com sessão, limite por
+conta e leitura da execução. Desde a 0.22.0 a leitura responde 204 sem corpo
+quando nada mudou, a espera pelo POST usa o resumo paginado em vez de 100
+execuções completas, reabrir o fluxo busca a conversa em uma requisição e testar
+sem alteração não repete o salvamento. O limite de 120 requisições por minuto
+por conta comporta o acompanhamento (~40 por minuto). Mantenha o `app` com 3 CPUs
+e o PostgreSQL com 1 GB para essa taxa.
+
+**Checklist antes da sessão.**
+
+1. Aplique o perfil acima e faça o deploy com antecedência; não faça deploy
+   durante a prática (o worker drena por `LIMITE_EXECUCAO_SEGUNDOS` + 5 s e o
+   `app` fica indisponível por até 60 s).
+2. Confira `GET /api/health`: `ok: true`, `workerAlive: true`, `queue.slots`
+   igual ao configurado e `queue.queued` zerado.
+3. Peça que cada pessoa conecte o ChatGPT antes do exercício: a conexão é por
+   conta, e uma execução sem ChatGPT conectado é recusada na hora (409) com
+   mensagem clara, sem entrar na fila.
+4. Teste com duas contas: uma execução completa, uma com aprovação e uma
+   cancelada, observando `tarefa_iniciada`/`tarefa_concluida` nos logs do worker.
+5. Durante a prática acompanhe `queue.queued`, `queue.oldestQueuedSeconds` e
+   `queue.workers`. Se `oldestQueuedSeconds` passar de 120 s, aumente as vagas
+   (requer redeploy do worker) ou peça para alternarem os testes.
+6. Se o worker cair, as execuções permanecem na fila e o chat mostra
+   "aguardando o processador"; ao voltar, ele retoma em ordem. Execuções que
+   estavam em andamento terminam como interrompidas, sem repetir efeitos.
+
+**O que o participante vê em caso de problema.** Posição na fila e vagas em uso
+enquanto espera; "Você é o próximo" quando chega a vez; limite de uso da
+assinatura ChatGPT, sessão expirada, rede ou tarefa grande demais explicados em
+português com o detalhe original; tempo limite da etapa descrito como tal (não
+como cancelamento); e, se a resposta do servidor se perder, o editor repete o
+envio sem criar uma segunda execução (identificador escolhido pelo cliente).
 
 Limites do plano beta, por conta: `LIMITE_EXECUCOES_MES` (1000) execuções reais
 por mês civil (horário de Brasília) e `LIMITE_FLUXOS` (5) fluxos. Contas com
