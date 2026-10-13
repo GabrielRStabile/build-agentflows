@@ -3988,6 +3988,8 @@
 .account-usage.exhausted small { color: #c44453; }
 .account-upgrade { margin: 0 0 16px; }
 .account-upgrade h2 { margin: 0 0 4px; }
+.account-upgrade-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-left: auto; flex-shrink: 0; }
+.account-upgrade-actions .studio-button { margin-left: 0; white-space: nowrap; }
 .account-coupon { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .account-coupon code { padding: 6px 10px; border: 1px dashed var(--studio-primary); border-radius: 8px; background: var(--studio-primary-soft); color: var(--studio-ink); font-size: 13px; font-weight: 700; letter-spacing: 0.06em; user-select: all; }
 .account-password { display: grid; gap: 12px; max-width: 420px; }
@@ -4007,7 +4009,8 @@
 @media (max-width: 720px) {
   .account-profile > div { grid-template-columns: 1fr; gap: 2px; }
   .account-upgrade { flex-wrap: wrap; }
-  .account-upgrade .studio-button { margin-left: 0; width: 100%; }
+  .account-upgrade-actions { width: 100%; margin-left: 0; }
+  .account-upgrade-actions .studio-button { flex: 1; min-width: 160px; }
   .plan-limit-actions .studio-button { flex: 1; }
 }
 

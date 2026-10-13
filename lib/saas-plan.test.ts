@@ -6,7 +6,7 @@ import { migrateDatabase } from "./db/migrate";
 import { withTenantJob } from "./tenant-context";
 import { createTenantFlow, deleteTenantFlow } from "./tenant-flows";
 import { enqueueRun } from "./saas-jobs";
-import { accountUsage, AI_ACTION_URL, AI_ACTION_COUPON, PlanLimitError } from "./saas-plan";
+import { accountUsage, AI_ACTION_URL, AI_ACTION_COUPON, AI_ACTION_CHECKOUT_URL, PlanLimitError } from "./saas-plan";
 import { createKnowledgeBase, saveKnowledgeSource, deleteKnowledgeSource } from "./tenant-knowledge";
 import { DEFAULT_SPLITTER } from "./knowledge-types";
 import { accountProfile, changePassword, loginUser } from "./saas-auth";
@@ -125,6 +125,9 @@ test("bases de conhecimento armazenam até o limite em arquivos de até 10 MB ca
     await assert.rejects(asA(() => saveKnowledgeSource(base.id, input, file(10 * 1024 + 1))), /até 10 MB cada/);
     await asA(() => saveKnowledgeSource(base.id, input, [...file(9 * 1024), ...file(9 * 1024)]));
     await assert.rejects(asA(() => saveKnowledgeSource(base.id, input, [...file(9 * 1024), ...file(9 * 1024), ...file(9 * 1024)])), /20 MB/);
-    assert.equal((await accountUsage(db, a)).coupon, AI_ACTION_COUPON);
+    const usage = await accountUsage(db, a);
+    assert.equal(usage.coupon, AI_ACTION_COUPON);
+    assert.equal(usage.checkoutUrl, AI_ACTION_CHECKOUT_URL);
+    assert.equal(new URL(usage.checkoutUrl).searchParams.get("cupom"), AI_ACTION_COUPON);
   } finally { process.env.LIMITE_ARMAZENAMENTO_MB = previousStorage; }
 });

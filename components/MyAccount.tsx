@@ -94,10 +94,13 @@ export function MyAccount() {
               <Icon name="spark" size={23} />
               <div>
                 <h2 id="account-ai-action">Faça parte do AI Action</h2>
-                <p>Tenha execuções mensais e fluxos ilimitados. Use seu cupom exclusivo na inscrição:</p>
+                <p>Tenha execuções mensais e fluxos ilimitados. Seu cupom exclusivo já vai aplicado ao garantir a vaga:</p>
                 <Coupon code={usage.coupon} />
               </div>
-              <a className="studio-button primary" href={usage.upgradeUrl} target="_blank" rel="noopener noreferrer">Faça parte do AI Action</a>
+              <div className="account-upgrade-actions">
+                <a className="studio-button" href={usage.upgradeUrl} target="_blank" rel="noopener noreferrer">Conhecer o programa</a>
+                <a className="studio-button primary" href={usage.checkoutUrl} target="_blank" rel="noopener noreferrer">Garantir minha vaga</a>
+              </div>
             </section>
           )}
           <section className="credential-manager-card account-card" aria-labelledby="account-profile">

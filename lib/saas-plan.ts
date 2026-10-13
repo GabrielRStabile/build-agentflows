@@ -6,6 +6,8 @@ export type Plan = "beta" | "ai_action";
 export const AI_ACTION_URL = "https://pages.startse.com/ai-action";
 /** Exclusive coupon for beta members joining AI Action. */
 export const AI_ACTION_COUPON = "JOURNEY2ACTION";
+/** Checkout with the coupon already applied ("Garantir minha vaga" in Minha conta). */
+export const AI_ACTION_CHECKOUT_URL = "https://checkout.startse.com/ai-action-ed1a26?cupom=" + AI_ACTION_COUPON;
 const positive = (name: string, fallback: number) => { const n = Number(process.env[name]); return Number.isInteger(n) && n > 0 ? n : fallback; };
 /** Limits read per call so deploys can tune them. The AI Action plan has no run or flow limit;
  * knowledge file storage applies to every account. */
@@ -47,7 +49,7 @@ export async function assertFlowCapacity(sql: Sql, owner: string) {
 }
 
 export type AccountUsage = {
-  plan: Plan; month: string; upgradeUrl: string; coupon: string;
+  plan: Plan; month: string; upgradeUrl: string; checkoutUrl: string; coupon: string;
   runs: { used: number; limit: number | null }; flows: { used: number; limit: number | null };
   /** Bytes of files in knowledge bases. */
   storage: { used: number; limit: number };
@@ -58,7 +60,7 @@ export async function accountUsage(sql: Sql, owner: string): Promise<AccountUsag
     (SELECT count(*) FROM flows f WHERE f.user_id=u.id)::int flows FROM users u WHERE u.id=$1`, [owner]);
   if (!rows[0]) throw new FlowError("Conta não encontrada.", 404);
   const { plan, month, runs, flows } = rows[0], limits = planLimits(), beta = plan === "beta";
-  return { plan, month, upgradeUrl: AI_ACTION_URL, coupon: AI_ACTION_COUPON,
+  return { plan, month, upgradeUrl: AI_ACTION_URL, checkoutUrl: AI_ACTION_CHECKOUT_URL, coupon: AI_ACTION_COUPON,
     runs: { used: runs, limit: beta ? limits.runsPerMonth : null }, flows: { used: flows, limit: beta ? limits.flows : null },
     storage: { used: await knowledgeFileBytes(sql, owner), limit: limits.storageMb * 1024 * 1024 } };
 }
