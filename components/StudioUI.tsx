@@ -343,14 +343,17 @@ export function announcePlanLimit(message: string, upgradeUrl = "https://pages.s
 export function unavailableMessage(status: number) {
   return status >= 500 || status === 0 ? "O servidor está indisponível no momento. Tente novamente em instantes." : "Não foi possível concluir.";
 }
+/** Without `title` the dialog has no header: only the close button floats over the body, and `label` names it for assistive technology. */
 export function Modal({
   title,
+  label,
   children,
   onClose,
   wide = false,
   className = "",
 }: {
-  title: ReactNode;
+  title?: ReactNode;
+  label?: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
@@ -370,7 +373,8 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={"studio-modal" + (wide ? " wide" : "") + (className ? " " + className : "")}
+      className={"studio-modal" + (wide ? " wide" : "") + (title === undefined ? " headless" : "") + (className ? " " + className : "")}
+      aria-label={title === undefined ? label : undefined}
       onCancel={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -382,10 +386,16 @@ export function Modal({
         if (e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom) onClose();
       }}
     >
-      <header>
-        {typeof title === "string" ? <h2>{title}</h2> : title}
-        <IconButton icon="close" label="Fechar diálogo" onClick={onClose} />
-      </header>
+      {title === undefined ? (
+        <div className="studio-modal-close">
+          <IconButton icon="close" label="Fechar diálogo" onClick={onClose} />
+        </div>
+      ) : (
+        <header>
+          {typeof title === "string" ? <h2>{title}</h2> : title}
+          <IconButton icon="close" label="Fechar diálogo" onClick={onClose} />
+        </header>
+      )}
       <div className="studio-modal-body">{children}</div>
     </dialog>
   );

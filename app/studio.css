@@ -651,6 +651,22 @@
 .studio-modal-body {
   padding: 24px;
 }
+/* Diálogo sem cabeçalho: só o botão de fechar, sobre o canto do corpo, acompanhando a rolagem. */
+.studio-modal > .studio-modal-close {
+  position: sticky;
+  top: 0;
+  height: 0;
+  z-index: 2;
+}
+.studio-modal > .studio-modal-close .studio-icon-button {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  background: var(--studio-panel);
+}
+.studio-modal.headless .dialog-tabs {
+  padding-right: 48px;
+}
 .studio-modal p {
   color: var(--studio-muted);
   font-size: 12px;
@@ -3290,6 +3306,10 @@
   }
   .studio-modal-body {
     padding: 19px;
+  }
+  .studio-modal > .studio-modal-close .studio-icon-button {
+    top: 13px;
+    right: 13px;
   }
   .studio-modal > header h2 {
     font-size: 15px;

@@ -206,7 +206,7 @@ print(dados["id"], dados["queued"])
           </section>
   );
   return (
-    <Modal title="Implantar Fluxo Agêntico" onClose={onClose} wide>
+    <Modal label="Implantar Fluxo Agêntico" onClose={onClose} wide>
       <div className="dialog-tabs">
         <button className={tab === "embed" ? "active" : ""} onClick={() => setTab("embed")}>Chat no site</button>
         <button className={tab !== "embed" ? "active" : ""} onClick={() => setTab("whatsapp")}>Integrações</button>
