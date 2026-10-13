@@ -351,6 +351,7 @@ export function Modal({
   onClose,
   wide = false,
   className = "",
+  autoFocus = true,
 }: {
   title?: ReactNode;
   label?: string;
@@ -358,21 +359,25 @@ export function Modal({
   onClose: () => void;
   wide?: boolean;
   className?: string;
+  /** false: nenhum campo recebe foco ao abrir (o próprio diálogo fica focado, Esc continua fechando). */
+  autoFocus?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const el = ref.current;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     el?.showModal();
-    el?.querySelector<HTMLElement>("[autofocus], [data-autofocus]")?.focus();
+    if (autoFocus) el?.querySelector<HTMLElement>("[autofocus], [data-autofocus]")?.focus();
+    else el?.focus();
     return () => {
       el?.close();
       if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     };
-  }, []);
+  }, [autoFocus]);
   return (
     <dialog
       ref={ref}
+      tabIndex={-1}
       className={"studio-modal" + (wide ? " wide" : "") + (title === undefined ? " headless" : "") + (className ? " " + className : "")}
       aria-label={title === undefined ? label : undefined}
       onCancel={(e) => {

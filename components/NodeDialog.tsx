@@ -241,6 +241,7 @@ export function NodeDialog({
         </div>
       }
       onClose={saveAndClose}
+      autoFocus={false}
     >
       <div className="node-dialog-type">
         <span style={{ background: NODE_STYLE[k].color }}>
