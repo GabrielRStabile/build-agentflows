@@ -13,15 +13,18 @@ export type WatchOptions<T extends WatchedRun> = {
   pollIntervalMs?: number;
   /** Without any stream event in this time, polling takes over. */
   streamTimeoutMs?: number;
+  /** While polling after a fallback (restart, deploy), the stream is tried again at this interval. */
+  streamRetryMs?: number;
 };
 export const streamUrl = (id: string) => "/api/runs/" + encodeURIComponent(id) + "/events";
 export const watchDone = (run: WatchedRun) => run.status !== "running";
 /** Follows a run until it stops running, calling onUpdate with every new state. Returns the stop function. */
 export function watchRun<T extends WatchedRun>(id: string, after: string | undefined, onUpdate: (run: T) => void, options: WatchOptions<T>) {
-  const { poll, open, pollIntervalMs = 2000, streamTimeoutMs = 5000 } = options;
-  let stopped = false, latest = after, stream: EventSourceLike | undefined, timer: ReturnType<typeof setInterval> | undefined, guard: ReturnType<typeof setTimeout> | undefined;
+  const { poll, open, pollIntervalMs = 2000, streamTimeoutMs = 5000, streamRetryMs = 30000 } = options;
+  let stopped = false, latest = after, stream: EventSourceLike | undefined, timer: ReturnType<typeof setInterval> | undefined, guard: ReturnType<typeof setTimeout> | undefined, retry: ReturnType<typeof setTimeout> | undefined;
   const deliver = (run: T) => { if (stopped) return; latest = run.updatedAt; onUpdate(run); if (watchDone(run)) stop(); };
-  const stop = () => { stopped = true; stream?.close(); stream = undefined; if (timer) clearInterval(timer); if (guard) clearTimeout(guard); };
+  const stopPolling = () => { if (timer) clearInterval(timer); timer = undefined; };
+  const stop = () => { stopped = true; stream?.close(); stream = undefined; stopPolling(); if (guard) clearTimeout(guard); if (retry) clearTimeout(retry); };
   const startPolling = () => {
     if (stopped || timer) return;
     let inFlight = false;
@@ -30,6 +33,8 @@ export function watchRun<T extends WatchedRun>(id: string, after: string | undef
       inFlight = true;
       poll(id, latest).then((run) => { if (run) deliver(run); }).catch(() => {}).finally(() => { inFlight = false; });
     }, pollIntervalMs);
+    // Polling is the safety net, not the destination: the stream is retried while the run keeps going.
+    if (open && !retry) retry = setTimeout(() => { retry = undefined; startStream(); }, streamRetryMs);
   };
   const startStream = () => {
     if (stopped || !open) { startPolling(); return; }
@@ -41,6 +46,7 @@ export function watchRun<T extends WatchedRun>(id: string, after: string | undef
     guard = setTimeout(() => { if (!received) fallback(); }, streamTimeoutMs);
     source.addEventListener("run", (event) => {
       received = true; if (guard) clearTimeout(guard);
+      stopPolling(); // The stream is back; one channel is enough.
       try { deliver(JSON.parse(event.data || "") as T); } catch { /* ignore malformed frame */ }
     });
     source.addEventListener("end", (event) => {

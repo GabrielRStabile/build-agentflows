@@ -134,6 +134,29 @@ alteração não repete o salvamento. O proxy precisa aceitar respostas longas s
 buffering (`X-Accel-Buffering: no`, ping a cada 15 s); o Traefik do Coolify
 atende. Mantenha o `app` com 3 CPUs e o PostgreSQL com 1 GB.
 
+**O que sobrevive a um reinício ou deploy.** Nada do estado fica no stream,
+no Redis ou na memória do web: a fila, as execuções e as aprovações
+pendentes estão no PostgreSQL.
+
+- Execução **na fila** quando o worker reinicia: continua na fila e é
+  reivindicada quando ele volta; o chat mostra "aguardando o processador"
+  enquanto isso.
+- Execução **em andamento** no deploy do worker: o worker drena por
+  `LIMITE_EXECUCAO_SEGUNDOS` + 5 s antes de encerrar; o que passar disso termina
+  como interrompido, com mensagem, sem repetir ações externas.
+- **Envio** durante a indisponibilidade do `app`: o editor repete com o mesmo
+  `runId`; a execução não é duplicada.
+- **Acompanhamento** (stream) quando o `app` reinicia: o navegador cai para o
+  polling, ignora as respostas de erro do proxy e, a cada 30 s, tenta o stream
+  de novo; ao voltar, o polling para. Ao reabrir, o stream envia o estado atual
+  lido do banco, então nenhum aviso perdido nesse intervalo faz falta.
+- **PostgreSQL** reiniciado com app e worker no ar: a conexão `LISTEN` reconecta
+  com tentativas a cada 5 s; enquanto isso cada stream relê a execução a cada
+  10 s, e o worker retoma a fila sozinho. `npm run test:docker` cobre esse
+  cenário e a recriação completa dos containers.
+- **Redis** indisponível: o worker volta à consulta durável no PostgreSQL a
+  cada segundo; nenhum aviso é necessário para a fila andar.
+
 **Checklist antes da sessão.**
 
 1. Aplique o perfil acima e faça o deploy com antecedência; não faça deploy

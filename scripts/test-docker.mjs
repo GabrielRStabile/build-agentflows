@@ -287,6 +287,30 @@ try {
     const { verifyEmbedBrowser } = await import("./test-embed-browser.mjs");
     await verifyEmbedBrowser(origin, fixture);
   }
+  console.log("Docker: restarting PostgreSQL under live app and workers...");
+  await compose("restart", "postgres");
+  await compose("up", "-d", "--no-build", "--wait", "--wait-timeout", "180", "postgres");
+  await inside(common + `
+    const fixture = JSON.parse(await readFile('/app/data/docker-test.json', 'utf8'));
+    // The app's LISTEN connection and the workers reconnect on their own; no notice is required for the stream
+    // to progress (periodic re-read), and the queue in PostgreSQL still drives the run to completion.
+    let queued;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      queued = await request(fixture.tokenA, '/api/flows/' + fixture.flowId + '/run', { input: 'After database restart', demo: true });
+      if (queued.status === 202) break;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    assert.equal(queued.status, 202);
+    const started = Date.now();
+    const response = await fetch('http://127.0.0.1:10000/api/runs/' + queued.body.id + '/events', { headers: { cookie: 'agentflows_session=' + fixture.tokenA } });
+    assert.equal(response.status, 200);
+    const blocks = (await response.text()).split(String.fromCharCode(10, 10)).filter(block => block && !block.startsWith(':'));
+    const frames = blocks.map(block => ({ event: /^event: (.*)$/m.exec(block)[1], data: JSON.parse(/^data: (.*)$/m.exec(block)[1]) }));
+    assert.equal(frames.at(-1).event, 'end'); assert.equal(frames.at(-1).data.reason, 'done');
+    assert.equal(frames.at(-2).data.status, 'completed');
+    assert.ok(Date.now() - started < 60000, 'stream finished after database restart');
+    await db.close();
+  `);
   console.log("Docker: recreating containers while retaining volumes...");
   await compose("down");
   await compose("up", "-d", "--no-build", "--wait", "--wait-timeout", "180");
@@ -322,7 +346,7 @@ try {
   const status = (await compose("ps", "--format", "json")).trim().split("\n").map((line) => JSON.parse(line));
   assert.equal(status.length, 4);
   assert.ok(status.every((service) => service.Health === "healthy"));
-  console.log("Docker passed: authenticated API, private media credentials/images, tenant channels, deduplication, isolation, queue capacity, two workers, restart and volumes.");
+  console.log("Docker passed: authenticated API, private media credentials/images, tenant channels, deduplication, isolation, queue capacity, two workers, push stream, database restart, recreate and volumes.");
 } finally {
   try { await compose("down", "--volumes", "--remove-orphans"); }
   finally { await rm(dir, { recursive: true, force: true }); }

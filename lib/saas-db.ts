@@ -53,7 +53,9 @@ export function saasDatabase() {
         listener = undefined;
         if (closed || !channels.size) return;
         console.error("Conexão de avisos com PostgreSQL interrompida; reconectando.");
-        setTimeout(() => { void ensureListener().catch(() => {}); }, 2000).unref();
+        // Streams keep working meanwhile through their periodic re-read; retry until the database is back.
+        const retry = () => { if (closed || listener || !channels.size) return; ensureListener().catch(() => setTimeout(retry, 5000).unref()); };
+        setTimeout(retry, 2000).unref();
       };
       client.on("error", dropped); client.on("end", dropped);
       await client.connect();

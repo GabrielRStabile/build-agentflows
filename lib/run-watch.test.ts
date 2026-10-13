@@ -64,3 +64,22 @@ test("fim por janela de sessão reabre o stream; sem EventSource usa polling; st
   halt();
   const before = polls; await tick(30); assert.equal(polls, before);
 });
+
+test("depois de cair para polling, o stream é tentado de novo e o polling para quando ele volta", async () => {
+  const sources: FakeSource[] = [];
+  let polls = 0;
+  const seen: string[] = [];
+  const stop = watchRun<Run>("r6", undefined, (run) => seen.push(run.updatedAt), { poll: async () => { polls++; return null; }, open: (url) => { const s = new FakeSource(url); sources.push(s); return s; }, pollIntervalMs: 10, streamTimeoutMs: 1000, streamRetryMs: 40 });
+  sources[0].emit("error"); // the app restarted: the first stream dies
+  await tick(25);
+  assert.ok(polls >= 1, "polling took over");
+  await tick(40);
+  assert.equal(sources.length, 2, "stream retried after the interval");
+  const pollsBefore = polls;
+  sources[1].emit("run", { id: "r6", status: "running", updatedAt: "t1" });
+  await tick(40);
+  assert.deepEqual(seen, ["t1"]);
+  assert.equal(polls, pollsBefore, "polling stopped once the stream delivered");
+  stop();
+  assert.equal(sources[1].closed, true);
+});
