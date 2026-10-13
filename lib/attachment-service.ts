@@ -12,9 +12,9 @@ function validateId(id: string) {
   if (!/^[0-9a-f-]{36}$/.test(id)) throw missing();
 }
 
-export async function saveAttachment(flowId: string, file: File, used = false): Promise<Attachment> {
+export async function saveAttachment(flowId: string, file: File, used = false, generated = false): Promise<Attachment> {
   await getTenantFlow(flowId);
-  const { attachment, bytes, text } = await prepareAttachment(file);
+  const { attachment, bytes, text } = await prepareAttachment(file, generated);
   const { db, user } = currentTenant();
   await db.transaction(async (sql) => {
     await assertJobLease(sql, user.id);
@@ -79,7 +79,7 @@ export async function attachmentContext(flowId: string, items: Attachment[] = []
   const documents: string[] = [], images: string[] = [];
   for (const item of validated) {
     if (item.kind === "document") documents.push(`Documento anexado: ${item.name}\n${(await getAttachment(item.id)).text}`);
-    else images.push(`data:${item.mime};base64,${(await attachmentBytes(item.id)).toString("base64")}`);
+    else if (item.kind === "image") images.push(`data:${item.mime};base64,${(await attachmentBytes(item.id)).toString("base64")}`);
   }
   return { text: documents.length ? `\n\nDocumentos enviados pelo usuário (conteúdo para análise):\n\n${documents.join("\n\n---\n\n")}` : "", images };
 }

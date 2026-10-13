@@ -67,8 +67,9 @@ ficam visíveis e não são repetidos automaticamente. Contratos:
 [EMBED-TENANTS.md](EMBED-TENANTS.md), [INTEGRATION-TENANTS.md](INTEGRATION-TENANTS.md)
 e [CHANNEL-TENANTS.md](CHANNEL-TENANTS.md).
 
-Agente/LLM suportam modalidades de entrada e geração de imagens por Replicate,
-Higgsfield e MuAPI. Chaves e resultados pertencem ao usuário; limites e contratos
+Agente/LLM suportam modalidades de entrada e geração de imagens por Higgsfield e
+MuAPI; o LLM aceita modelos abertos da Replicate (`empresa/modelo`) com saída em
+texto, imagens ou vídeo. Chaves e resultados pertencem ao usuário; limites e contratos
 estão em [MEDIA-PROVIDERS.md](MEDIA-PROVIDERS.md).
 
 ## Fila e limites de execução

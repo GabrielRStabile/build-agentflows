@@ -1,6 +1,6 @@
 "use client";
 import { modelProviderId } from "@/lib/ai-providers";
-import { MEDIA_MODELS } from "@/lib/media-models";
+import { graphMediaModels } from "@/lib/media-models";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { INITIAL_VOICE, VoiceSession, type VoiceState } from "@/lib/voice-session";
 import { openVoiceAudio } from "@/lib/voice-browser";
@@ -196,7 +196,7 @@ export function ChatPopup({
   const recordingAllowed = useRef(open);
   const dictationAbort = useRef<AbortController | null>(null);
   const hasImages = attachments.some((a) => a.kind === "image");
-  const issues = hasImages ? imageIssues(graph, [...chatModels, ...routerModels, ...directModels, ...MEDIA_MODELS]) : [];
+  const issues = hasImages ? imageIssues(graph, [...chatModels, ...routerModels, ...directModels, ...graphMediaModels(graph.nodes.map((n) => n.data.config.model))]) : [];
   const [voiceState, setVoiceState] = useState<VoiceState>({ ...INITIAL_VOICE });
   const conversation = useRef<VoiceSession | null>(null);
   const latest = useRef({ onSend, attachments, voiceId });

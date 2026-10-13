@@ -546,7 +546,7 @@ test("chamadas de ferramenta registram início, duração e falha mesmo quando o
 test("detalhes somam resumo e resposta sem duplicar notificações cumulativas e preservam falhas", async () => {
   const original = bridge.run;
   const graph = template();
-  Object.assign(graph.nodes[1].data.config, { memoryType: "conversationSummary", prompt: "Analise {{input}}", system: "Instrução registrada" });
+  Object.assign(graph.nodes[1].data.config, { memoryType: "conversationSummary", prompt: "Analise com cuidado", system: "Instrução registrada" });
   let calls = 0;
   bridge.run = async ({ onUsage }) => {
     calls++;
@@ -561,7 +561,7 @@ test("detalhes somam resumo e resposta sem duplicar notificações cumulativas e
     assert.equal(calls, 2);
     assert.deepEqual((await store.getRun(run.id)).trace.find((entry) => entry.nodeId === "analista")!.usage, { input: 40, output: 10, total: 50 });
     assert.match(trace.input!, /Resumo da memória/);
-    assert.match(trace.input!, /Analise Olá/);
+    assert.match(trace.input!, /Analise com cuidado/);
     assert.equal(trace.instructions, "Instrução registrada");
     assert.equal(trace.output, "Resposta final");
     calls = 0;

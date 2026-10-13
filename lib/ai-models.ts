@@ -6,6 +6,8 @@ import { providerFailure } from "./ai-provider-error";
 
 export async function providerModels(provider: AiProvider, credentialId?: string, fetcher = fetch): Promise<AiModel[]> {
   if (provider === "openrouter") return (await listModels()).map(m => ({ ...m, id: `openrouter:${m.id}`, name: m.nome }));
+  // Replicate models are typed by name in the LLM block; there is no listed catalogue.
+  if (provider === "replicate") return [];
   const media = MEDIA_MODELS.filter(m => m.provider === provider);
   if (media.length) return media.map(m => ({ ...m, parameters: [] }));
   const p = aiProvider(provider)!;

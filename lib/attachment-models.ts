@@ -5,10 +5,10 @@ import { listModels } from "./openrouter";
 import { imageIssues, reachableAiNodes, type ModelCapability } from "./model-capabilities";
 import type { Graph } from "./flow-types";
 import { FlowError } from "./flow-store";
-import { isMediaModel, MEDIA_MODELS } from "./media-models";
+import { isMediaModel, graphMediaModels } from "./media-models";
 export async function assertImageModels(graph: Graph) {
   const nodes = reachableAiNodes(graph);
-  const models: ModelCapability[] = [...MEDIA_MODELS];
+  const models: ModelCapability[] = graphMediaModels(nodes.map((n) => n.data.config.model));
   try {
     if (nodes.some((n) => modelProviderId(n.data.config.model) === "chatgpt")) models.push(...await chatGPT().models());
     if (nodes.some((n) => n.data.config.model?.startsWith("openrouter:"))) models.push(...(await listModels()).map((m) => ({ id: `openrouter:${m.id}`, name: m.nome, inputModalities: m.inputModalities })));

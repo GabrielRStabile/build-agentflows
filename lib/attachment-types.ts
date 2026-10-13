@@ -1,4 +1,4 @@
-export type Attachment = { id: string; name: string; mime: string; size: number; kind: "image" | "document"; textLength?: number };
+export type Attachment = { id: string; name: string; mime: string; size: number; kind: "image" | "document" | "video"; textLength?: number };
 export const MAX_ATTACHMENTS = 5;
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 20 * 1024 * 1024;

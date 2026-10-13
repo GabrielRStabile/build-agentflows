@@ -20,7 +20,12 @@ export async function uploadForm(req: Request) {
     return await new Response(Buffer.concat(chunks), { headers: { "Content-Type": req.headers.get("content-type") || "" } }).formData();
   } catch { throw new FlowError("Envie o arquivo pelo botão de anexar."); }
 }
-export async function prepareAttachment(file: File) {
+// Generated videos only: uploads never accept them. MP4 has "ftyp" at offset 4; WebM starts with the EBML header.
+export function videoFormat(bytes: Buffer) {
+  if (bytes.subarray(4, 8).toString("latin1") === "ftyp" && bytes.subarray(8, 10).toString("latin1") !== "qt") return "mp4";
+  if (bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return "webm";
+}
+export async function prepareAttachment(file: File, generated = false) {
   if (!file.size || file.size > MAX_FILE_BYTES) throw new FlowError("Escolha um arquivo não vazio de até 10 MB.");
   const name = file.name.split(/[\\/]/).pop()!.replace(/[\u0000-\u001f]/g, "").slice(0, 180) || "anexo";
   const ext = name.split(".").pop()?.toLowerCase();
@@ -28,7 +33,10 @@ export async function prepareAttachment(file: File) {
   let mime: string, text: string | undefined;
   let kind: Attachment["kind"] = "document";
   const imageFormats: Record<string, string> = { png: "png", jpg: "jpeg", jpeg: "jpeg", webp: "webp" };
-  if (ext && imageFormats[ext]) {
+  if (generated && ext && ["mp4", "webm"].includes(ext)) {
+    if (videoFormat(bytes) !== ext) throw new FlowError("O provedor não retornou um vídeo MP4 ou WebM válido.", 502);
+    mime = `video/${ext}`; kind = "video";
+  } else if (ext && imageFormats[ext]) {
     try {
       const image = sharp(bytes, { limitInputPixels: 40_000_000 });
       const metadata = await image.metadata();

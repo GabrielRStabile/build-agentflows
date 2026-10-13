@@ -16,7 +16,7 @@ export function ChatEvidence({ run, onOpenTool }: { run: Run; onOpenTool: (index
   return <>
     <MarkdownContent>{text || (run.status === "running" ? "Pensando…" : "Sem resposta.")}</MarkdownContent>
     {!!run.mediaRequests?.length && <details className="chat-steps">
-      <summary>Solicitações de imagens</summary>
+      <summary>Solicitações de mídia</summary>
       <p>Use o identificador para consultar a geração e a cobrança no painel do provedor.</p>
       <ul>{run.mediaRequests.map((request, index) => <li key={index}>
         {MEDIA_PROVIDERS.find((provider) => provider.id === request.provider)?.name} · {mediaModel(request.model)?.name} · <code>{request.requestId}</code>

@@ -368,8 +368,14 @@ test("fontes bloqueiam rede privada e URLs com credenciais", async () => {
     "172.16.0.1",
     "::1",
     "::ffff:127.0.0.1",
+    "[::ffff:10.0.0.1]",
+    "::ffff:7f00:1",
+    "fd00::1",
   ])
     assert.equal(privateKnowledgeAddress(ip), true, ip);
+  // Public IPv4 must not match the IPv4-mapped IPv6 rule.
+  for (const ip of ["185.199.109.133", "8.8.8.8", "1.1.1.1", "::ffff:8.8.8.8", "2606:4700:4700::1111"])
+    assert.equal(privateKnowledgeAddress(ip), false, ip);
   await assert.rejects(() => knowledgeFetch(url), /público/);
   await assert.rejects(
     () => knowledgeFetch("https://user:password@example.com"),

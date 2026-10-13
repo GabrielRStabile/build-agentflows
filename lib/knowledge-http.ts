@@ -3,7 +3,7 @@ import { isIP, BlockList } from "node:net";
 import { Agent, fetch as request } from "undici";
 import { FlowError } from "./flow-store";
 
-const blocked = new BlockList();
+const blocked = new BlockList(), blockedV6 = new BlockList();
 for (const [ip, prefix] of [
   ["0.0.0.0", 8],
   ["10.0.0.0", 8],
@@ -24,12 +24,14 @@ for (const [ip, prefix] of [
   ["fe80::", 10],
   ["ff00::", 8],
 ] as const)
-  blocked.addSubnet(ip, prefix, "ipv6");
+  blockedV6.addSubnet(ip, prefix, "ipv6");
+// Node's BlockList also matches plain IPv4 against the ::ffff:0:0/96 rule, which would
+// block every public IPv4. Check each family separately; dotted mapped IPv6 uses IPv4 rules.
 export function privateKnowledgeAddress(address: string) {
-  return blocked.check(
-    address.replace(/^\[|\]$/g, ""),
-    address.includes(":") ? "ipv6" : "ipv4",
-  );
+  const value = address.replace(/^\[|\]$/g, "");
+  const mapped = value.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i)?.[1];
+  if (mapped || isIP(value) === 4) return blocked.check(mapped || value, "ipv4");
+  return blockedV6.check(value, "ipv6");
 }
 export class KnowledgeServiceError extends FlowError {
   upstreamStatus: number;

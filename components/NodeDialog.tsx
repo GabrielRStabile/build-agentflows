@@ -284,13 +284,14 @@ export function NodeDialog({
               <>
               <ModelPicker
                 value={c[key] || ""}
+                kind={k}
                 chatModels={models}
                 connected={connected}
                 config={c}
                 onConfigChange={(values) => setDraft(d => ({ ...d, data: { ...d.data, config: { ...d.data.config, ...values } } }))}
                 onConnect={onConnect}
               />
-              {isMediaModel(c.model) && <small>Use as instruções e a mensagem para descrever a imagem. Remova ferramentas e bases deste bloco; elas podem ser usadas em um bloco de texto anterior. A memória aceita Todas as mensagens ou Últimas mensagens, sem resumo.</small>}
+              {isMediaModel(c.model) && <small>Use as instruções e a mensagem para descrever o que será gerado. Remova ferramentas e bases deste bloco; elas podem ser usadas em um bloco de texto anterior. A memória aceita Todas as mensagens ou Últimas mensagens, sem resumo.</small>}
               </>
             ) : key === "operator" || key === "method" ? (
               <select

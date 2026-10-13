@@ -5,10 +5,11 @@ import { AI_PROVIDERS, aiProvider, modelProviderId, aiCredentialProvider, type A
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
 import { ToolSelect } from "./ToolSelect";
 import { ToolCredentialDialog } from "./ToolCredentialDialog";
-import { MEDIA_PROVIDERS, mediaModel, isMediaModel } from "@/lib/media-models";
+import { MEDIA_PROVIDERS, mediaModel, isMediaModel, REPLICATE_PREFIX, replicateModelName } from "@/lib/media-models";
 export type ChatModel = { id: string; name: string; inputModalities?: string[] };
 export type RouterModel = { id: string; nome: string; provedor: string; inputModalities?: string[] };
 const PREFIX = "openrouter:";
+const NEW_CREDENTIAL = "__nova_credencial__";
 // Nome curto de um modelo salvo no bloco, para a pílula do bloco e a lista.
 export const OPENROUTER_AUTO = PREFIX + "openrouter/auto";
 export function modelLabel(model?: string) {
@@ -26,8 +27,8 @@ export function modelProvider(model?: string) {
   if (media) return MEDIA_PROVIDERS.find((provider) => provider.id === media.provider)!.name;
   return aiProvider(modelProviderId(model))?.name || "ChatGPT";
 }
-export function ModelPicker({ value, chatModels, connected, config, onConfigChange, onConnect }: {
-  value: string; chatModels: ChatModel[]; connected: boolean; config: Record<string, string>;
+export function ModelPicker({ value, kind, chatModels, connected, config, onConfigChange, onConnect }: {
+  value: string; kind: string; chatModels: ChatModel[]; connected: boolean; config: Record<string, string>;
   onConfigChange: (values: Record<string, string>) => void; onConnect: () => void;
 }) {
   const provider = modelProviderId(value), metadata = aiProvider(provider);
@@ -45,7 +46,8 @@ export function ModelPicker({ value, chatModels, connected, config, onConfigChan
   const matching = credentials.filter(c => c.provider === aiCredentialProvider(provider));
   const credentialId = config.modelCredentialId || "";
   useEffect(() => {
-    if (provider === "chatgpt") return;
+    // Replicate has no listed catalogue: the LLM block names any owner/model directly.
+    if (provider === "chatgpt" || provider === "replicate") return;
     let alive = true;
     const timer = setTimeout(() => {
       setLoading(true); setError(""); setModels([]);
@@ -59,7 +61,8 @@ export function ModelPicker({ value, chatModels, connected, config, onConfigChan
   }, [provider, credentialId, retry]);
   const selected = models.find(m => m.id === value);
   const selectedCredential = matching.find(c => c.id === credentialId);
-  const catalog = [{ id: "chatgpt", name: "ChatGPT · assinatura" }, ...AI_PROVIDERS.map(p => ({ id: `credential:ai_${p.id}`, name: p.name }))];
+  // Agents call tools in a text loop; Replicate generation models belong to the LLM block. Saved agents keep their choice.
+  const catalog = [{ id: "chatgpt", name: "ChatGPT · assinatura" }, ...AI_PROVIDERS.filter(p => kind !== "agent" || p.id !== "replicate" || provider === "replicate").map(p => ({ id: `credential:ai_${p.id}`, name: p.name }))];
   function saved(c: SavedToolCredential) {
     setCredentials(items => [...items.filter(i => i.id !== c.id), c]); setEditor(null);
     onConfigChange({ modelCredentialId: c.id }); setRetry(n => n + 1);
@@ -86,15 +89,19 @@ export function ModelPicker({ value, chatModels, connected, config, onConfigChan
           </select></label>
         </> : <>
           <label>Credencial<div className="provider-credential-row">
-            <select aria-label="Credencial do modelo" value={credentialId} onChange={e => onConfigChange({ modelCredentialId: e.target.value })}>
+            {/* The last option is an action: it opens the dialog and the controlled value stays unchanged. */}
+            <select aria-label="Credencial do modelo" value={credentialId} onChange={e => e.target.value === NEW_CREDENTIAL ? setEditor("new") : onConfigChange({ modelCredentialId: e.target.value })}>
               <option value="">{matching.length ? "Conexão padrão (fluxos existentes)" : "Selecione ou conecte uma credencial"}</option>
               {matching.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               {credentialId && !selectedCredential && <option value={credentialId}>Credencial indisponível</option>}
+              <option value={NEW_CREDENTIAL}>+ Conectar nova credencial…</option>
             </select>
             {selectedCredential && <IconButton icon="pencil" label="Editar credencial do modelo" onClick={() => setEditor(selectedCredential)} />}
           </div></label>
-          <div className="studio-actions"><button type="button" className="studio-button" onClick={() => setEditor("new")}><Icon name="plus" size={15} />Conectar credencial</button></div>
-          {loading ? <small role="status">Carregando modelos…</small> : <>
+          {provider === "replicate" ? <label>Modelo da Replicate<input aria-label="Modelo da Replicate" placeholder="empresa/modelo" spellCheck={false} autoCapitalize="none" value={replicateModelName(value) || ""}
+              onChange={e => onConfigChange({ model: REPLICATE_PREFIX + e.target.value.trim().toLowerCase(), modelTemperature: "", modelMaxTokens: "" })} />
+            <small>Use o nome exibido na Replicate, como google/nano-banana. O resultado pode ser texto, imagens ou um vídeo, conforme o modelo. <a href="https://replicate.com/explore" target="_blank" rel="noreferrer">Explorar modelos</a></small>
+          </label> : loading ? <small role="status">Carregando modelos…</small> : <>
             <ToolSelect label="Modelo de IA" listLabel="Modelos de IA" value={value} catalog={models} icon={<Icon name="spark" size={18} />} emptyMessage="Nenhum modelo disponível. Conecte uma credencial e tente novamente." missingLabel={modelLabel(value)}
               onChange={model => onConfigChange({ model, modelTemperature: "", modelMaxTokens: "" })} />
             {!!models.length && <small>{models.length} modelos disponíveis{selected?.contextLength ? ` · contexto de ${selected.contextLength.toLocaleString("pt-BR")} tokens` : ""}{selected?.inputModalities.includes("image") ? " · aceita imagens" : ""}</small>}
@@ -102,7 +109,7 @@ export function ModelPicker({ value, chatModels, connected, config, onConfigChan
           {error && <div role="alert"><p className="studio-error">{error}</p><button type="button" className="tool-text-button" onClick={() => setRetry(n => n + 1)}>Tentar novamente</button></div>}
           {selected?.parameters.includes("temperature") && <label>Temperatura<input aria-label="Temperatura" type="number" min="0" max={provider === "anthropic" ? "1" : "2"} step="0.1" placeholder="Padrão do modelo" value={config.modelTemperature || ""} onChange={e => onConfigChange({ modelTemperature: e.target.value })} /></label>}
           {selected?.parameters.includes("max_tokens") && <label>Máximo de tokens de saída<input aria-label="Máximo de tokens de saída" type="number" min="1" max={selected.maxOutputTokens || 1000000} step="1" placeholder="4000" value={config.modelMaxTokens || ""} onChange={e => onConfigChange({ modelMaxTokens: e.target.value })} /></label>}
-          {isMediaModel(value) && <small>Gera imagens com o saldo do fornecedor. {mediaModel(value)?.inputModalities.includes("image") ? "Aceita até 5 referências e 6 MB no total." : "Recebe descrições em texto."}</small>}
+          {isMediaModel(value) && provider !== "replicate" && <small>Gera imagens com o saldo do fornecedor. {mediaModel(value)?.inputModalities.includes("image") ? "Aceita até 5 referências e 6 MB no total." : "Recebe descrições em texto."}</small>}
         </>}
         <a className="tool-text-button" href="/credenciais" target="_blank" rel="noreferrer">Gerenciar todas as credenciais</a>
       </div>}

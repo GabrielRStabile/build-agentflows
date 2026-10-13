@@ -203,3 +203,41 @@ nodeTest("chat conserva o nome entre mensagens e inicia sem histórico após lim
   await send("Nova conversa", []);
   for (const prompt of prompts) assert.doesNotMatch(prompt, /Rafael|Sabe meu nome/);
 });
+
+test("referências nas instruções ou na mensagem não duplicam o conteúdo enviado automaticamente", async () => {
+  const f = await flow();
+  const [, a, b, c] = f.graph.nodes;
+  a.data.config.system = "Atenda o pedido: {{input}}. Repita para conferir: {{ input }}";
+  b.data.config.system = "Revise {{nodes.a}} considerando {{input}}";
+  c.data.config.prompt = "Pedido: {{input}}";
+  await saveFlow(f.id, f);
+  const calls: { system: string; prompt: string }[] = [];
+  bridge.run = async ({ system, prompt }) => { calls.push({ system, prompt }); return ["Rascunho exclusivo", "Revisão exclusiva", "Final"][calls.length - 1]; };
+  const run = await prepareRun(f.id, "Pedido original", false, false);
+  run.conversation = [{ input: "Pergunta passada", output: "Resposta passada" }];
+  const result = await execute(run);
+  assert.equal(result.status, "completed");
+  const count = (call: { system: string; prompt: string }, text: string) => (call.system + "\n" + call.prompt).split(text).length - 1;
+  // A: duas referências escritas pelo usuário; nada é acrescentado como mensagem ou memória.
+  assert.equal(count(calls[0], "Pedido original"), 2);
+  assert.equal(calls[0].prompt.endsWith("Siga as instruções."), true);
+  assert.match(calls[0].prompt, /Pergunta passada/, "conversas anteriores continuam na memória");
+  // B: a saída anterior (mensagem automática) e a entrada já estão nas instruções.
+  assert.equal(count(calls[1], "Rascunho exclusivo"), 1);
+  assert.equal(count(calls[1], "Pedido original"), 1);
+  // C: a entrada citada na mensagem sai do histórico; respostas não citadas continuam.
+  assert.equal(count(calls[2], "Pedido original"), 1);
+  assert.match(calls[2].prompt, /Revisão exclusiva/);
+});
+
+test("aprovação não repete o resultado anterior já citado no texto de revisão", async () => {
+  const created = await createFlow("Aprovação");
+  for (const [text, expected] of [["Revise: {{last}}", "Revise: Pedido"], ["Revise com atenção", "Revise com atenção\n\nPedido"]]) {
+    const nodes = [block("start", "inicio", 0, 0), block("approval", "ok", 0, 0), block("end", "fim", 0, 0), block("end", "recusa", 0, 0)];
+    nodes[1].data.config.prompt = text;
+    await saveFlow(created.id, { ...created, graph: { nodes, edges: [{ id: "e1", source: "inicio", target: "ok" }, { id: "e2", source: "ok", sourceHandle: "yes", target: "fim" }, { id: "e3", source: "ok", sourceHandle: "no", target: "recusa" }] } });
+    const result = await execute(await prepareRun(created.id, "Pedido", false, false));
+    assert.equal(result.status, "waiting");
+    assert.equal(result.trace.at(-1)?.output, expected);
+  }
+});

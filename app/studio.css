@@ -3759,6 +3759,10 @@
 .markdown-content > :first-child { margin-top: 0; }
 .markdown-content > :last-child { margin-bottom: 0; }
 .markdown-content p { margin: 0 0 12px; line-height: inherit; }
+.markdown-media { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 100%; }
+.markdown-media img, .markdown-media video { display: block; max-width: 100%; width: auto; height: auto; max-height: 600px; border-radius: 8px; }
+.markdown-media video { width: 100%; background: #000; }
+.markdown-media-open { font-size: 13px; }
 .markdown-content h1, .markdown-content h2, .markdown-content h3, .markdown-content h4 { margin: 18px 0 10px; line-height: 1.35; }
 .markdown-content h1 { font-size: 1.35em; } .markdown-content h2 { font-size: 1.2em; } .markdown-content h3, .markdown-content h4 { font-size: 1.05em; }
 .markdown-content ul, .markdown-content ol { padding-left: 24px; margin: 8px 0 14px; }

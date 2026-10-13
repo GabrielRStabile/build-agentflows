@@ -113,6 +113,21 @@ export function FlowEditor({ id }: { id: string }) {
   const [voice, setVoice] = useState({ voz: false, ligacao: false });
   const { connection, setConnection } = useChatGPT();
   const aiConnected = !!connection?.account || openrouterConnected;
+  // The open chat covers the right side of the canvas, where the flow usually ends.
+  // Refit into the visible area so the last block (and its completion badge) stays in view.
+  useEffect(() => {
+    if (!chat || expanded) return;
+    const frame = requestAnimationFrame(() => {
+      const canvas = document.querySelector(".react-flow")?.getBoundingClientRect();
+      const panel = document.querySelector(".chat-popup:not([hidden])")?.getBoundingClientRect();
+      if (!canvas || !panel) return;
+      const right = canvas.right - panel.left + 24;
+      // Narrow screens show the chat over the whole canvas; nothing useful would remain.
+      if (canvas.width - right < 320) return;
+      void instance.current?.fitView({ ...FIT_VIEW_OPTIONS, padding: { top: "12%", bottom: "12%", left: "8%", right: `${Math.round(right)}px` }, duration: 200 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [chat, expanded]);
   useEffect(() => {
     const dismiss = (event: Event) => {
       const target = event.target;
