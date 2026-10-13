@@ -8,6 +8,7 @@ import { attachmentContext, resolveAttachments, markAttachmentsUsed } from "./at
 import { assertImageModels } from "./attachment-models";
 import { reachableAiNodes } from "./model-capabilities";
 import { isMediaModel, MEDIA_RUN_MS } from "./media-models";
+import { runBudgetMs } from "./run-limits";
 import { mediaMarkdown, runMedia } from "./media-runtime";
 import { toolRunScope } from "./replicate-tool";
 import { tenantConversationHistory } from "./conversation";
@@ -76,7 +77,7 @@ async function agent(n: Block, r: Run, signal: AbortSignal, details: Partial<Tra
     signal,
     tools: [],
     webSearch: false,
-    timeoutMs: r.embedSessionId ? Math.max(1, (r.maxActiveMs || 180000) - (r.activeMs || 0) - (Date.now() - (r.activeSegmentStartedAt || Date.now()))) : undefined,
+    timeoutMs: r.embedSessionId ? Math.max(1, (r.maxActiveMs || runBudgetMs()) - (r.activeMs || 0) - (Date.now() - (r.activeSegmentStartedAt || Date.now()))) : undefined,
   }));
   const initialAttachments = r.attachments?.length || 0;
   const firstTrace = r.trace.length;
@@ -103,7 +104,7 @@ async function agent(n: Block, r: Run, signal: AbortSignal, details: Partial<Tra
     // Ferramentas escolhidas no agente têm prioridade sobre a busca nativa.
     webSearch: tools.length === 0 && !knowledge.context,
     signal,
-    timeoutMs: r.embedSessionId ? Math.max(1, (r.maxActiveMs || 180000) - (r.activeMs || 0) - (Date.now() - (r.activeSegmentStartedAt || Date.now()))) : undefined,
+    timeoutMs: r.embedSessionId ? Math.max(1, (r.maxActiveMs || runBudgetMs()) - (r.activeMs || 0) - (Date.now() - (r.activeSegmentStartedAt || Date.now()))) : undefined,
     onText: (text) => {
       r.output = text.slice(0, 50000);
       if (Date.now() - lastProgress >= 500) {
@@ -184,7 +185,7 @@ export async function execute(r: Run, externalSignal?: AbortSignal): Promise<Run
   const executionStarted = Date.now();
   r.activeSegmentStartedAt = executionStarted;
   // Flows with media generation get a longer budget; embedded chats keep their configured limit.
-  const limit = r.maxActiveMs || (r.graph.nodes.some((n) => isMediaModel(n.data.config.model)) ? MEDIA_RUN_MS : 180000);
+  const limit = r.maxActiveMs || (r.graph.nodes.some((n) => isMediaModel(n.data.config.model)) ? MEDIA_RUN_MS : runBudgetMs());
   const remaining = limit - (r.embedSessionId ? r.activeMs || 0 : 0);
   const deadline = Date.now() + remaining;
   const controller = new AbortController();

@@ -9,10 +9,13 @@ import { runClaimedJob } from "../lib/saas-worker.ts";
 import { nextJobNotification, closeQueue } from "../lib/saas-queue.ts";
 import { deliverAuthMail } from "../lib/saas-mail.ts";
 import { cleanupAuth } from "../lib/saas-auth.ts";
+import { runBudgetMs } from "../lib/run-limits.ts";
 
-// A deploy stops claiming new jobs but lets active runs finish (runs last up to 180 s by default);
+// A deploy stops claiming new jobs but lets active runs finish (LIMITE_EXECUCAO_SEGUNDOS, 180 s by default);
 // only after DRAIN_MS are they aborted. Keep stop_grace_period above DRAIN_MS + EXIT_MARGIN_MS.
-const DRAIN_MS = 185000, EXIT_MARGIN_MS = 10000;
+const DRAIN_MS = runBudgetMs() + 5000, EXIT_MARGIN_MS = 10000;
+// Operational log lines (JSON, no user content) so queue latency is visible in the host's logs.
+const log = (evento, extra) => console.log(JSON.stringify({ evento, ...extra, em: new Date().toISOString() }));
 const db = saasDatabase(), id = randomUUID(), stop = new AbortController(), drain = new AbortController();
 const active = new Set();
 let mail = Promise.resolve(), sendingMail = false, lastMaintenance = 0;
@@ -21,6 +24,7 @@ for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => {
   setTimeout(() => drain.abort(), DRAIN_MS).unref();
 });
 await migrateDatabase(db);
+log("worker_pronto", { id, vagas: queueLimits().running, limiteExecucaoMs: runBudgetMs(), drenagemMs: DRAIN_MS });
 writeFileSync(path.join(tmpdir(), "agentflows-worker-id"), id, { mode: 0o600 });
 try {
   while (!stop.signal.aborted) {
@@ -41,7 +45,11 @@ try {
       while (active.size < queueLimits().running && !stop.signal.aborted) {
         const job = await claimJob(db, await nextJobNotification() || undefined);
         if (!job) break;
-        const work = runClaimedJob(db, job, drain.signal).catch(() => console.error("Falha ao finalizar job; a recuperação verificará a autorização expirada."))
+        const started = Date.now();
+        log("tarefa_iniciada", { id: job.id, tipo: job.kind, esperaMs: Math.max(0, started - new Date(job.created_at).getTime()), ativas: active.size + 1 });
+        const work = runClaimedJob(db, job, drain.signal)
+          .then((result) => log("tarefa_concluida", { id: job.id, tipo: job.kind, duracaoMs: Date.now() - started, ok: result.ok, ...(result.error ? { erro: result.error.slice(0, 200) } : {}) }))
+          .catch(() => console.error("Falha ao finalizar job; a recuperação verificará a autorização expirada."))
           .finally(() => active.delete(work));
         active.add(work);
       }

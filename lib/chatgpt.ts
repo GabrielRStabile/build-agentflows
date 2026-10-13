@@ -10,6 +10,7 @@ import { tenantId, currentTenant } from "./tenant-context";
 import { AuthError } from "./saas-security";
 import { ChatSessionLease, readChatSession, revokeChatSession } from "./chatgpt-session";
 import { currentJobLease } from "./saas-job-context";
+import { runBudgetMs } from "./run-limits";
 
 import { tokenUsage, type TokenUsage } from "./token-usage";
 import { normalizeUsage } from "./account-usage";
@@ -487,7 +488,7 @@ export class ChatGPTBridge {
     signal,
     onText,
     onUsage,
-    timeoutMs = 180000,
+    timeoutMs = runBudgetMs(),
     webSearch = false,
   }: {
     system: string;

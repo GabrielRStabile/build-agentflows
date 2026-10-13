@@ -9,7 +9,7 @@ import { settleChannelDelivery } from "./channel-flows";
 import type { Run } from "./flow-types";
 import { consumeMonthlyRun } from "./saas-plan";
 
-export type Job = { id: string; user_id: string; kind: "run" | "index" | "extract"; resource_id: string; run_id: string | null; base_id: string | null; source_id: string | null; status: string; lease_token: string | null; error: string | null };
+export type Job = { id: string; user_id: string; kind: "run" | "index" | "extract"; resource_id: string; run_id: string | null; base_id: string | null; source_id: string | null; status: string; lease_token: string | null; error: string | null; created_at?: Date | string; started_at?: Date | string | null };
 export const queueLock = (sql: Sql) => sql.query("SELECT pg_advisory_xact_lock(742193802)");
 const positive = (name: string, fallback: number) => { const n = Number(process.env[name]); return Number.isInteger(n) && n > 0 ? n : fallback; };
 /** Read per call so tests and deploys can tune limits without code changes. Each account still runs one job at a time (ChatGPT session lease). */
@@ -150,6 +150,15 @@ export async function recoverExpiredJobs(db: Database) {
     }
     return rows.length;
   });
+}
+/** Aggregate picture for operators (health endpoint): backlog, slots in use, live workers and the oldest wait. */
+export async function queueStats(sql: Sql) {
+  const { rows } = await sql.query<{ queued: number; running: number; workers: number; oldest: number | null }>(`SELECT
+    (SELECT count(*)::int FROM jobs WHERE status='queued') AS queued,
+    (SELECT count(*)::int FROM jobs WHERE status='running' OR (status='cancelled' AND lease_until IS NOT NULL)) AS running,
+    (SELECT count(*)::int FROM worker_heartbeats WHERE updated_at>now()-interval '45 seconds') AS workers,
+    (SELECT floor(extract(epoch FROM now()-min(created_at)))::int FROM jobs WHERE status='queued') AS oldest`);
+  return { queued: rows[0].queued, running: rows[0].running, slots: queueLimits().running, workers: rows[0].workers, oldestQueuedSeconds: rows[0].oldest ?? 0 };
 }
 /** Position of a queued run, in the worker's claim order, plus whether any worker is alive to claim it. */
 export async function runQueueStatus(sql: Sql, owner: string, runId: string): Promise<QueueStatus | undefined> {

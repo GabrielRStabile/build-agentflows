@@ -275,3 +275,17 @@ test("identificador de execução do cliente: repetição devolve a mesma execu�
   const late = await asA(() => enqueueRun(flow.id, "Primeira", false, true, undefined, undefined, undefined, runId));
   assert.equal(late.repeated, true); assert.equal(late.run.status, "completed");
 });
+
+test("resumo da fila para o operador: pendentes, vagas em uso, workers vivos e espera mais antiga", async () => {
+  const { queueStats } = await import("./saas-jobs");
+  await db.query("DELETE FROM worker_heartbeats");
+  assert.deepEqual(await queueStats(db), { queued: 0, running: 0, slots: queueLimits().running, workers: 0, oldestQueuedSeconds: 0 });
+  const flow = await asA(create), other = await asB(create);
+  const one = await asA(() => enqueueRun(flow.id, "A1", false, true));
+  await asB(() => enqueueRun(other.id, "B1", false, true));
+  await db.query("INSERT INTO worker_heartbeats(id,updated_at) VALUES($1,now()),($2,now()-interval '2 minutes')", [randomUUID(), randomUUID()]);
+  await claimJob(db, one.job.id);
+  const stats = await queueStats(db);
+  assert.equal(stats.queued, 1); assert.equal(stats.running, 1); assert.equal(stats.workers, 1);
+  assert.ok(stats.oldestQueuedSeconds >= 0 && stats.oldestQueuedSeconds < 60);
+});
