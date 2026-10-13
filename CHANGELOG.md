@@ -1,5 +1,13 @@
 # Histórico de versões
 
+## 0.26.0 — 13/10/2026
+
+- Bloco Repetir sem setas de saída: o destino é escolhido pelo nome dentro do bloco (campo "Voltar para", antes do máximo de repetições) e aparece como etiqueta no canvas. Novo campo "Mensagem ao atingir o limite", com referências `{{…}}`, entregue como resultado quando o limite chega sem concluir; em branco, mantém o resultado anterior.
+- Motor: Repetir volta ao destino enquanto há passagens e encerra a execução no limite, como Agente/LLM terminal. A validação exige um destino válido (nem o próprio bloco, nem Início ou Resposta), considera o destino alcançável e aceita Repetir como fim de caminho.
+- Conexões nunca formam ciclo. Fluxos antigos são migrados ao abrir o editor e ao validar: a seta Repetir vira o destino escolhido e a seta Concluir é removida; blocos que vinham depois de Concluir ficam soltos até serem reconectados ou removidos.
+- Gerador de fluxos atualizado para o novo formato (target, limit, limitMessage) e tolerante a setas de loop na resposta.
+- Validação: 361 testes gerais, lint e build sem erros.
+
 ## 0.25.0 — 13/10/2026
 
 - Chat de teste: "Expandir" abre um modal grande centralizado sobre o editor (fundo escurecido, cabeçalho com Limpar conversa, Reduzir e Fechar), em vez de só alargar o painel lateral. Esc e clique no fundo voltam ao painel; rascunho, anexos e conversa por voz são preservados porque o mesmo componente continua montado.
