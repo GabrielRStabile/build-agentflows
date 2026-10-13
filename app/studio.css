@@ -2569,12 +2569,9 @@
   text-underline-offset: 2px;
 }
 .reference-menu {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% - 4px);
+  /* Posição e altura vêm do componente (coordenadas da janela), para não ser cortado pelo diálogo. */
+  position: fixed;
   z-index: 5;
-  max-height: 220px;
   overflow: auto;
   margin: 0;
   padding: 4px;

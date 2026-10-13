@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { referenceSegments } from "@/lib/reference-highlight";
 import { displayReferences, storedReferences, type ReferenceAlias } from "@/lib/reference-display";
 /** alias: forma mostrada no campo no lugar de value (ex.: {{Analista}} para {{nodes.a1}}). */
@@ -71,6 +71,30 @@ export function ReferenceField({
           (shown(r) + " " + r.label).toLowerCase().includes(query.toLowerCase()),
         );
   const current = options.length ? Math.min(active, options.length - 1) : 0;
+  // O menu usa coordenadas da janela: dentro de um diálogo curto (ex.: Resposta), um menu absoluto
+  // seria cortado pela rolagem do próprio diálogo. Abre para cima quando falta espaço abaixo.
+  const menu = useRef<HTMLUListElement | null>(null);
+  const menuOpen = options.length > 0;
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+    const place = () => {
+      const el = ref.current, list = menu.current;
+      if (!el || !list) return;
+      const rect = el.getBoundingClientRect();
+      const below = window.innerHeight - rect.bottom - 12, above = rect.top - 12;
+      const up = below < 160 && above > below;
+      const room = Math.max(96, Math.min(220, up ? above : below));
+      list.style.left = rect.left + "px";
+      list.style.width = rect.width + "px";
+      list.style.maxHeight = room + "px";
+      list.style.top = up ? "auto" : rect.bottom - 4 + "px";
+      list.style.bottom = up ? window.innerHeight - rect.top + 4 + "px" : "auto";
+    };
+    place();
+    window.addEventListener("resize", place);
+    document.addEventListener("scroll", place, true);
+    return () => { window.removeEventListener("resize", place); document.removeEventListener("scroll", place, true); };
+  }, [menuOpen]);
   function detect(text: string, caret: number) {
     replacementEnd.current = null;
     const before = text.slice(0, caret);
@@ -183,8 +207,8 @@ export function ReferenceField({
           {...shared}
         />
       )}
-      {options.length > 0 && (
-        <ul className="reference-menu" role="listbox">
+      {menuOpen && (
+        <ul ref={menu} className="reference-menu" role="listbox">
           {options.map((r, i) => (
             <li
               key={r.value}
