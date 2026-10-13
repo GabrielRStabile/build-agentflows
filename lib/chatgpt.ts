@@ -9,10 +9,35 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { tenantId, currentTenant } from "./tenant-context";
 import { AuthError } from "./saas-security";
 import { ChatSessionLease, readChatSession, revokeChatSession } from "./chatgpt-session";
+import { currentJobLease } from "./saas-job-context";
 
 import { tokenUsage, type TokenUsage } from "./token-usage";
 import { normalizeUsage } from "./account-usage";
 import type { ModelCapability } from "./model-capabilities";
+
+/** Every concurrent run in the worker holds one bridge; the cap must never be below EXECUCOES_SIMULTANEAS. */
+export function maxBridges() {
+  const running = Number(process.env.EXECUCOES_SIMULTANEAS);
+  return Math.max(4, Number.isInteger(running) && running > 0 ? running : 6);
+}
+/** Web requests hold the session for about a second (usage, models); a worker run waits for them instead of failing. */
+const LEASE_RETRY = { request: { attempts: 20, delayMs: 100 }, job: { attempts: 150, delayMs: 100 } };
+export const CHATGPT_TIMEOUT_MESSAGE = "O ChatGPT não respondeu dentro do tempo limite da etapa. Simplifique a tarefa ou tente novamente.";
+/** Provider failures reach the trace in plain language, keeping the original detail for support. */
+export function turnErrorMessage(raw: string | undefined) {
+  const detail = (raw || "").trim();
+  if (!detail) return "O ChatGPT não concluiu a resposta. Tente novamente.";
+  const hint = /context[ _-]?length|too long|maximum.*tokens/i.test(detail)
+    ? "A tarefa ficou grande demais para o modelo. Reduza a mensagem, a memória ou os anexos."
+    : /usage[ _-]?limit|rate[ _-]?limit|too many requests|\b429\b|quota|exceeded/i.test(detail)
+      ? "Sua assinatura ChatGPT atingiu o limite de uso. Aguarde a janela liberar ou escolha outro modelo ou provedor no bloco."
+      : /unauthori[sz]ed|\b401\b|invalid[ _-]?(token|grant)|refresh[ _-]?token|not logged in|login/i.test(detail)
+        ? "A sessão ChatGPT expirou ou foi revogada. Reconecte o ChatGPT em Configurações."
+        : /ECONN|ENOTFOUND|EAI_AGAIN|network|socket|timed? ?out|timeout|unavailable|\b50[234]\b|overloaded/i.test(detail)
+          ? "Não foi possível alcançar o ChatGPT agora. Tente novamente em instantes."
+          : null;
+  return hint ? `${hint} Detalhe: ${detail.slice(0, 200)}` : detail;
+}
 
 type Json = Record<string, unknown>;
 type Message = {
@@ -177,11 +202,12 @@ export class ChatGPTBridge {
     this.ready = (async () => {
       // Metadata requests can briefly hold the lease just as a worker starts.
       // Retry only acquisition, before any native/provider action is dispatched.
+      const retry = currentJobLease() ? LEASE_RETRY.job : LEASE_RETRY.request;
       for (let attempt = 0; ; attempt++) {
         try { this.lease = await ChatSessionLease.acquire(); break; }
         catch (error) {
-          if (!(error instanceof AuthError) || error.status !== 409 || attempt >= 19) throw error;
-          await new Promise(resolve => setTimeout(resolve, 100));
+          if (!(error instanceof AuthError) || error.status !== 409 || attempt >= retry.attempts - 1) throw error;
+          await new Promise(resolve => setTimeout(resolve, retry.delayMs));
         }
       }
       const codexHome = this.lease.directory;
@@ -393,12 +419,7 @@ export class ChatGPTBridge {
       if (result?.status === "completed" && turn.text.trim())
         turn.resolve(turn.text);
       else
-        turn.reject(
-          new Error(
-            ((result?.error as Json)?.message as string) ||
-              "O ChatGPT não concluiu a resposta. Tente novamente.",
-          ),
-        );
+        turn.reject(new Error(turnErrorMessage((result?.error as Json)?.message as string | undefined)));
     }
   }
   private async nativeAccount(): Promise<{
@@ -522,11 +543,13 @@ export class ChatGPTBridge {
     const id = r.thread.id;
     return new Promise<string>((resolve, reject) => {
       const finish = (error?: Error, text?: string) => {
-        signal?.removeEventListener("abort", abort);
+        signal?.removeEventListener("abort", cancel);
         if (error) reject(error);
         else resolve(text!);
       };
-      const abort = () => {
+      // A turn that outlives its budget is interrupted with a message that says so;
+      // a plain abort (cancel, shutdown, step deadline) keeps the cancellation text.
+      const abort = (reason = "Execução cancelada.") => {
         const t = this.turns.get(id);
         if (t) {
           if (t.turnId)
@@ -536,11 +559,11 @@ export class ChatGPTBridge {
             }).catch(() => {});
           clearTimeout(t.timer);
           this.turns.delete(id);
-          finish(new Error("Execução cancelada."));
+          finish(new Error(reason));
         }
       };
       const timer = setTimeout(() => {
-        abort();
+        abort(CHATGPT_TIMEOUT_MESSAGE);
       }, Math.max(1, Math.min(timeoutMs, 3600000)));
       this.turns.set(id, {
         resolve: (text) => finish(undefined, text),
@@ -552,7 +575,8 @@ export class ChatGPTBridge {
         onUsage,
         timer,
       });
-      signal?.addEventListener("abort", abort, { once: true });
+      const cancel = () => abort();
+      signal?.addEventListener("abort", cancel, { once: true });
       if (signal?.aborted) {
         abort();
         return;
@@ -597,9 +621,9 @@ export function chatGPT(): ChatGPTBridge {
   }
   let entry = clients.get(owner);
   if (!entry) {
-    if (clients.size >= 4) {
+    if (clients.size >= maxBridges()) {
       const idle = [...clients].filter(([, value]) => !value.bridge.busy).sort((a, b) => a[1].touched - b[1].touched)[0];
-      if (!idle) throw new Error("Todas as conexões ChatGPT estão ocupadas. Aguarde e tente novamente.");
+      if (!idle) throw new Error("Todas as conexões ChatGPT deste servidor estão ocupadas. Aguarde alguns segundos e tente novamente.");
       idle[1].bridge.close(); clients.delete(idle[0]);
     }
     entry = { bridge: new ChatGPTBridge(), touched: Date.now() };

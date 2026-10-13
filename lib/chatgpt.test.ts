@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createTenantTestContext } from "../scripts/tenant-test-context";
-import { ChatGPTBridge } from "./chatgpt";
+import { ChatGPTBridge, CHATGPT_TIMEOUT_MESSAGE, maxBridges, turnErrorMessage } from "./chatgpt";
 const dir = mkdtempSync(join(tmpdir(), "chatgpt-protocol-"));
 process.env.DATA_DIR = dir;
 let tenant: Awaited<ReturnType<typeof createTenantTestContext>>;
@@ -86,6 +86,28 @@ scenario("sinal de cancelamento interrompe o turno", async () => {
   });
   setTimeout(() => abort.abort(), 50);
   await assert.rejects(() => response, /cancelada/);
+});
+scenario("turno que estoura o tempo da etapa explica o limite, não um cancelamento", async () => {
+  await assert.rejects(() => bridge.run({ system: "", prompt: "wait", timeoutMs: 50 }), new RegExp(CHATGPT_TIMEOUT_MESSAGE.slice(0, 30)));
+});
+test("erros do provedor viram orientação em português e preservam o detalhe", () => {
+  assert.match(turnErrorMessage("usage_limit_reached: weekly cap"), /^Sua assinatura ChatGPT atingiu o limite de uso.*Detalhe: usage_limit_reached/);
+  assert.match(turnErrorMessage("HTTP 429 Too Many Requests"), /limite de uso/);
+  assert.match(turnErrorMessage("401 Unauthorized: refresh token expired"), /Reconecte o ChatGPT/);
+  assert.match(turnErrorMessage("connect ECONNRESET"), /Não foi possível alcançar o ChatGPT/);
+  assert.match(turnErrorMessage("context_length_exceeded"), /grande demais/);
+  assert.equal(turnErrorMessage("Limite atingido"), "Limite atingido");
+  assert.equal(turnErrorMessage(""), "O ChatGPT não concluiu a resposta. Tente novamente.");
+  assert.equal(turnErrorMessage("x".repeat(500)).length, "x".repeat(500).length);
+});
+test("conexões por processo nunca ficam abaixo das execuções simultâneas", () => {
+  const before = process.env.EXECUCOES_SIMULTANEAS;
+  try {
+    delete process.env.EXECUCOES_SIMULTANEAS; assert.equal(maxBridges(), 6);
+    process.env.EXECUCOES_SIMULTANEAS = "2"; assert.equal(maxBridges(), 4);
+    process.env.EXECUCOES_SIMULTANEAS = "24"; assert.equal(maxBridges(), 24);
+    process.env.EXECUCOES_SIMULTANEAS = "abc"; assert.equal(maxBridges(), 6);
+  } finally { if (before === undefined) delete process.env.EXECUCOES_SIMULTANEAS; else process.env.EXECUCOES_SIMULTANEAS = before; }
 });
 
 scenario("imagens chegam ao turno pelo protocolo; modelo sem imagem é recusado", async () => {
