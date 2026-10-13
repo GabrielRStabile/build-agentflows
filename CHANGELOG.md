@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 0.23.0 — 13/10/2026
+
+- Diálogo Implantar sem cabeçalho: apenas o botão de fechar, fixo no canto enquanto o conteúdo rola. O componente Modal passa a aceitar esse modo (título opcional, nome do diálogo por `label` para leitores de tela).
+- Aba "Developer" renomeada para "cURL". Nas abas cURL e Conector MCP, o exemplo (Execute seu fluxo / Conecte seu assistente) vem primeiro e a Chave de acesso fica abaixo.
+- Validação: 355 testes gerais, lint e build sem erros.
+
 ## 0.22.0 — 13/10/2026
 
 - Preparação para turmas grandes (150 pessoas testando ao mesmo tempo): análise, tabela de dimensionamento e perfil de ambiente em DEPLOY-COOLIFY.md ("Prática com 150 pessoas"). O Compose parametriza memória, CPUs, PIDs e tempo de parada do worker e do app; cada vaga ChatGPT custa cerca de 40 PIDs, e o limite anterior de 256 bloqueava a sexta execução simultânea.
