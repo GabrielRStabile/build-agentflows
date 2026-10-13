@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 0.25.0 — 13/10/2026
+
+- Chat de teste: "Expandir" abre um modal grande centralizado sobre o editor (fundo escurecido, cabeçalho com Limpar conversa, Reduzir e Fechar), em vez de só alargar o painel lateral. Esc e clique no fundo voltam ao painel; rascunho, anexos e conversa por voz são preservados porque o mesmo componente continua montado.
+- Diálogos dos blocos: selecionar texto num campo e soltar o mouse fora do diálogo não o fecha mais; só um clique iniciado e concluído no fundo fecha.
+- Validação: 359 testes gerais, lint e build sem erros.
+
 ## 0.24.0 — 13/10/2026
 
 - Referências `{{…}}` coloridas nos campos dos blocos (Instruções, Mensagem, critérios da Condição, Novo valor): roxo quando a referência existe no fluxo e vermelho com sublinhado quando não existe. `state.<variável>` vale como `fluxo.<variável>`, como no motor, que passa a compartilhar a mesma regra de leitura.
