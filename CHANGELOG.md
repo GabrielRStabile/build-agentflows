@@ -1,9 +1,10 @@
 # Histórico de versões
 
-## Não publicado
+## 0.20.0 — 13/10/2026
 
 - Minha conta: convite do AI Action antes do Perfil, com o cupom exclusivo `JOURNEY2ACTION` e botão para copiar.
 - Limite de armazenamento das bases de conhecimento: até 50 MB em arquivos por conta (`LIMITE_ARMAZENAMENTO_MB`), exibido em Limites de uso. Cada arquivo pode ter até 10 MB (até 20 arquivos e 20 MB por envio).
+- Validação: 326 testes gerais (PGlite), build e lint sem erros; Minha conta verificada no navegador em desktop e celular (ordem dos blocos, cópia do cupom e medidor de armazenamento).
 
 ## 0.19.0 — 13/10/2026
 
