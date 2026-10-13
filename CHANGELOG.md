@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.27.1 — 13/10/2026
+
+- O menu de referências `{{…}}` não é mais cortado pelo diálogo em blocos com poucos campos (ex.: Resposta): ele é posicionado em coordenadas da janela, acompanha rolagem e redimensionamento e abre para cima quando falta espaço abaixo.
+
 ## 0.27.0 — 13/10/2026
 
 - Referências a blocos aparecem pelo nome nos campos do editor (`{{Analista}}` em vez de `{{nodes.a1}}`), no autocompletar, no destaque colorido e ao inserir. O fluxo continua gravando o id: renomear o bloco atualiza o campo sozinho, e nomes repetidos entre blocos mantêm o id de cada ocorrência pela posição no texto. Nomes iguais a referências nativas (input, last, fluxo.x…) ou com chaves seguem pelo id.
