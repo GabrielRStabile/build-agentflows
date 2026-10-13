@@ -1,6 +1,6 @@
-# Build Agentflows — v0.18.0
+# Build Agentflows — v0.19.0
 
-Versão 0.18.0: aplicação exclusivamente multi-tenant com PostgreSQL, contas com convite para o beta, fila por usuário com limites configuráveis, novas telas de entrada com logo e animação de conexões, e novo favicon. Versões anteriores incluem acesso à Base de Conhecimento removido da tela Fluxo Agêntico, paginação oculta quando há apenas uma página, badges de referências e ferramentas no chat de teste, múltiplas bases como ferramentas no Agente e LLM, descrição de uso e referências por base, ícones compactos no canvas, modos de limpeza no Record Manager, exclusão de base com confirmação pelo nome, endereço dos embeddings em Opções avançadas, Top K e filtros salvos na base, armazenamento Faiss automático, conexão Postgres por credencial e campos separados, opções de busca/gravação e dimensões/formato dos embeddings OpenAI. Veja a [comparação de recursos e preparação dos serviços](KNOWLEDGE-FLOWISE.md). Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
+Versão 0.19.0: modelos abertos da Replicate no bloco LLM (texto, imagens e vídeo), vídeos de até 10 minutos, mídia com "Abrir em nova aba" no chat, referências sem duplicação e limites do plano beta. Versão 0.18.0: aplicação exclusivamente multi-tenant com PostgreSQL, contas com convite para o beta, fila por usuário com limites configuráveis, novas telas de entrada com logo e animação de conexões, e novo favicon. Versões anteriores incluem acesso à Base de Conhecimento removido da tela Fluxo Agêntico, paginação oculta quando há apenas uma página, badges de referências e ferramentas no chat de teste, múltiplas bases como ferramentas no Agente e LLM, descrição de uso e referências por base, ícones compactos no canvas, modos de limpeza no Record Manager, exclusão de base com confirmação pelo nome, endereço dos embeddings em Opções avançadas, Top K e filtros salvos na base, armazenamento Faiss automático, conexão Postgres por credencial e campos separados, opções de busca/gravação e dimensões/formato dos embeddings OpenAI. Veja a [comparação de recursos e preparação dos serviços](KNOWLEDGE-FLOWISE.md). Consulte o [histórico de versões](CHANGELOG.md). Para publicar no Coolify, consulte [DEPLOY-COOLIFY.md](DEPLOY-COOLIFY.md) e use `docker-compose.coolify.yml`.
 
 Crie fluxos visuais de agentes de IA, teste cada etapa e publique versões que seus sistemas e assistentes podem executar. Aplicação independente da suíte **IA para Executivos**, inspirada na orquestração explícita de [AgentFlow V2 do Flowise](https://docs.flowiseai.com/using-flowise/agentflowv2).
 
@@ -55,9 +55,10 @@ A tela inicial e o menu dão acesso à jornada de fontes, extração, revisão d
 
 ## Stack
 
-Geração de imagens disponível em Agente/LLM com chaves próprias de Replicate,
-Higgsfield e MuAPI. O catálogo inicial, entradas aceitas, resultados privados e
-limitações de cancelamento estão em [MEDIA-PROVIDERS.md](MEDIA-PROVIDERS.md).
+Geração de mídia com chaves próprias: no bloco LLM, qualquer modelo da Replicate
+informado como `empresa/modelo` (texto, imagens ou vídeo, conforme o modelo); em
+Agente/LLM, Higgsfield e MuAPI para imagens. Entradas aceitas, resultados privados
+e limitações de cancelamento estão em [MEDIA-PROVIDERS.md](MEDIA-PROVIDERS.md).
 
 Next.js 16, React 19, TypeScript, Tailwind 4, React Flow, Drizzle e PostgreSQL. Cada usuário tem seu contexto privado; Redis notifica o worker sobre tarefas da fila persistida no PostgreSQL. Não há modo de conta única nem armazenamento SQLite. A arquitetura e a validação estão em [SAAS-PLAN.md](SAAS-PLAN.md). A IA principal usa login ChatGPT pelo Codex App Server oficial; o OpenRouter é configurado por usuário.
 

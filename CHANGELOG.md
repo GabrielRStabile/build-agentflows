@@ -1,11 +1,19 @@
 # Histórico de versões
 
-## Não publicado
+## 0.19.0 — 13/10/2026
 
+- Replicate aberta no bloco LLM: campo `empresa/modelo` no lugar da lista; o schema do modelo define a entrada e o resultado (texto, imagens ou vídeo MP4/WebM). Modelos oficiais rodam pelo nome e os da comunidade pela versão. A Replicate não aparece mais na lista do Agente; agentes salvos continuam funcionando.
+- Fluxos com modelo de mídia têm até 10 minutos de execução, para vídeos de 4 a 5 minutos.
+- Chat e histórico mostram imagens e vídeos gerados com o link "Abrir em nova aba"; anexos respondem a `Range` para tocar e avançar vídeos.
+- Corrigido o bloqueio de endereços: no Node 24 todo IPv4 público era tratado como privado, impedindo o download de resultados de mídia e de fontes da Base de Conhecimento.
+- Referências como `{{input}}`, `{{last}}` e `{{nodes.x}}` nas instruções ou na mensagem não duplicam mais o conteúdo que o motor acrescenta sozinho (mensagem automática, memória e Aprovação).
+- Ao abrir o chat de teste, o canvas se ajusta para o último bloco (Resposta) não ficar coberto pelo painel.
+- Nova credencial de modelo direto na lista de credenciais, sem botão separado.
 - Plano beta com até 1000 execuções reais por mês e 5 fluxos por conta (`LIMITE_EXECUCOES_MES`, `LIMITE_FLUXOS`); contas AI Action são ilimitadas. Uso mensal em `usage_months`, contado na mesma transação que enfileira a execução.
 - Ao atingir um limite, diálogo convida a fazer parte do AI Action; Novo Fluxo Agêntico avisa antes de abrir o editor.
 - Minha conta no menu do nome de usuário: nome, e-mail, forma de acesso, uso do mês e alteração de senha (contas com senha), encerrando as outras sessões.
 - Aviso de conexão do ChatGPT na tela inicial só aparece depois de confirmar que a conta não está conectada.
+- Validação: 325 testes gerais (PGlite), build e lint sem erros; navegador com app, worker, PostgreSQL e Redis temporários e a API da Replicate simulada (vídeo de 4,5 minutos, imagem, nova aba e bloco Resposta visível).
 
 ## 0.18.0 — 08/10/2026
 
