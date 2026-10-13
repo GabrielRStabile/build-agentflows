@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
-import { Pool, type PoolClient } from "pg";
+import { Client, Pool, type PoolClient } from "pg";
 import { drizzle as postgresOrm } from "drizzle-orm/node-postgres";
 import { drizzle as pgliteOrm } from "drizzle-orm/pglite";
 import type { PgliteClient } from "drizzle-orm/pglite";
@@ -22,7 +22,7 @@ export async function createTestDatabase() {
       if (!values && text.trimStart().startsWith("CREATE TABLE ")) { await sql.exec(text); return { rows: [] }; }
       return sql.query(text, values);
     } });
-    const db: Database = { ...adapter(pg), transaction: (fn) => pg.transaction((tx) => fn(adapter(tx))) };
+    const db: Database = { ...adapter(pg), transaction: (fn) => pg.transaction((tx) => fn(adapter(tx))), listen: (channel, handler) => pg.listen(channel, (payload) => handler(payload)) };
     return { db, exec: (text: string) => pg.exec(text), close: () => pg.close() };
   }
   const connection = new URL(url);
@@ -37,6 +37,8 @@ export async function createTestDatabase() {
     const result = await sql.query(text, values);
     return { rows: Array.isArray(result) ? [] : result.rows };
   } });
+  let listener: Client | undefined;
+  const handlers = new Map<string, Set<(payload: string) => void>>();
   const db: Database = { ...adapter(pool), async transaction(fn) {
     const client = await pool.connect();
     try {
@@ -46,8 +48,18 @@ export async function createTestDatabase() {
       return result;
     } catch (error) { await client.query("ROLLBACK"); throw error; }
     finally { client.release(); }
+  }, async listen(channel, handler) {
+    if (!listener) {
+      listener = new Client({ connectionString: connection.toString() });
+      listener.on("notification", (m) => { for (const h of handlers.get(m.channel) || []) h(m.payload || ""); });
+      await listener.connect();
+    }
+    const set = handlers.get(channel) || new Set(); const first = !handlers.has(channel); set.add(handler); handlers.set(channel, set);
+    if (first) await listener.query(`LISTEN "${channel}"`);
+    return async () => { set.delete(handler); if (!set.size) { handlers.delete(channel); await listener?.query(`UNLISTEN "${channel}"`); } };
   } };
   return { db, exec: (text: string) => pool.query(text), async close() {
+    await listener?.end();
     await pool.end();
     try { await admin.query(`DROP DATABASE ${testDatabase}`); }
     finally { await admin.end(); }

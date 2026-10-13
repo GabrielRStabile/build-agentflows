@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { watchRun, type WatchedRun } from "@/lib/run-watch";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { version } from "../package.json";
@@ -311,6 +312,13 @@ export async function request<T>(
   if (!r.ok) throw new RequestError(data?.error || unavailableMessage(r.status), r.status);
   if (data === undefined) throw new RequestError(unavailableMessage(r.status), r.status);
   return data as T;
+}
+/** Follows a run by Server-Sent Events, falling back to pollRun; returns the stop function. */
+export function followRun<T extends WatchedRun>(id: string, after: string | undefined, onUpdate: (run: T) => void) {
+  return watchRun<T>(id, after, onUpdate, {
+    poll: (runId, since) => pollRun<T>(runId, since),
+    open: typeof EventSource === "undefined" ? undefined : (url) => new EventSource(url),
+  });
 }
 /** Polls one run; null means "unchanged since `after`" (HTTP 204), so callers keep what they have. */
 export async function pollRun<T extends { updatedAt: string }>(id: string, after?: string): Promise<T | null> {

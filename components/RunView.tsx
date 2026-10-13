@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Run } from "@/lib/flow-types";
 import { MarkdownContent } from "./MarkdownContent";
 import { TraceDetails, TraceRow } from "./TraceDetails";
-import { Icon, pollRun, request } from "./StudioUI";
+import { Icon, followRun, request } from "./StudioUI";
 import { formatCost, runCost } from "@/lib/token-usage";
 import { queueLabel } from "@/lib/queue-status";
 export const RUN_STATUS = {
@@ -24,20 +24,14 @@ export function RunView({
 }) {
   const [received, setReceived] = useState<Run | null>(null);
   const run = received?.id === initialRun.id && received.updatedAt >= initialRun.updatedAt ? received : initialRun;
-  // The poll sends the newest timestamp without restarting the interval on every update.
+  // One follower per running run; it stops by itself when the run leaves "running".
   const latest = useRef(run.updatedAt);
   useEffect(() => { latest.current = run.updatedAt; }, [run.updatedAt]);
   useEffect(() => {
     if (run.status !== "running") return;
-    let active = true, fetching = false;
-    const timer = setInterval(() => {
-      if (fetching) return;
-      fetching = true;
-      void pollRun<Run>(run.id, latest.current).then((next) => {
-        if (active && next) { setReceived(next); onChange?.(next); }
-      }).catch(() => {}).finally(() => { fetching = false; });
-    }, 2500);
-    return () => { active = false; clearInterval(timer); };
+    let active = true;
+    const stop = followRun<Run>(run.id, latest.current, (next) => { if (active) { setReceived(next); onChange?.(next); } });
+    return () => { active = false; stop(); };
   }, [run.id, run.status, onChange]);
   const [selectedTrace, setSelectedTrace] = useState<number | null>(null);
   const [busy, setBusy] = useState(false),

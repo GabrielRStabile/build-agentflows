@@ -111,8 +111,11 @@ uma vaga por usuário; o total simultâneo, o tamanho da fila e o tempo por
 execução são configuráveis (`EXECUCOES_SIMULTANEAS`, `FILA_LIMITE_USUARIO`,
 `FILA_LIMITE_TOTAL`, `LIMITE_EXECUCAO_SEGUNDOS`; veja DEPLOY-COOLIFY.md).
 Enquanto espera na fila, `GET /api/runs/[id]` inclui `queue` (posição, vagas e
-workers ativos); com `?after=<updatedAt>` responde 204 quando nada mudou. O
-POST de execução aceita `runId` (UUID v4) como chave de idempotência.
+workers ativos); com `?after=<updatedAt>` responde 204 quando nada mudou.
+`GET /api/runs/[id]/events` acompanha a execução por Server-Sent Events
+(eventos `run`, `end` e `error`), alimentado por LISTEN/NOTIFY do PostgreSQL; o
+editor usa o stream e volta ao polling quando ele não está disponível. O POST
+de execução aceita `runId` (UUID v4) como chave de idempotência.
 
 O chat incorporado usa tickets vinculados ao proprietário e à conversa, anexos
 privados e a mesma fila dos fluxos. Veja [EMBED-TENANTS.md](EMBED-TENANTS.md).

@@ -8,6 +8,7 @@ import type { Sql } from "./saas-db";
 import { readToolCards } from "./agent-tools";
 import { knowledgeSettings } from "./knowledge-settings";
 import { assertFlowCapacity } from "./saas-plan";
+import { announceQueue, announceRun } from "./run-events";
 
 async function validateReferences(sql: Sql, owner: string, graph: Graph) {
   await sql.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [owner]);
@@ -117,6 +118,7 @@ export async function persistTenantRun(sql: Sql, owner: string, input: Run) {
       if (!stored.rows[0] || stored.rows[0].body.flowId !== run.flowId) throw new FlowError("Não é possível mover uma execução para outro fluxo.", 409);
       Object.assign(run, stored.rows[0].body);
     }
+    await announceRun(sql, owner, run.id);
   return run;
 }
 export async function cancelTenantRun(id: string) {
@@ -135,6 +137,7 @@ export async function cancelTenantRun(id: string) {
     await sql.query("UPDATE jobs SET status='cancelled',finished_at=CASE WHEN status='queued' THEN now() ELSE NULL END WHERE user_id=$1 AND run_id=$2 AND status IN ('queued','running')", [user.id, id]);
     const cancelled = await sql.query<{ id: string; user_id: string; run_id: string }>("SELECT id,user_id,run_id FROM jobs WHERE user_id=$1 AND run_id=$2 AND status='cancelled' AND lease_until IS NULL", [user.id, id]);
     for (const job of cancelled.rows) await settleChannelDelivery(sql, job);
+    await announceRun(sql, user.id, id); await announceQueue(sql);
     return run;
   });
 }
@@ -177,5 +180,6 @@ export async function claimTenantRun(id: string) {
     await getTenantRun(id); // An unknown/foreign ID has the same 404, not a state disclosure.
     throw new FlowError("Esta decisão já foi recebida.", 409);
   }
+  await announceRun(db, user.id, id);
   return rows[0].body;
 }

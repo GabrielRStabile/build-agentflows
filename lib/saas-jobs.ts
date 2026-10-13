@@ -5,6 +5,7 @@ import { FlowError } from "./flow-store";
 import { buildRun, clientRunId } from "./flow-runtime";
 import { getTenantRun, persistTenantRun } from "./tenant-flows";
 import type { QueueStatus } from "./queue-status";
+import { announceQueue, announceRun } from "./run-events";
 import { settleChannelDelivery } from "./channel-flows";
 import type { Run } from "./flow-types";
 import { consumeMonthlyRun } from "./saas-plan";
@@ -78,6 +79,7 @@ export async function enqueueResume(id: string, decision: unknown) {
     // Both the decision and its dispatch commit together; a crash cannot strand an approved run.
     await sql.query("UPDATE runs SET status='running',body=$3 WHERE user_id=$1 AND id=$2", [user.id, id, JSON.stringify(run)]);
     const job = await insertJob(sql, { user_id: user.id, kind: "run", resource_id: id, run_id: id, base_id: null, source_id: null });
+    await announceRun(sql, user.id, id);
     return { run, job };
   });
 }
@@ -103,7 +105,9 @@ export async function claimJob(db: Database, preferredId?: string): Promise<Job 
       ORDER BY (j.id::text=$1) DESC,j.created_at,j.id LIMIT 1 FOR UPDATE OF j SKIP LOCKED`, [preferredId || ""]);
     if (!rows[0]) return undefined;
     const job = rows[0], token = randomUUID();
-    return (await sql.query<Job>("UPDATE jobs SET status='running',lease_token=$2,lease_until=now()+interval '60 seconds',started_at=now() WHERE id=$1 RETURNING *", [job.id, token])).rows[0];
+    const claimed = (await sql.query<Job>("UPDATE jobs SET status='running',lease_token=$2,lease_until=now()+interval '60 seconds',started_at=now() WHERE id=$1 RETURNING *", [job.id, token])).rows[0];
+    await announceQueue(sql);
+    return claimed;
   });
 }
 export async function heartbeatJob(db: Database, job: Job) {
@@ -120,6 +124,8 @@ export async function finishJob(db: Database, job: Job, error?: string) {
     if (owned.rows.length) await settleChannelDelivery(sql, job);
     if (error && rows[0]?.run_id) await sql.query(`UPDATE runs SET status='failed',body=(body-'queued') || $3::jsonb
       WHERE user_id=$1 AND id=$2 AND status='running'`, [rows[0].user_id, rows[0].run_id, JSON.stringify({ status: "failed", error, updatedAt: new Date().toISOString() })]);
+    if (rows[0]?.run_id) await announceRun(sql, rows[0].user_id, rows[0].run_id);
+    await announceQueue(sql);
   });
 }
 export async function recoverExpiredJobs(db: Database) {
@@ -135,6 +141,7 @@ export async function recoverExpiredJobs(db: Database) {
       await settleChannelDelivery(sql, job);
       if (job.run_id) await sql.query(`UPDATE runs SET status='failed',body=body || $3::jsonb
         WHERE user_id=$1 AND id=$2 AND status='running'`, [job.user_id, job.run_id, JSON.stringify({ status: "failed", interrupted: true, error, updatedAt: new Date().toISOString() })]);
+      if (job.run_id) await announceRun(sql, job.user_id, job.run_id);
       if (job.run_id) await sql.query("UPDATE embed_commands SET status='cancelled',body=body || '{\"status\":\"cancelled\"}'::jsonb WHERE user_id=$1 AND run_id=$2 AND status IN ('pending','delivered')", [job.user_id, job.run_id]);
       if (job.base_id) {
         await sql.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [job.user_id]);
@@ -148,6 +155,7 @@ export async function recoverExpiredJobs(db: Database) {
         await sql.query("DELETE FROM knowledge_locks WHERE user_id=$1 AND base_id=$2 AND job_id=$3 AND job_token=$4", [job.user_id, job.base_id, job.id, job.lease_token]);
       }
     }
+    if (rows.length || cancelled.rows.length) await announceQueue(sql);
     return rows.length;
   });
 }

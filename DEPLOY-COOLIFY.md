@@ -120,14 +120,19 @@ ou sétima execução simultânea com "Não foi possível iniciar a conexão Cha
 O host precisa de memória para a soma dos limites mais sistema e Coolify: com o
 perfil acima, reserve 10 GB.
 
-**Carga no web e no banco.** Cada pessoa acompanha a execução a cada 2 s; com
-150 pessoas são ~75 requisições por segundo, cada uma com sessão, limite por
-conta e leitura da execução. Desde a 0.22.0 a leitura responde 204 sem corpo
-quando nada mudou, a espera pelo POST usa o resumo paginado em vez de 100
-execuções completas, reabrir o fluxo busca a conversa em uma requisição e testar
-sem alteração não repete o salvamento. O limite de 120 requisições por minuto
-por conta comporta o acompanhamento (~40 por minuto). Mantenha o `app` com 3 CPUs
-e o PostgreSQL com 1 GB para essa taxa.
+**Carga no web e no banco.** O acompanhamento da execução é por push: o
+navegador abre um stream de eventos (`GET /api/runs/[id]/events`, Server-Sent
+Events) e o servidor envia o estado sempre que o PostgreSQL anuncia uma mudança
+(`NOTIFY` no commit de cada gravação da execução e a cada vaga ocupada ou
+liberada). Cada processo web mantém uma única conexão `LISTEN`; 150 pessoas
+acompanhando são 150 conexões abertas quase ociosas, não 75 requisições por
+segundo. Se o stream não abrir em 5 s ou cair, o navegador volta ao polling de
+`GET /api/runs/[id]?after=` (204 sem corpo quando nada mudou), e o stream é
+reaberto a cada 15 minutos para revalidar a sessão. A espera pelo POST usa o
+resumo paginado, reabrir o fluxo busca a conversa em uma requisição e testar sem
+alteração não repete o salvamento. O proxy precisa aceitar respostas longas sem
+buffering (`X-Accel-Buffering: no`, ping a cada 15 s); o Traefik do Coolify
+atende. Mantenha o `app` com 3 CPUs e o PostgreSQL com 1 GB.
 
 **Checklist antes da sessão.**
 

@@ -31,7 +31,7 @@ import {
   outputLabel,
   outputs,
 } from "@/lib/flow-graph";
-import { Icon, IconButton, Modal, pollRun, request, RequestError, useDismissMenus } from "./StudioUI";
+import { Icon, IconButton, Modal, followRun, pollRun, request, RequestError, useDismissMenus } from "./StudioUI";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
 import { NodeDialog } from "./NodeDialog";
 import { ChatPopup } from "./ChatPopup";
@@ -509,17 +509,8 @@ export function FlowEditor({ id }: { id: string }) {
     if (!followIds) return;
     let active = true;
     const known = new Map<string, string>(session.filter((r) => r.status === "running").map((r) => [r.id, r.updatedAt]));
-    const inFlight = new Set<string>();
-    const timer = setInterval(() => {
-      for (const runId of followIds.split(",")) {
-        if (inFlight.has(runId)) continue;
-        inFlight.add(runId);
-        void pollRun<Run>(runId, known.get(runId))
-          .then((r) => { if (r && active && executionLifetime.current.active) { known.set(runId, r.updatedAt); updateRun(r); } })
-          .catch(() => {}).finally(() => inFlight.delete(runId));
-      }
-    }, 1500);
-    return () => { active = false; clearInterval(timer); };
+    const stops = followIds.split(",").map((runId) => followRun<Run>(runId, known.get(runId), (r) => { if (active && executionLifetime.current.active) updateRun(r); }));
+    return () => { active = false; for (const stop of stops) stop(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followIds, updateRun]);
   async function execute(input: string, attachments: Attachment[]): Promise<Run | null> {
@@ -548,7 +539,7 @@ export function FlowEditor({ id }: { id: string }) {
       }, 800);
       // The run id is chosen here: a retry after a lost response adopts the same run instead of starting another.
       const runId = crypto.randomUUID();
-      let result = await submitRun<Run>({
+      const result = await submitRun<Run>({
         post: () => request<Run>("/api/flows/" + saved.id + "/run", "POST", {
           input,
           demo: false,
@@ -561,18 +552,21 @@ export function FlowEditor({ id }: { id: string }) {
       if (!lifetime.active) return null;
       updateRun(result);
       if (timer) { clearInterval(timer); timer = undefined; }
-      const deadline = Date.now() + 30 * 60_000;
-      while (result.status === "running") {
-        if (Date.now() > deadline) throw new Error("A tarefa continua no histórico. Abra a execução para acompanhar.");
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        if (!lifetime.active) return null;
-        const fresh = await pollRun<Run>(result.id, result.updatedAt);
-        if (!lifetime.active) return null;
-        if (!fresh) continue;
-        result = fresh;
-        updateRun(result);
-      }
-      return result;
+      if (result.status !== "running") return result;
+      // Push updates (SSE) with polling as fallback, until the run stops running or the editor is left.
+      const followed = await new Promise<Run | null>((resolve, reject) => {
+        let stop = () => {};
+        const cleanup = () => { clearTimeout(limit); clearInterval(leave); stop(); };
+        const finish = (value: Run | null) => { cleanup(); resolve(value); };
+        const limit = setTimeout(() => { cleanup(); reject(new Error("A tarefa continua no histórico. Abra a execução para acompanhar.")); }, 30 * 60_000);
+        const leave = setInterval(() => { if (!lifetime.active) finish(null); }, 1000);
+        stop = followRun<Run>(result.id, result.updatedAt, (r) => {
+          if (!lifetime.active) { finish(null); return; }
+          updateRun(r);
+          if (r.status !== "running") finish(r);
+        });
+      });
+      return followed;
     } catch (e) {
       if (lifetime.active) setError(e instanceof Error ? e.message : "Não foi possível executar.");
       return null;
