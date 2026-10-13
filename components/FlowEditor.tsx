@@ -477,6 +477,21 @@ export function FlowEditor({ id }: { id: string }) {
         : [...list, r],
     );
   }, [setRun, setSession]);
+  // Após aprovar/rejeitar (ou abrir pelo histórico), a execução segue no servidor fora de execute();
+  // acompanha até terminar para o chat e o canvas não ficarem presos em "Em execução".
+  const following = !running && session.some((r) => r.status === "running");
+  const followIds = following ? session.filter((r) => r.status === "running").map((r) => r.id).join(",") : "";
+  useEffect(() => {
+    if (!followIds) return;
+    let active = true;
+    const timer = setInterval(() => {
+      for (const runId of followIds.split(","))
+        void request<Run>("/api/runs/" + runId)
+          .then((r) => { if (active && executionLifetime.current.active) updateRun(r); })
+          .catch(() => {});
+    }, 1500);
+    return () => { active = false; clearInterval(timer); };
+  }, [followIds, updateRun]);
   async function execute(input: string, attachments: Attachment[]): Promise<Run | null> {
     const lifetime = executionLifetime.current;
     setRunning(true);
@@ -562,7 +577,7 @@ export function FlowEditor({ id }: { id: string }) {
         sourceColor: from ? NODE_STYLE[from].color : "#6557d2",
         targetColor: to ? NODE_STYLE[to].color : "#6557d2",
         label: from ? outputLabel(from, e.sourceHandle, graph.nodes.find((n) => n.id === e.source)?.data.config) : "",
-        active: running && run?.next === e.target,
+        active: (running || following) && run?.status === "running" && run.next === e.target,
       },
     };
   });
@@ -959,7 +974,7 @@ export function FlowEditor({ id }: { id: string }) {
               graph={graph}
               chatModels={connection?.models || []}
               error={error}
-              running={running}
+              running={running || following}
               demo={false}
               connected={aiConnected}
               expanded={expanded}
