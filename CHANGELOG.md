@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 0.21.0 — 13/10/2026
+
+- LLM com modelo de imagem ou vídeo: o campo Instruções vira PROMPT, já preenchido com `{{input}}`; Mensagem (opcional), memória e bases de conhecimento ficam ocultas e o que foi configurado antes de escolher o modelo é ignorado.
+- Replicate como ferramenta do Agente, com a mesma credencial do bloco LLM: a tela verifica o modelo e informa se ele é multimodal (recebe imagens de referência, como `google/nano-banana-pro`) ou só texto. O resultado aparece abaixo da resposta do agente.
+- Custo por etapa e total da execução, exibido somente quando o provedor o informa (OpenRouter). A Replicate não informa valor; o identificador da solicitação fica nos detalhes da etapa.
+- Chat mais limpo: mídia abre em nova aba por um ícone discreto e as solicitações de mídia saíram do chat. A Entrada dos detalhes da etapa de mídia mostra o prompt enviado; no LLM, o rótulo passa a ser "Instruções".
+- Correção: após aprovar ou rejeitar, o chat e o canvas acompanham a execução até o fim, sem ficar presos em "Em execução".
+- Validação: 330 testes gerais, teste de mídia com PostgreSQL, build e lint sem erros; aprovação, PROMPT de mídia, chat, detalhes da etapa e ferramenta Replicate verificados no navegador em pilha Docker isolada, com respostas controladas e sem credenciais reais.
+
 ## 0.20.0 — 13/10/2026
 
 - Minha conta: convite do AI Action antes do Perfil, com o cupom exclusivo `JOURNEY2ACTION` e botão para copiar.
