@@ -27,5 +27,10 @@ export async function notifyJob(id: string) {
 export async function nextJobNotification() {
   try { return await (await redisClient()).lPop(KEY); } catch { return null; }
 }
+/** Blocks up to `seconds` for the next notification, so a worker with a free slot starts a job the moment it is queued
+ * instead of on its next tick. Returns null on timeout or when Redis is unavailable (the caller then paces itself). */
+export async function waitJobNotification(seconds: number) {
+  try { return (await (await redisClient()).blPop(KEY, seconds))?.element ?? null; } catch { return null; }
+}
 export async function queueReady() { try { return await (await redisClient()).ping() === "PONG"; } catch { return false; } }
 export function closeQueue() { if (connection?.isOpen) connection.destroy(); connection = undefined; }

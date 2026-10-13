@@ -99,10 +99,15 @@ export async function persistTenantRun(sql: Sql, owner: string, input: Run) {
   const run = { ...input, updatedAt: new Date().toISOString() };
   delete run.queue; // Live queue position is computed on read, never stored.
     // Shares the flow lock with delete: an execution cannot start between its check and deletion.
-    await validateReferences(sql, owner, run.graph);
     await readFlow(sql, owner, run.flowId, true);
-    for (const attachment of run.attachments || []) {
-      if (!(await sql.query("SELECT 1 FROM attachments WHERE user_id=$1 AND flow_id=$2 AND id=$3", [owner, run.flowId, attachment.id])).rows.length) throw new FlowError("Anexo não encontrado neste fluxo.", 404);
+    // References and attachments are checked when the run is created. Progress writes (every 500 ms while a
+    // model streams) reuse the same snapshot, so a credential or base removed meanwhile cannot kill the run.
+    const exists = (await sql.query("SELECT 1 FROM runs WHERE user_id=$1 AND id=$2", [owner, run.id])).rows.length > 0;
+    if (!exists) {
+      await validateReferences(sql, owner, run.graph);
+      for (const attachment of run.attachments || []) {
+        if (!(await sql.query("SELECT 1 FROM attachments WHERE user_id=$1 AND flow_id=$2 AND id=$3", [owner, run.flowId, attachment.id])).rows.length) throw new FlowError("Anexo não encontrado neste fluxo.", 404);
+      }
     }
     const { rows } = await sql.query(`INSERT INTO runs(user_id,id,flow_id,status,body) VALUES ($1,$2,$3,$4,$5)
       ON CONFLICT(user_id,id) DO UPDATE SET status=excluded.status,body=excluded.body

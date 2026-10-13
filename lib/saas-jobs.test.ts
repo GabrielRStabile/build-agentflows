@@ -289,3 +289,17 @@ test("resumo da fila para o operador: pendentes, vagas em uso, workers vivos e e
   assert.equal(stats.queued, 1); assert.equal(stats.running, 1); assert.equal(stats.workers, 1);
   assert.ok(stats.oldestQueuedSeconds >= 0 && stats.oldestQueuedSeconds < 60);
 });
+
+test("gravações de progresso reutilizam o snapshot: referência removida depois do início não derruba a execução", async () => {
+  const graph = template();
+  graph.nodes[1].data.config.knowledgeBase = "base-refs";
+  await db.query("INSERT INTO knowledge_bases(user_id,id,body) VALUES ($1,'base-refs',$2)", [a, JSON.stringify({ id: "base-refs" })]);
+  const flow = await asA(() => createTenantFlow("Refs", false, { name: "Refs", description: "", graph }));
+  const { run } = await asA(() => enqueueRun(flow.id, "Entrada", false, true));
+  await db.query("DELETE FROM knowledge_bases WHERE user_id=$1 AND id='base-refs'", [a]);
+  // Creating another run with the same graph is still refused; updating the existing one is not.
+  await assert.rejects(asA(() => enqueueRun(flow.id, "Outra", false, true)), /Base de conhecimento não encontrada/);
+  const updated = await asA(() => putTenantRun({ ...run, output: "progresso" }));
+  assert.equal(updated.output, "progresso");
+  assert.equal((await asA(() => getTenantRun(run.id))).output, "progresso");
+});

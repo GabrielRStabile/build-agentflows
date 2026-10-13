@@ -6,7 +6,7 @@ import { saasDatabase } from "../lib/saas-db.ts";
 import { migrateDatabase } from "../lib/db/migrate.ts";
 import { claimJob, queueLimits, recoverExpiredJobs } from "../lib/saas-jobs.ts";
 import { runClaimedJob } from "../lib/saas-worker.ts";
-import { nextJobNotification, closeQueue } from "../lib/saas-queue.ts";
+import { nextJobNotification, waitJobNotification, closeQueue } from "../lib/saas-queue.ts";
 import { deliverAuthMail } from "../lib/saas-mail.ts";
 import { cleanupAuth } from "../lib/saas-auth.ts";
 import { runBudgetMs } from "../lib/run-limits.ts";
@@ -18,7 +18,7 @@ const DRAIN_MS = runBudgetMs() + 5000, EXIT_MARGIN_MS = 10000;
 const log = (evento, extra) => console.log(JSON.stringify({ evento, ...extra, em: new Date().toISOString() }));
 const db = saasDatabase(), id = randomUUID(), stop = new AbortController(), drain = new AbortController();
 const active = new Set();
-let mail = Promise.resolve(), sendingMail = false, lastMaintenance = 0;
+let mail = Promise.resolve(), sendingMail = false, lastMaintenance = 0, hint;
 for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => {
   stop.abort();
   setTimeout(() => drain.abort(), DRAIN_MS).unref();
@@ -43,7 +43,8 @@ try {
       }
       // Fill every free slot per tick so a burst does not start at one job per second.
       while (active.size < queueLimits().running && !stop.signal.aborted) {
-        const job = await claimJob(db, await nextJobNotification() || undefined);
+        const preferred = hint || await nextJobNotification() || undefined; hint = undefined;
+        const job = await claimJob(db, preferred);
         if (!job) break;
         const started = Date.now();
         log("tarefa_iniciada", { id: job.id, tipo: job.kind, esperaMs: Math.max(0, started - new Date(job.created_at).getTime()), ativas: active.size + 1 });
@@ -54,7 +55,12 @@ try {
         active.add(work);
       }
     } catch { console.error("Worker aguardando recuperação da infraestrutura."); }
-    await new Promise((resolve) => { const timer = setTimeout(done, 1000); function done() { clearTimeout(timer); stop.signal.removeEventListener("abort", done); resolve(); } stop.signal.addEventListener("abort", done, { once: true }); if (stop.signal.aborted) done(); });
+    // With a free slot, wait on Redis for up to a second and claim the notified job right away;
+    // without Redis (or with every slot busy) pace the durable PostgreSQL poll at one tick per second.
+    const tickStarted = Date.now();
+    if (!stop.signal.aborted && active.size < queueLimits().running) hint = await waitJobNotification(1) || undefined;
+    const remaining = 1000 - (Date.now() - tickStarted);
+    if (!hint && remaining > 0) await new Promise((resolve) => { const timer = setTimeout(done, remaining); function done() { clearTimeout(timer); stop.signal.removeEventListener("abort", done); resolve(); } stop.signal.addEventListener("abort", done, { once: true }); if (stop.signal.aborted) done(); });
   }
 } finally {
   const deadline = setTimeout(() => process.exit(1), DRAIN_MS + EXIT_MARGIN_MS); deadline.unref();

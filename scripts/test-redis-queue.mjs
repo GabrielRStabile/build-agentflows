@@ -8,7 +8,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomBytes, randomUUID } from "node:crypto";
-import { notifyJob, nextJobNotification, queueReady, closeQueue } from "../lib/saas-queue.ts";
+import { notifyJob, nextJobNotification, waitJobNotification, queueReady, closeQueue } from "../lib/saas-queue.ts";
 
 const binary = process.env.REDIS_SERVER;
 if (!binary) throw new Error("Defina REDIS_SERVER para o executável redis-server de teste.");
@@ -53,6 +53,15 @@ try {
   const recovered = randomUUID();
   assert.equal(await notifyJob(recovered), true);
   assert.equal(await nextJobNotification(), recovered, "cliente reconecta sem reiniciar o app");
+  const idleStarted = Date.now();
+  assert.equal(await waitJobNotification(1), null, "espera bloqueante expira sem aviso");
+  assert.ok(Date.now() - idleStarted >= 900, "espera bloqueante respeita o tempo");
+  const awaited = randomUUID();
+  const waiting = waitJobNotification(5);
+  setTimeout(() => { void notifyJob(awaited); }, 100);
+  const wakeStarted = Date.now();
+  assert.equal(await waiting, awaited, "aviso acorda o worker imediatamente");
+  assert.ok(Date.now() - wakeStarted < 2000, "acordou antes do tempo limite");
   console.log("Redis real: envio, consumo único, indisponibilidade, AOF e reconexão passaram.");
 } finally {
   closeQueue(); await stop(); await rm(dir, { recursive: true, force: true });
