@@ -99,10 +99,18 @@ volumes descartáveis e não usa dados ou segredos reais da aplicação.
 
 ## Planos e limites mensais
 
-| Plano | Execuções por mês | Fluxos |
-| --- | --- | --- |
-| `beta` (padrão) | 1000 (`LIMITE_EXECUCOES_MES`) | 5 (`LIMITE_FLUXOS`) |
-| `ai_action` | ilimitadas | ilimitados |
+| Plano | Execuções por mês | Fluxos | Armazenamento das bases |
+| --- | --- | --- | --- |
+| `beta` (padrão) | 1000 (`LIMITE_EXECUCOES_MES`) | 5 (`LIMITE_FLUXOS`) | 50 MB (`LIMITE_ARMAZENAMENTO_MB`) |
+| `ai_action` | ilimitadas | ilimitados | 50 MB (`LIMITE_ARMAZENAMENTO_MB`) |
+
+O armazenamento soma o tamanho real dos arquivos enviados às fontes das bases de
+conhecimento (cada arquivo até 10 MB; até 20 arquivos e 20 MB por envio). É
+verificado ao salvar a fonte, com a linha da conta travada; substituir os arquivos
+de uma fonte conta só os novos e excluir fontes libera espaço. Fontes anteriores
+são medidas uma vez e registradas em `fileBytes`. O erro é 413, sem oferta de
+plano, porque o limite vale para todas as contas. Minha conta mostra o uso e, no
+beta, o convite do AI Action com o cupom exclusivo `JOURNEY2ACTION` antes do Perfil.
 
 O mês é civil, no horário de Brasília (`usage_months.month` = `AAAA-MM`). Contam
 execuções reais criadas pelo chat, MCP, webhook, canais e chat incorporado, no

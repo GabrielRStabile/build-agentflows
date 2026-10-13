@@ -14,6 +14,7 @@ import { resolveEmbeddingCredential } from "./tool-credential-store";
 import { postgresConnectionString } from "./knowledge-postgres";
 import { knowledgeBaseIds } from "./knowledge-settings";
 import { assertJobLease, currentJobLease } from "./saas-job-context";
+import { planLimits } from "./saas-plan";
 
 const now = () => new Date().toISOString();
 const leases = new AsyncLocalStorage<{ owner: string; baseId: string; token: string; active: boolean }>();
@@ -110,11 +111,28 @@ async function privateRecord(sql: Sql, owner: string, baseId: string, resourceId
 }
 export async function putKnowledgePrivate(sql: Sql, owner: string, baseId: string, resourceId: string, value: Record<string, string>) {
   const ciphertext = seal(JSON.stringify(value), `knowledge:${owner}:${baseId}:${resourceId}`);
-  if (Buffer.byteLength(ciphertext) > 20 * 1024 * 1024) throw new FlowError("Os dados da fonte excedem o limite permitido.", 413);
+  // 20 MB of files become about 36 MB once encoded and sealed.
+  if (Buffer.byteLength(ciphertext) > 40 * 1024 * 1024) throw new FlowError("Os dados da fonte excedem o limite permitido.", 413);
   await sql.query(`INSERT INTO knowledge_private(user_id,base_id,resource_id,ciphertext) VALUES($1,$2,$3,$4)
     ON CONFLICT(user_id,base_id,resource_id) DO UPDATE SET ciphertext=excluded.ciphertext`, [owner, baseId, resourceId, ciphertext]);
   const quota = await sql.query<{ bytes: number }>("SELECT coalesce(sum(octet_length(ciphertext)),0)::bigint bytes FROM knowledge_private WHERE user_id=$1", [owner]);
   if (Number(quota.rows[0].bytes) > 200 * 1024 * 1024) throw new FlowError("O espaço privado das fontes atingiu 200 MB. Exclua fontes antigas para liberar espaço.", 413);
+}
+const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+/** Bytes of files uploaded to the owner's knowledge sources. Older sources are measured once and recorded. */
+export async function knowledgeFileBytes(sql: Sql, owner: string, exceptSourceId?: string) {
+  const { rows } = await sql.query<{ id: string; base_id: string; body: KnowledgeSource }>("SELECT id,base_id,body FROM knowledge_sources WHERE user_id=$1", [owner]);
+  let total = 0;
+  for (const { id, base_id, body } of rows) {
+    if (id === exceptSourceId) continue;
+    let bytes = body.fileBytes;
+    if (typeof bytes !== "number") {
+      bytes = body.fileNames?.length ? JSON.parse((await privateRecord(sql, owner, base_id, `source:${id}`)).files || "[]").reduce((n: number, f: SourceFile) => n + Buffer.byteLength(f.data, "base64"), 0) : 0;
+      await sql.query("UPDATE knowledge_sources SET body=jsonb_set(body,'{fileBytes}',to_jsonb($4::bigint)) WHERE user_id=$1 AND base_id=$2 AND id=$3", [owner, base_id, id, bytes]);
+    }
+    total += bytes as number;
+  }
+  return total;
 }
 export async function getKnowledgePrivate(baseId: string, resourceId: string) {
   const { db, user } = currentTenant();
@@ -189,6 +207,11 @@ export async function saveKnowledgeSource(baseId: string, input: SourceInput, fi
     const previous = id ? await readSource(sql, owner, baseId, id) : undefined;
     if (!previous && (await sql.query<{ n: number }>("SELECT count(*)::int n FROM knowledge_sources WHERE user_id=$1 AND base_id=$2", [owner, baseId])).rows[0].n >= 100) throw new FlowError("Use até 100 fontes por base.", 413);
     const result = normalizeKnowledgeSource(baseId, input, files, previous, previous ? await privateRecord(sql, owner, baseId, `source:${previous.id}`) : {});
+    // The owner row is locked by mutateKnowledge, so concurrent uploads cannot exceed the quota.
+    const limit = planLimits().storageMb * 1024 * 1024;
+    const others = await knowledgeFileBytes(sql, owner, result.source.id);
+    if (others + (result.source.fileBytes || 0) > limit)
+      throw new FlowError(`Suas bases de conhecimento podem armazenar até ${planLimits().storageMb} MB em arquivos. Você já usa ${megabytes(others)} e este envio tem ${megabytes(result.source.fileBytes || 0)}. Exclua fontes antigas para liberar espaço.`, 413);
     await storeSource(sql, owner, result.source);
     await putKnowledgePrivate(sql, owner, baseId, `source:${result.source.id}`, result.secrets);
     await touch(sql, owner, base);

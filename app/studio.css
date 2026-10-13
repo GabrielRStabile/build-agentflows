@@ -3886,7 +3886,10 @@
 .account-usage.exhausted progress::-moz-progress-bar { background: #c44453; }
 .account-usage small, .account-password small { color: var(--studio-muted); font-size: 11px; }
 .account-usage.exhausted small { color: #c44453; }
-.account-upgrade { margin-top: 8px; }
+.account-upgrade { margin: 0 0 16px; }
+.account-upgrade h2 { margin: 0 0 4px; }
+.account-coupon { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.account-coupon code { padding: 6px 10px; border: 1px dashed var(--studio-primary); border-radius: 8px; background: var(--studio-primary-soft); color: var(--studio-ink); font-size: 13px; font-weight: 700; letter-spacing: 0.06em; user-select: all; }
 .account-password { display: grid; gap: 12px; max-width: 420px; }
 .account-field { display: grid; gap: 6px; font-size: 12px; font-weight: 600; color: var(--studio-ink); }
 .account-field input { width: 100%; padding: 10px 12px; border: 1px solid var(--studio-line); border-radius: 8px; background: var(--studio-bg); color: var(--studio-ink); font: inherit; font-weight: 400; }

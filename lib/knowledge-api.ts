@@ -43,7 +43,7 @@ export async function knowledgeSourceBody(req: Request) {
   let input: Record<string, unknown>;
   let files: SourceFile[] | undefined;
   if (req.headers.get("content-type")?.startsWith("multipart/form-data")) {
-    const bytes = await knowledgeRequestBytes(req, 11 * 1024 * 1024);
+    const bytes = await knowledgeRequestBytes(req, 21 * 1024 * 1024);
     let form: FormData;
     try {
       form = await new Response(bytes, {

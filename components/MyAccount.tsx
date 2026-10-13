@@ -11,14 +11,32 @@ const monthLabel = (month: string) => {
   return new Date(year, value - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 };
 
-function UsageMeter({ label, used, limit, note }: { label: string; used: number; limit: number | null; note: string }) {
+const count = (n: number) => n.toLocaleString("pt-BR");
+const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+
+function UsageMeter({ label, used, limit, note, format = count }: { label: string; used: number; limit: number | null; note: string; format?: (n: number) => string }) {
   const left = limit === null ? null : Math.max(0, limit - used);
   return (
     <div className={"account-usage" + (left === 0 ? " exhausted" : "")}>
-      <div><strong>{label}</strong><span>{limit === null ? `${used.toLocaleString("pt-BR")} · ilimitado` : `${used.toLocaleString("pt-BR")} de ${limit.toLocaleString("pt-BR")}`}</span></div>
-      {limit !== null && <progress aria-label={`${label}: ${used} de ${limit}`} value={Math.min(used, limit)} max={limit} />}
+      <div><strong>{label}</strong><span>{limit === null ? `${format(used)} · ilimitado` : `${format(used)} de ${format(limit)}`}</span></div>
+      {limit !== null && <progress aria-label={`${label}: ${format(used)} de ${format(limit)}`} value={Math.min(used, limit)} max={limit} />}
       <small>{limit === null ? "Sem limite no seu plano." : left === 0 ? "Limite atingido." : note}</small>
     </div>
+  );
+}
+
+function Coupon({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* the code stays visible to copy by hand */ }
+  }
+  return (
+    <span className="account-coupon">
+      <code>{code}</code>
+      <button type="button" className="studio-button subtle" onClick={() => void copy()} aria-label={`Copiar cupom ${code}`}>
+        <Icon name={copied ? "check" : "copy"} size={14} />{copied ? "Copiado" : "Copiar"}
+      </button>
+    </span>
   );
 }
 
@@ -71,6 +89,17 @@ export function MyAccount() {
         {error && <p role="alert" className="account-error">{error} <button type="button" className="studio-button subtle" onClick={() => void load()}>Tentar novamente</button></p>}
         {!account && !error && <p className="settings-loading" role="status">Carregando…</p>}
         {account && usage && <>
+          {beta && (
+            <section className="library-connect-banner account-upgrade account-card" aria-labelledby="account-ai-action">
+              <Icon name="spark" size={23} />
+              <div>
+                <h2 id="account-ai-action">Faça parte do AI Action</h2>
+                <p>Tenha execuções mensais e fluxos ilimitados. Use seu cupom exclusivo na inscrição:</p>
+                <Coupon code={usage.coupon} />
+              </div>
+              <a className="studio-button primary" href={usage.upgradeUrl} target="_blank" rel="noopener noreferrer">Faça parte do AI Action</a>
+            </section>
+          )}
           <section className="credential-manager-card account-card" aria-labelledby="account-profile">
             <h2 id="account-profile">Perfil</h2>
             <dl className="account-profile">
@@ -86,16 +115,8 @@ export function MyAccount() {
             </div>
             <UsageMeter label={`Execuções em ${monthLabel(usage.month)}`} used={usage.runs.used} limit={usage.runs.limit} note="Renova no primeiro dia de cada mês." />
             <UsageMeter label="Fluxos" used={usage.flows.used} limit={usage.flows.limit} note="Excluir um fluxo libera espaço para outro." />
-            {beta && (
-              <div className="library-connect-banner account-upgrade">
-                <Icon name="spark" size={23} />
-                <div>
-                  <strong>Faça parte do AI Action</strong>
-                  <p>Tenha execuções mensais e fluxos ilimitados.</p>
-                </div>
-                <a className="studio-button primary" href={usage.upgradeUrl} target="_blank" rel="noopener noreferrer">Faça parte do AI Action</a>
-              </div>
-            )}
+            <UsageMeter label="Armazenamento das bases de conhecimento" used={usage.storage.used} limit={usage.storage.limit} format={megabytes}
+              note="Arquivos enviados às bases, até 10 MB cada. Excluir fontes libera espaço." />
           </section>
           {account.hasPassword && (
             <section className="credential-manager-card account-card" aria-labelledby="account-password">

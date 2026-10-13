@@ -6,7 +6,9 @@ import { migrateDatabase } from "./db/migrate";
 import { withTenantJob } from "./tenant-context";
 import { createTenantFlow, deleteTenantFlow } from "./tenant-flows";
 import { enqueueRun } from "./saas-jobs";
-import { accountUsage, AI_ACTION_URL, PlanLimitError } from "./saas-plan";
+import { accountUsage, AI_ACTION_URL, AI_ACTION_COUPON, PlanLimitError } from "./saas-plan";
+import { createKnowledgeBase, saveKnowledgeSource, deleteKnowledgeSource } from "./tenant-knowledge";
+import { DEFAULT_SPLITTER } from "./knowledge-types";
 import { accountProfile, changePassword, loginUser } from "./saas-auth";
 import { hashToken, passwordHash, randomToken } from "./saas-security";
 import { httpError } from "./saas-http";
@@ -98,4 +100,31 @@ test("alterar senha exige a atual, mantém esta sessão e encerra as demais; con
   await db.query("UPDATE users SET google_sub='google-b' WHERE id=$1", [b]);
   assert.deepEqual(await accountProfile(db, b), { name: "Pessoa teste", email: `${b}@example.com`, hasPassword: false, google: true });
   await assert.rejects(changePassword(db, b, { current: "x", password: next }, undefined), /Google/);
+});
+
+test("bases de conhecimento armazenam até o limite em arquivos de até 10 MB cada, por conta", async () => {
+  const previousStorage = process.env.LIMITE_ARMAZENAMENTO_MB;
+  process.env.LIMITE_ARMAZENAMENTO_MB = "1";
+  try {
+    const file = (kb: number) => [{ name: "doc.txt", data: Buffer.alloc(kb * 1024, "a").toString("base64") }];
+    const input = { name: "Arquivo", loader: "text", config: {}, splitter: DEFAULT_SPLITTER, metadata: {} };
+    const base = await asA(() => createKnowledgeBase({ name: "Base" }));
+    const first = await asA(() => saveKnowledgeSource(base.id, input, file(600)));
+    await assert.rejects(asA(() => saveKnowledgeSource(base.id, input, file(600))), (e: Error) => /até 1 MB/.test(e.message) && /Exclua fontes/.test(e.message));
+    // Replacing a source's files only counts the new files.
+    await asA(() => saveKnowledgeSource(base.id, input, file(900), first.id));
+    assert.deepEqual((await accountUsage(db, a)).storage, { used: 900 * 1024, limit: 1024 * 1024 });
+    assert.deepEqual((await accountUsage(db, b)).storage, { used: 0, limit: 1024 * 1024 });
+    // Sources saved before storage was counted are measured once and recorded.
+    await db.query("UPDATE knowledge_sources SET body=body-'fileBytes' WHERE user_id=$1", [a]);
+    assert.equal((await accountUsage(db, a)).storage.used, 900 * 1024);
+    assert.equal((await db.query<{ n: string }>("SELECT body->>'fileBytes' n FROM knowledge_sources WHERE user_id=$1", [a])).rows[0].n, String(900 * 1024));
+    await asA(() => deleteKnowledgeSource(base.id, first.id));
+    assert.equal((await accountUsage(db, a)).storage.used, 0);
+    process.env.LIMITE_ARMAZENAMENTO_MB = "50";
+    await assert.rejects(asA(() => saveKnowledgeSource(base.id, input, file(10 * 1024 + 1))), /até 10 MB cada/);
+    await asA(() => saveKnowledgeSource(base.id, input, [...file(9 * 1024), ...file(9 * 1024)]));
+    await assert.rejects(asA(() => saveKnowledgeSource(base.id, input, [...file(9 * 1024), ...file(9 * 1024), ...file(9 * 1024)])), /20 MB/);
+    assert.equal((await accountUsage(db, a)).coupon, AI_ACTION_COUPON);
+  } finally { process.env.LIMITE_ARMAZENAMENTO_MB = previousStorage; }
 });

@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## Não publicado
+
+- Minha conta: convite do AI Action antes do Perfil, com o cupom exclusivo `JOURNEY2ACTION` e botão para copiar.
+- Limite de armazenamento das bases de conhecimento: até 50 MB em arquivos por conta (`LIMITE_ARMAZENAMENTO_MB`), exibido em Limites de uso. Cada arquivo pode ter até 10 MB (até 20 arquivos e 20 MB por envio).
+
 ## 0.19.0 — 13/10/2026
 
 - Replicate aberta no bloco LLM: campo `empresa/modelo` no lugar da lista; o schema do modelo define a entrada e o resultado (texto, imagens ou vídeo MP4/WebM). Modelos oficiais rodam pelo nome e os da comunidade pela versão. A Replicate não aparece mais na lista do Agente; agentes salvos continuam funcionando.

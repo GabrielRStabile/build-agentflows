@@ -49,11 +49,13 @@ export function KnowledgeSourceDialog({
   };
   function selectFiles(selected: File[]) {
     if (!selected.length || busy) return;
+    // Same rule as the server (knowledge-source-input.ts).
     if (
       selected.length > 20 ||
-      selected.reduce((n, f) => n + f.size, 0) > 10 * 1024 * 1024
+      selected.some((f) => f.size > 10 * 1024 * 1024) ||
+      selected.reduce((n, f) => n + f.size, 0) > 20 * 1024 * 1024
     ) {
-      setError("Envie até 20 arquivos, somando no máximo 10 MB.");
+      setError("Envie até 20 arquivos de até 10 MB cada, somando no máximo 20 MB.");
       return;
     }
     const extensions = loader?.accept
@@ -244,8 +246,8 @@ export function KnowledgeSourceDialog({
                     : "Arraste os arquivos ou clique para selecionar"}
                 </strong>
                 <small>
-                  {loader.accept.replaceAll(",", " · ")} · até 20 arquivos,
-                  somando 10 MB
+                  {loader.accept.replaceAll(",", " · ")} · até 20 arquivos de
+                  até 10 MB cada (20 MB por envio)
                 </small>
                 <input
                   ref={upload}

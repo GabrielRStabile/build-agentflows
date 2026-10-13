@@ -36,6 +36,8 @@ export type KnowledgeSource = {
   config: Record<string, string>;
   configuredSecrets: string[];
   fileNames: string[];
+  /** Bytes of the uploaded files; absent in sources saved before storage was counted. */
+  fileBytes?: number;
   splitter: SplitterConfig;
   metadata: Record<string, unknown>;
   status: "draft" | "processing" | "processed" | "failed";
