@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { watchRun, type WatchedRun } from "@/lib/run-watch";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -365,6 +365,14 @@ export function Modal({
   autoFocus?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Only a press that starts on the backdrop closes the dialog: dragging a text selection
+  // out of a field and releasing outside fires a click on the <dialog> itself and must not close it.
+  const pressedBackdrop = useRef(false);
+  const onBackdrop = (e: MouseEvent<HTMLDialogElement>) => {
+    if (e.target !== e.currentTarget) return false;
+    const bounds = e.currentTarget.getBoundingClientRect();
+    return e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom;
+  };
   useEffect(() => {
     const el = ref.current;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -387,10 +395,11 @@ export function Modal({
         e.stopPropagation();
         onClose();
       }}
+      onPointerDown={(e) => { pressedBackdrop.current = onBackdrop(e); }}
       onClick={(e) => {
-        if (e.target !== e.currentTarget) return;
-        const bounds = e.currentTarget.getBoundingClientRect();
-        if (e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom) onClose();
+        const pressed = pressedBackdrop.current;
+        pressedBackdrop.current = false;
+        if (pressed && onBackdrop(e)) onClose();
       }}
     >
       {title === undefined ? (
