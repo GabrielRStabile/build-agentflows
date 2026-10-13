@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.27.0 — 13/10/2026
+
+- Referências a blocos aparecem pelo nome nos campos do editor (`{{Analista}}` em vez de `{{nodes.a1}}`), no autocompletar, no destaque colorido e ao inserir. O fluxo continua gravando o id: renomear o bloco atualiza o campo sozinho, e nomes repetidos entre blocos mantêm o id de cada ocorrência pela posição no texto. Nomes iguais a referências nativas (input, last, fluxo.x…) ou com chaves seguem pelo id.
+- Validação: 364 testes gerais, lint e build sem erros.
+
 ## 0.26.0 — 13/10/2026
 
 - Bloco Repetir sem setas de saída: o destino é escolhido pelo nome dentro do bloco (campo "Voltar para", antes do máximo de repetições) e aparece como etiqueta no canvas. Novo campo "Mensagem ao atingir o limite", com referências `{{…}}`, entregue como resultado quando o limite chega sem concluir; em branco, mantém o resultado anterior.
