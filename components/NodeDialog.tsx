@@ -8,6 +8,7 @@ import { NODE_STYLE } from "@/lib/flow-presets";
 import { Icon, IconButton, Modal, request } from "./StudioUI";
 import { ReferenceField, type Reference } from "./ReferenceField";
 import { loopTargets } from "@/lib/flow-graph";
+import { nodeAlias } from "@/lib/reference-display";
 import { ToolPicker } from "./ToolPicker";
 import { ModelPicker } from "./ModelPicker";
 import { memorySettings } from "@/lib/memory-settings";
@@ -202,6 +203,7 @@ export function NodeDialog({
         value: `{{nodes.${o.id}}}`,
         label: o.data.label,
         hint: BLOCKS[o.data.kind].label,
+        alias: nodeAlias(o.id, o.data.label)?.display,
       })),
   ];
   return (
@@ -409,7 +411,7 @@ export function NodeDialog({
               <option value="">Escolha uma variável</option>
               {[...updateKeys].map((key) => <option key={key} value={key} disabled={updates.some((update, index) => index !== i && update.key === key)}>{key}</option>)}
             </select></label>
-            <label>Novo valor<ReferenceField showOnFocus multiline rows={2} value={u.value} ariaLabel={`Novo valor ${i + 1}`} onChange={(value) => setUpdates(updates.map((x, j) => j === i ? { ...x, value } : x))} references={[{ value: `{{nodes.${node.id}}}`, label: "Resposta deste agente" }, ...references.filter((r) => r.value !== "{{last}}")]} /></label>
+            <label>Novo valor<ReferenceField showOnFocus multiline rows={2} value={u.value} ariaLabel={`Novo valor ${i + 1}`} onChange={(value) => setUpdates(updates.map((x, j) => j === i ? { ...x, value } : x))} references={[{ value: `{{nodes.${node.id}}}`, label: "Resposta deste agente", alias: nodeAlias(node.id, draft.data.label)?.display }, ...references.filter((r) => r.value !== "{{last}}")]} /></label>
           </div>)}
           <button className="studio-button" disabled={!updateKeys.size || updates.length >= updateKeys.size} onClick={() => setUpdates([...updates, { key: [...updateKeys].find((key) => !updates.some((u) => u.key === key)) || "", value: `{{nodes.${node.id}}}` }])}>Atualizar variável de estado</button>
         </section>}

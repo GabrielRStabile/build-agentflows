@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { referenceSegments } from "@/lib/reference-highlight";
-export type Reference = { value: string; label: string; hint?: string };
+import { displayReferences, storedReferences, type ReferenceAlias } from "@/lib/reference-display";
+/** alias: forma mostrada no campo no lugar de value (ex.: {{Analista}} para {{nodes.a1}}). */
+export type Reference = { value: string; label: string; hint?: string; alias?: string };
 // A camada de destaque espelha o campo (fonte, espaçamento, bordas e posição) para colorir as
 // referências sem mexer no texto digitado: o campo fica com o texto transparente por cima dela.
 const MIRRORED = ["font", "lineHeight", "letterSpacing", "wordSpacing", "textIndent", "textTransform", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "borderRadius", "boxSizing"] as const;
@@ -32,7 +34,12 @@ export function ReferenceField({
 }) {
   const ref = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
   const highlight = useRef<HTMLDivElement | null>(null);
-  const segments = referenceSegments(value, references.map((r) => r.value));
+  // O campo edita a forma exibida (nomes dos blocos); o que sobe por onChange é a forma gravada (ids).
+  const aliases: ReferenceAlias[] = references.flatMap((r) => r.alias ? [{ value: r.value, display: r.alias }] : []);
+  const shown = (r: Reference) => r.alias || r.value;
+  const display = displayReferences(value, aliases);
+  const commit = (next: string) => onChange(storedReferences(next, aliases, value));
+  const segments = referenceSegments(display, references.map(shown));
   const highlighted = segments.some((s) => s.kind !== "text");
   useEffect(() => {
     const el = ref.current, layer = highlight.current;
@@ -52,7 +59,7 @@ export function ReferenceField({
     observer?.observe(el);
     window.addEventListener("resize", mirror);
     return () => { observer?.disconnect(); window.removeEventListener("resize", mirror); };
-  }, [highlighted, value]);
+  }, [highlighted, display]);
   const [query, setQuery] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const [start, setStart] = useState(0);
@@ -61,7 +68,7 @@ export function ReferenceField({
     query === null
       ? []
       : references.filter((r) =>
-          (r.value + " " + r.label).toLowerCase().includes(query.toLowerCase()),
+          (shown(r) + " " + r.label).toLowerCase().includes(query.toLowerCase()),
         );
   const current = options.length ? Math.min(active, options.length - 1) : 0;
   function detect(text: string, caret: number) {
@@ -94,19 +101,19 @@ export function ReferenceField({
   }
   function pick(r: Reference) {
     const el = ref.current;
-    const caret = el?.selectionStart ?? value.length;
-    const next = value.slice(0, start) + r.value + value.slice(replacementEnd.current ?? caret);
-    onChange(next);
+    const caret = el?.selectionStart ?? display.length;
+    const next = display.slice(0, start) + shown(r) + display.slice(replacementEnd.current ?? caret);
+    commit(next);
     setQuery(null);
     replacementEnd.current = null;
-    const pos = start + r.value.length;
+    const pos = start + shown(r).length;
     requestAnimationFrame(() => {
       el?.focus();
       el?.setSelectionRange(pos, pos);
     });
   }
   const shared = {
-    value,
+    value: display,
     placeholder,
     "aria-label": ariaLabel,
     "aria-autocomplete": "list" as const,
@@ -114,7 +121,7 @@ export function ReferenceField({
     onChange: (
       e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>,
     ) => {
-      onChange(e.target.value);
+      commit(e.target.value);
       detect(e.target.value, e.target.selectionStart ?? e.target.value.length);
     },
     onKeyDown: (e: React.KeyboardEvent) => {
@@ -189,7 +196,7 @@ export function ReferenceField({
               onMouseEnter={() => setActive(i)}
             >
               <strong>{r.label}</strong>
-              <code>{r.value}</code>
+              <code>{shown(r)}</code>
               {r.hint && <small>{r.hint}</small>}
             </li>
           ))}
