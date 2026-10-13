@@ -1,5 +1,13 @@
 # Histórico de versões
 
+## 0.24.0 — 13/10/2026
+
+- Referências `{{…}}` coloridas nos campos dos blocos (Instruções, Mensagem, critérios da Condição, Novo valor): roxo quando a referência existe no fluxo e vermelho com sublinhado quando não existe. `state.<variável>` vale como `fluxo.<variável>`, como no motor, que passa a compartilhar a mesma regra de leitura.
+- Abrir um bloco não coloca mais o foco no campo de nome do cabeçalho.
+- Diálogo Implantar: a aba Integrações abre em cURL.
+- Minha conta: o cartão do AI Action ganha "Conhecer o programa" (landing) e "Garantir minha vaga" (checkout com o cupom já aplicado).
+- Validação: 359 testes gerais, lint e build sem erros; alinhamento da camada de destaque conferido no Chromium com a folha de estilos real, nos temas claro e escuro.
+
 ## 0.23.0 — 13/10/2026
 
 - Diálogo Implantar sem cabeçalho: apenas o botão de fechar, fixo no canto enquanto o conteúdo rola. O componente Modal passa a aceitar esse modo (título opcional, nome do diálogo por `label` para leitores de tela).
