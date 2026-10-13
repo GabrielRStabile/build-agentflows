@@ -11,6 +11,7 @@ import { ChatAttachments } from "./ChatAttachments";
 import type { RouterModel } from "./ModelPicker";
 import { ChatEvidence } from "./ChatEvidence";
 import { formatCost, runCost } from "@/lib/token-usage";
+import { queueExplanation, queueLabel } from "@/lib/queue-status";
 import { TraceDetails, TraceRow } from "./TraceDetails";
 import { Icon, request } from "./StudioUI";
 const STATUS: Record<Run["status"], string> = {
@@ -95,7 +96,9 @@ function BotMessage({
           </details>
         )}
         <div className="chat-text">
-          <ChatEvidence run={run} onOpenTool={setSelectedTrace} />
+          {run.queued && run.status === "running"
+            ? <p className="chat-queue" role="status"><span className="studio-spinner" />{queueExplanation(run.queue)}</p>
+            : <ChatEvidence run={run} onOpenTool={setSelectedTrace} />}
         </div>
         {run.error && (
           <p className="studio-error" role="alert">
@@ -129,7 +132,7 @@ function BotMessage({
         <footer>
           <MessageTime date={run.updatedAt || run.createdAt} active={active} />
           {cost !== undefined && <span className="chat-run-cost" title="Soma dos custos informados pelos provedores nesta execução">{formatCost(cost)}</span>}
-          {run.status !== "completed" && <span>{STATUS[run.status]}</span>}
+          {run.status !== "completed" && <span>{run.queued && run.status === "running" ? queueLabel(run.queue) : STATUS[run.status]}</span>}
           {["waiting", "running"].includes(run.status) && (
             <button disabled={busy} onClick={() => act("cancel")}>
               Cancelar execução

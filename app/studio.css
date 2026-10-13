@@ -2373,8 +2373,31 @@
 .node-execution-badge.waiting {
   background: #d6a353;
 }
-.node-execution-badge.running {
+.node-execution-badge.running,
+.node-execution-badge.queued {
   background: white;
+}
+.node-execution-label {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--studio-muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.chat-queue {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 11px;
+  color: var(--studio-muted);
+  margin: 0;
+}
+.chat-queue .studio-spinner {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 .node-dialog-type {
   display: flex;

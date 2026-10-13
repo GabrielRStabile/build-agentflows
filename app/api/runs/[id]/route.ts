@@ -1,12 +1,11 @@
 import { cancelRun } from "@/lib/flow-runtime";
 import { requestApi, body } from "@/lib/flow-api";
-import { enqueueResume } from "@/lib/saas-jobs";
+import { describeRun, enqueueResume } from "@/lib/saas-jobs";
 import { notifyJob } from "@/lib/saas-queue";
 import { tenantApi } from "@/lib/saas-http";
-import { getTenantRun } from "@/lib/tenant-flows";
 type C = { params: Promise<{ id: string }> };
 export async function GET(req: Request, c: C) {
-  return tenantApi(req, async () => getTenantRun((await c.params).id));
+  return tenantApi(req, async () => describeRun((await c.params).id));
 }
 export async function POST(req: Request, c: C) {
   return requestApi(req, async () => {

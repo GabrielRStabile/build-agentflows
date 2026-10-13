@@ -45,6 +45,7 @@ import { AgentEdge, type VisualEdge } from "./flow/AgentEdge";
 import { ConnectionLine } from "./flow/ConnectionLine";
 import type { Attachment } from "@/lib/attachment-types";
 import { readEditorChat, writeEditorChat } from "@/lib/editor-chat";
+import { queueLabel } from "@/lib/queue-status";
 const nodeTypes = { block: AgentNode };
 const edgeTypes = { agent: AgentEdge };
 const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 2 };
@@ -564,9 +565,10 @@ export function FlowEditor({ id }: { id: string }) {
   const visualNodes: VisualNode[] = graph.nodes.map((n) => {
     const done = run?.trace.some((t) => t.nodeId === n.id && t.type !== "tool");
     const current = run?.next === n.id;
+    const queued = !!run?.queued && run.status === "running";
     const execution =
       current && ["running", "waiting", "failed"].includes(run?.status || "")
-        ? run!.status
+        ? queued ? "queued" : run!.status
         : done
           ? "completed"
           : undefined;
@@ -575,6 +577,7 @@ export function FlowEditor({ id }: { id: string }) {
       data: {
         ...n.data,
         execution,
+        executionLabel: execution === "queued" ? queueLabel(run?.queue) : undefined,
         connected: graph.edges
           .filter((e) => e.source === n.id)
           .map((e) => e.sourceHandle || null),

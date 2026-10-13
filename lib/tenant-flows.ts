@@ -97,6 +97,7 @@ export async function putTenantRun(input: Run) {
 export async function persistTenantRun(sql: Sql, owner: string, input: Run) {
   await assertJobLease(sql, owner);
   const run = { ...input, updatedAt: new Date().toISOString() };
+  delete run.queue; // Live queue position is computed on read, never stored.
     // Shares the flow lock with delete: an execution cannot start between its check and deletion.
     await validateReferences(sql, owner, run.graph);
     await readFlow(sql, owner, run.flowId, true);

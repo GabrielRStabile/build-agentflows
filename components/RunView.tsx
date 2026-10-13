@@ -5,6 +5,7 @@ import { MarkdownContent } from "./MarkdownContent";
 import { TraceDetails, TraceRow } from "./TraceDetails";
 import { Icon, request } from "./StudioUI";
 import { formatCost, runCost } from "@/lib/token-usage";
+import { queueLabel } from "@/lib/queue-status";
 export const RUN_STATUS = {
   running: "Em execução",
   waiting: "Aguardando aprovação",
@@ -65,7 +66,7 @@ export function RunView({
           {!compact && <h2>{run.name}</h2>}
         </div>
         <span className={"execution-status " + run.status}>
-          {run.queued && run.status === "running" ? "Na fila" : RUN_STATUS[run.status]}
+          {run.queued && run.status === "running" ? queueLabel(run.queue) : RUN_STATUS[run.status]}
         </span>
       </header>
       {run.error && (

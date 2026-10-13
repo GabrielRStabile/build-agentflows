@@ -3,7 +3,8 @@ import type { Database, Sql } from "./saas-db";
 import { currentTenant } from "./tenant-context";
 import { FlowError } from "./flow-store";
 import { buildRun } from "./flow-runtime";
-import { persistTenantRun } from "./tenant-flows";
+import { getTenantRun, persistTenantRun } from "./tenant-flows";
+import type { QueueStatus } from "./queue-status";
 import { settleChannelDelivery } from "./channel-flows";
 import type { Run } from "./flow-types";
 import { consumeMonthlyRun } from "./saas-plan";
@@ -137,6 +138,24 @@ export async function recoverExpiredJobs(db: Database) {
     }
     return rows.length;
   });
+}
+/** Position of a queued run, in the worker's claim order, plus whether any worker is alive to claim it. */
+export async function runQueueStatus(sql: Sql, owner: string, runId: string): Promise<QueueStatus | undefined> {
+  const { rows } = await sql.query<{ ahead: number; running: number; workers: number }>(`SELECT
+    (SELECT count(*)::int FROM jobs q WHERE q.status='queued' AND (q.created_at<j.created_at OR (q.created_at=j.created_at AND q.id<j.id))) AS ahead,
+    (SELECT count(*)::int FROM jobs WHERE status='running' OR (status='cancelled' AND lease_until IS NOT NULL)) AS running,
+    (SELECT count(*)::int FROM worker_heartbeats WHERE updated_at>now()-interval '45 seconds') AS workers
+    FROM jobs j WHERE j.user_id=$1 AND j.kind='run' AND j.run_id=$2 AND j.status='queued'`, [owner, runId]);
+  if (!rows[0]) return undefined;
+  return { position: rows[0].ahead + 1, ahead: rows[0].ahead, running: rows[0].running, slots: queueLimits().running, workers: rows[0].workers };
+}
+/** Run as the API returns it: the persisted body plus the live queue position while it waits. */
+export async function describeRun(id: string): Promise<Run> {
+  const run = await getTenantRun(id);
+  if (!run.queued || run.status !== "running") return run;
+  const { db, user } = currentTenant();
+  const queue = await runQueueStatus(db, user.id, run.id);
+  return queue ? { ...run, queue } : run;
 }
 export async function listKnowledgeJobs(baseId: string) {
   const { db, user } = currentTenant();

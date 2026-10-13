@@ -229,3 +229,28 @@ test("requisições e workers concorrentes preservam quotas, dono e reivindicaç
   const states = await db.query("SELECT status FROM jobs WHERE status='done'");
   assert.equal(states.rows.length, 2);
 });
+
+test("posição na fila segue a ordem de reivindicação e informa workers ativos", async () => {
+  const { runQueueStatus, describeRun } = await import("./saas-jobs");
+  const flow = await asA(create), other = await asB(create);
+  const first = await asA(() => enqueueRun(flow.id, "A1", false, true));
+  const second = await asB(() => enqueueRun(other.id, "B1", false, true));
+  const third = await asA(() => enqueueRun(flow.id, "A2", false, true));
+  assert.deepEqual(await runQueueStatus(db, b, second.run.id), { position: 2, ahead: 1, running: 0, slots: queueLimits().running, workers: 0 });
+  assert.equal((await runQueueStatus(db, a, third.run.id))?.position, 3);
+  // Another account never learns about a run it does not own; a running run has no queue position.
+  assert.equal(await runQueueStatus(db, a, second.run.id), undefined);
+  await db.query("INSERT INTO worker_heartbeats(id) VALUES($1)", [randomUUID()]);
+  const claimed = (await claimJob(db, first.job.id))!;
+  assert.equal(claimed.run_id, first.run.id);
+  assert.deepEqual(await runQueueStatus(db, b, second.run.id), { position: 1, ahead: 0, running: 1, slots: queueLimits().running, workers: 1 });
+  assert.equal(await runQueueStatus(db, a, first.run.id), undefined);
+  const described = await asB(() => describeRun(second.run.id));
+  assert.equal(described.queue?.ahead, 0);
+  assert.equal(described.queued, true);
+  // The live field never reaches the stored body.
+  await asB(() => putTenantRun(described));
+  assert.equal((await asB(() => getTenantRun(second.run.id))).queue, undefined);
+  await runClaimedJob(db, claimed);
+  assert.equal((await asA(() => describeRun(first.run.id))).queue, undefined);
+});

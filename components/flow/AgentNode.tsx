@@ -18,6 +18,8 @@ import { knowledgeBaseIds } from "@/lib/knowledge-settings";
 import { modelLabel, modelProvider } from "../ModelPicker";
 export type VisualData = Block["data"] & {
   execution?: string;
+  /** Shown under the block while the run waits in the queue. */
+  executionLabel?: string;
   connected?: (string | null)[];
   edit?: () => void;
   duplicate?: () => void;
@@ -209,6 +211,8 @@ function AgentNodeView({ id, data, selected }: NodeProps<VisualNode>) {
           title={
             data.execution === "running"
               ? "Em execução"
+              : data.execution === "queued"
+                ? data.executionLabel || "Na fila"
               : data.execution === "failed"
                 ? "Falhou nesta etapa"
                 : data.execution === "waiting"
@@ -216,7 +220,7 @@ function AgentNodeView({ id, data, selected }: NodeProps<VisualNode>) {
                   : "Concluído"
           }
         >
-          {data.execution === "running" ? (
+          {data.execution === "running" || data.execution === "queued" ? (
             <span className="studio-spinner" />
           ) : (
             <Icon
@@ -231,6 +235,9 @@ function AgentNodeView({ id, data, selected }: NodeProps<VisualNode>) {
             />
           )}
         </span>
+      )}
+      {data.execution === "queued" && (
+        <span className="node-execution-label" role="status">{data.executionLabel || "Na fila"}</span>
       )}
     </div>
   );

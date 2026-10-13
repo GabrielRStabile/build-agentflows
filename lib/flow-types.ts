@@ -2,6 +2,7 @@ import type { KnowledgeReference } from "./knowledge-references";
 import type { TokenUsage } from "./token-usage";
 import type { Attachment } from "./attachment-types";
 import { MEMORY_DEFAULTS } from "./memory-settings";
+import type { QueueStatus } from "./queue-status";
 export const DEFAULT_SYSTEM = "Você é um assistente cuidadoso. Responda em português.";
 export const BLOCKS = {
   start: {
@@ -122,6 +123,8 @@ export type Run = {
   maxActiveMs?: number;
   interrupted?: boolean;
   queued?: boolean;
+  /** Present only in API responses while queued; the worker never writes it. */
+  queue?: QueueStatus;
   recoveryAttempts?: number;
   input: string;
   attachments?: Attachment[];
