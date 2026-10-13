@@ -209,7 +209,7 @@ print(dados["id"], dados["queued"])
     <Modal label="Implantar Fluxo Agêntico" onClose={onClose} wide>
       <div className="dialog-tabs">
         <button className={tab === "embed" ? "active" : ""} onClick={() => setTab("embed")}>Chat no site</button>
-        <button className={tab !== "embed" ? "active" : ""} onClick={() => setTab("whatsapp")}>Integrações</button>
+        <button className={tab !== "embed" ? "active" : ""} onClick={() => setTab("dev")}>Integrações</button>
       </div>
       {tab !== "embed" && <nav className="integration-options" aria-label="Tipos de integração">
         {TABS.map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{label}</button>)}
