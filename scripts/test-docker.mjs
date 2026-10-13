@@ -116,6 +116,23 @@ try {
     }
     assert.ok(done, 'workers did not finish the persisted queue');
     for (const id of fixture.runs) assert.equal((await request(fixture.tokenA, '/api/runs/' + id)).body.status, 'completed');
+    // Push channel: the web container's LISTEN connection receives the workers' NOTIFY and streams the run.
+    async function stream(token, id) {
+      const response = await fetch('http://127.0.0.1:10000/api/runs/' + id + '/events', { headers: { cookie: 'agentflows_session=' + token } });
+      assert.equal(response.status, 200); assert.ok(response.headers.get('content-type').includes('text/event-stream'));
+      const text = await response.text();
+      return text.split(String.fromCharCode(10, 10)).filter(block => block && !block.startsWith(':')).map(block => ({ event: /^event: (.*)$/m.exec(block)[1], data: JSON.parse(/^data: (.*)$/m.exec(block)[1]) }));
+    }
+    const finished = await stream(fixture.tokenA, fixture.runs[0]);
+    assert.deepEqual(finished.map(f => f.event), ['run', 'end']); assert.equal(finished[0].data.status, 'completed');
+    assert.equal((await fetch('http://127.0.0.1:10000/api/runs/' + fixture.runs[0] + '/events', { headers: { cookie: 'agentflows_session=' + fixture.tokenB } })).status, 200);
+    assert.equal((await stream(fixture.tokenB, fixture.runs[0]))[0].event, 'error');
+    const live = await request(fixture.tokenA, '/api/flows/' + fixture.flowId + '/run', { input: 'Streamed', demo: true });
+    assert.equal(live.status, 202);
+    const frames = await stream(fixture.tokenA, live.body.id);
+    assert.ok(frames.length >= 2, 'stream produced ' + frames.length + ' frames');
+    assert.equal(frames.at(-1).event, 'end'); assert.equal(frames.at(-1).data.reason, 'done');
+    assert.equal(frames.at(-2).event, 'run'); assert.equal(frames.at(-2).data.status, 'completed'); assert.equal(frames.at(-2).data.output, 'Worker completed');
     await db.close();
   `);
   console.log("Docker: checking encrypted ChatGPT session and native process isolation...");
