@@ -30,6 +30,7 @@ import {
   connectionProblem,
   outputLabel,
   outputs,
+  upgradeGraph,
 } from "@/lib/flow-graph";
 import { Icon, IconButton, Modal, followRun, pollRun, request, RequestError, useDismissMenus } from "./StudioUI";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
@@ -176,7 +177,7 @@ export function FlowEditor({ id }: { id: string }) {
         if (alive) {
           setFlow(f);
           if (!f.published) setDirty(true);
-          setGraph(f.graph);
+          setGraph(upgradeGraph(f.graph));
         }
       })
       .catch((e) => {
@@ -1185,7 +1186,7 @@ export function FlowEditor({ id }: { id: string }) {
             {info === "condition" ? "Adicione critérios para criar saídas numeradas. O primeiro critério atendido define o caminho; a última saída recebe os demais casos." : outputLabel(info, "yes")
               ? `Este bloco tem duas saídas (${outputLabel(info, "yes")} e ${outputLabel(info, "no")}). Conecte cada uma ao próximo passo.`
               : info === "loop"
-                ? "Repetir volta a uma etapa anterior pela saída Repetir até o limite e então segue pela saída Concluir."
+                ? "Repetir não tem setas de saída: escolha dentro dele o bloco para onde voltar e o máximo de passagens. Ao atingir o limite, entrega a mensagem configurada (ou o resultado anterior) e encerra."
                 : info === "end"
                   ? "A Resposta encerra o fluxo e entrega o texto final a quem chamou."
                   : "Conecte a saída deste bloco ao próximo passo do fluxo."}

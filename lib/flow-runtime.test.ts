@@ -127,12 +127,42 @@ test("aprovação persiste e só uma decisão pode retomar o checkpoint", async 
   assert.equal((await runtime.cancelRun(again.id)).status, "cancelled");
   await assert.rejects(() => runtime.resumeRun(again.id, "yes"), /já foi recebida/);
 });
-test("repetição tem limite e registro por passagem", async () => {
+test("repetição volta ao bloco escolhido até o limite e encerra com a mensagem do limite", async () => {
+  const a = block("start", "s", 0, 0),
+    v = block("state", "v", 0, 0),
+    l = block("loop", "l", 0, 0);
+  v.data.config = { key: "a", value: "{{last}}!" };
+  l.data.config = { target: "v", limit: "3", limitMessage: "Parei em {{last}} após o limite." };
+  const f = (await flow({
+    nodes: [a, v, l],
+    edges: [
+      { id: "a", source: "s", target: "v" },
+      { id: "b", source: "v", target: "l" },
+    ],
+  }));
+  const r = await runtime.startRun(f.id, "x", false, true);
+  assert.equal(r.status, "completed");
+  assert.equal(r.output, "Parei em x!!!! após o limite.");
+  assert.equal(r.visits.l, 4);
+  assert.equal(r.visits.v, 4);
+  // Sem mensagem, o resultado anterior é entregue como resposta.
+  l.data.config = { target: "v", limit: "1", limitMessage: "" };
+  const quiet = await runtime.startRun((await flow({ nodes: [a, v, l], edges: [{ id: "a", source: "s", target: "v" }, { id: "b", source: "v", target: "l" }] })).id, "y", false, true);
+  assert.equal(quiet.output, "y!!");
+  // Destino obrigatório e válido na execução (o rascunho pode ser salvo incompleto).
+  for (const target of ["", "s", "l"]) {
+    l.data.config = { target, limit: "2", limitMessage: "" };
+    const draft = await flow({ nodes: [a, v, l], edges: [{ id: "a", source: "s", target: "v" }, { id: "b", source: "v", target: "l" }] });
+    await assert.rejects(() => runtime.startRun(draft.id, "z", false, true), /bloco para onde voltar/);
+  }
+});
+test("fluxo antigo com setas Repetir/Concluir continua executando pelo destino migrado", async () => {
   const a = block("start", "s", 0, 0),
     l = block("loop", "l", 0, 0),
     v = block("state", "v", 0, 0),
     e = block("end", "e", 0, 0);
   v.data.config = { key: "a", value: "{{last}}!" };
+  l.data.config = { limit: "3" };
   const f = (await flow({
     nodes: [a, l, v, e],
     edges: [
@@ -142,7 +172,12 @@ test("repetição tem limite e registro por passagem", async () => {
       { id: "d", source: "l", target: "e", sourceHandle: "done" },
     ],
   }));
-  const r = await runtime.startRun(f.id, "x", false, true);
+  assert.equal(f.graph.nodes.find((n) => n.id === "l")?.data.config.target, "v");
+  assert.ok(!f.graph.edges.some((edge) => edge.sourceHandle));
+  // O bloco que vinha depois de Concluir ficou solto: o editor pede para reconectar ou remover.
+  await assert.rejects(() => runtime.startRun(f.id, "x", false, true), /conectados ao Início/);
+  const trimmed = (await flow({ ...f.graph, nodes: f.graph.nodes.filter((n) => n.id !== "e") }));
+  const r = await runtime.startRun(trimmed.id, "x", false, true);
   assert.equal(r.status, "completed");
   assert.equal(r.output, "x!!!");
   assert.equal(r.visits.l, 4);

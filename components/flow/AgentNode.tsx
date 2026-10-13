@@ -2,6 +2,7 @@
 import { memo, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Handle,
+  useNodesData,
   useUpdateNodeInternals,
   NodeToolbar,
   Position,
@@ -45,6 +46,8 @@ function AgentNodeView({ id, data, selected }: NodeProps<VisualNode>) {
   useEffect(() => () => { if (hideTimer.current) clearTimeout(hideTimer.current); }, []);
   const [editing, setEditing] = useState<string | null>(null);
   const outs = outputs(data.kind, data.config);
+  // Repetir não tem setas: o destino aparece como etiqueta no próprio bloco.
+  const loopTarget = useNodesData<VisualNode>(data.kind === "loop" && data.config.target ? data.config.target : "");
   const updateNodeInternals = useUpdateNodeInternals();
   const outputSignature = outs.map((output) => output.id).join(',');
   useEffect(() => { updateNodeInternals(id); }, [id, outputSignature, updateNodeInternals]);
@@ -161,6 +164,12 @@ function AgentNodeView({ id, data, selected }: NodeProps<VisualNode>) {
             <span className="af-pill" title={modelProvider(data.config.model)}>
               <Icon name={modelProvider(data.config.model) === "ChatGPT" ? "spark" : "link"} size={13} />
               {modelLabel(data.config.model)}
+            </span>
+          )}
+          {data.kind === "loop" && (
+            <span className="af-pill" title={loopTarget ? `Volta para ${loopTarget.data.label}` : "Escolha o bloco para onde voltar"}>
+              <Icon name="loop" size={13} />
+              {loopTarget ? loopTarget.data.label : "Escolha o destino"}
             </span>
           )}
           {data.kind === "start" && (

@@ -4,7 +4,7 @@ import { memorySettings } from "./memory-settings";
 import { validateMediaConfig } from "./media-models";
 import { knowledgeSettings } from "./knowledge-settings";
 import { validateToolCards } from "./agent-tools";
-import { outputs } from "./flow-graph";
+import { outputs, upgradeGraph } from "./flow-graph";
 import {
   BLOCKS,
   type Flow,
@@ -20,10 +20,11 @@ export class FlowError extends Error {
 export function validateGraph(value: unknown, executable = false): Graph {
   if (!value || typeof value !== "object")
     throw new FlowError("O fluxo precisa de blocos e conexões.");
-  const g = value as Graph;
+  const raw = value as Graph;
+  if (!Array.isArray(raw.nodes) || !Array.isArray(raw.edges))
+    throw new FlowError("Use até 60 blocos e 120 conexões por fluxo.");
+  const g = upgradeGraph(raw);
   if (
-    !Array.isArray(g.nodes) ||
-    !Array.isArray(g.edges) ||
     g.nodes.length > 60 ||
     g.edges.length > 120 ||
     JSON.stringify(g).length > 250000
@@ -111,6 +112,11 @@ export function validateGraph(value: unknown, executable = false): Graph {
         (!/^\d+$/.test(c.limit || "") || +c.limit < 1 || +c.limit > 20)
       )
         throw new FlowError("A repetição deve ter entre 1 e 20 passagens.");
+      if (k === "loop") {
+        const target = g.nodes.find((o) => o.id === c.target);
+        if (!target || target.id === n.id || target.data.kind === "start" || target.data.kind === "end")
+          throw new FlowError(`Escolha em “${n.data.label}” o bloco para onde voltar.`);
+      }
       if (
         k === "condition" &&
         !conditionCriteria(c).every((row) => COMPARISONS.some(([operator]) => operator === row.operator))
@@ -166,22 +172,25 @@ export function validateGraph(value: unknown, executable = false): Graph {
       if (reachable.has(id)) return;
       reachable.add(id);
       g.edges.filter((e) => e.source === id).forEach((e) => walk(e.target));
+      // Repetir alcança o bloco escolhido sem seta.
+      const node = g.nodes.find((n) => n.id === id);
+      if (node?.data.kind === "loop" && ids.has(node.data.config.target)) walk(node.data.config.target);
     }
     walk(starts[0].id);
     if (reachable.size !== g.nodes.length)
       throw new FlowError(
         "Todos os blocos precisam estar conectados ao Início.",
       );
-    // Every block must have a route to an end; bounded loops may revisit earlier blocks.
+    // Every block must have a route to an end. Repetir ends the flow when its limit is reached.
     const finishing = new Set(
-      g.nodes.filter((n) => ["end", "agent", "llm"].includes(n.data.kind) && !g.edges.some((e) => e.source === n.id)).map((n) => n.id),
+      g.nodes.filter((n) => ["end", "agent", "llm", "loop"].includes(n.data.kind) && !g.edges.some((e) => e.source === n.id)).map((n) => n.id),
     );
     for (let i = 0; i < g.nodes.length; i++)
       g.edges.forEach((e) => {
         if (finishing.has(e.target)) finishing.add(e.source);
       });
     if (finishing.size !== g.nodes.length)
-      throw new FlowError("Todo caminho precisa poder terminar em Agente, LLM ou Resposta.");
+      throw new FlowError("Todo caminho precisa poder terminar em Agente, LLM, Resposta ou Repetir.");
   }
   const result = structuredClone(g);
   for (const n of result.nodes) if (n.data.kind === "start") n.data.label = "Início";

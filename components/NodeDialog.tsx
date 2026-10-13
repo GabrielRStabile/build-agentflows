@@ -7,6 +7,7 @@ import { BLOCKS, DEFAULT_SYSTEM, type Block, type Kind } from "@/lib/flow-types"
 import { NODE_STYLE } from "@/lib/flow-presets";
 import { Icon, IconButton, Modal, request } from "./StudioUI";
 import { ReferenceField, type Reference } from "./ReferenceField";
+import { loopTargets } from "@/lib/flow-graph";
 import { ToolPicker } from "./ToolPicker";
 import { ModelPicker } from "./ModelPicker";
 import { memorySettings } from "@/lib/memory-settings";
@@ -22,7 +23,7 @@ const fields: Record<Kind, string[]> = {
   http: ["url", "method", "body", "credential"],
   tool: ["tool", "args"],
   approval: ["prompt"],
-  loop: ["limit"],
+  loop: ["target", "limit", "limitMessage"],
   whatsapp: ["to", "text"],
   call: ["to", "context"],
   end: ["text"],
@@ -50,13 +51,15 @@ const labels: Record<string, [string, string]> = {
   ],
   tool: ["Ferramenta", "Ferramenta do serviço conectado."],
   args: ["Argumentos", "JSON com os parâmetros da ferramenta."],
+  target: ["Voltar para", "Bloco executado novamente a cada passagem. O caminho segue dele até chegar aqui de novo."],
   limit: ["Máximo de repetições", "Entre 1 e 20 passagens."],
+  limitMessage: ["Mensagem ao atingir o limite", "Entregue como resultado quando o limite chega sem concluir. Em branco, mantém o resultado anterior."],
   text: ["Resposta final", "Texto entregue a quem chamou o fluxo."],
   to: ["Número de destino", "Com DDI e DDD, ex.: 5511999990000. Aceita {{state.telefone}}."],
   context: ["Contexto da ligação", "O que o agente de voz deve saber e fazer nesta chamada."],
 };
-const TEXTAREAS = ["system", "prompt", "state", "body", "args", "text", "context"];
-const REFERENCES = ["system", "prompt", "value", "compare", "body", "args", "text", "to", "context"];
+const TEXTAREAS = ["system", "prompt", "state", "body", "args", "text", "context", "limitMessage"];
+const REFERENCES = ["system", "prompt", "value", "compare", "body", "args", "text", "to", "context", "limitMessage"];
 
 
 type ToolInfo = {
@@ -321,6 +324,21 @@ export function NodeDialog({
                     {l}
                   </option>
                 ))}
+              </select>
+            ) : key === "target" ? (
+              <select
+                value={c[key] || ""}
+                onChange={(e) => change(key, e.target.value)}
+              >
+                <option value="">Escolha um bloco</option>
+                {loopTargets({ nodes, edges: [] }, node.id).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.data.label} · {BLOCKS[o.data.kind].label}
+                  </option>
+                ))}
+                {c.target && !nodes.some((o) => o.id === c.target) && (
+                  <option value={c.target}>{c.target} · não encontrado</option>
+                )}
               </select>
             ) : key === "tools" ? (
               <ToolPicker value={c.tools || ""} cardsValue={c.toolCards || ""} onChange={(tools, toolCards) => setDraft((d) => ({

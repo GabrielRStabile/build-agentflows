@@ -21,7 +21,7 @@ const FIELDS: Record<Kind, string> = {
   approval: "prompt (o que a pessoa deve revisar)",
   whatsapp: "to (número com DDI e DDD; use {{fluxo.telefone}} ou o número fixo), text (mensagem; use {{last}})",
   call: "to (telefone com DDI e DDD), context (o que o agente de voz deve saber e fazer; use {{last}})",
-  loop: "limit (número de 1 a 20)",
+  loop: "target (id do bloco para onde voltar), limit (número de 1 a 20), limitMessage (mensagem entregue quando o limite chega sem concluir; opcional)",
   end: "text (resposta final; use {{last}} ou {{nodes.id}})",
 };
 export const GENERATOR_SYSTEM = `Você desenha fluxos de agentes de IA para executivos. Responda somente com um JSON válido, sem comentários nem texto fora do JSON.
@@ -29,14 +29,14 @@ export const GENERATOR_SYSTEM = `Você desenha fluxos de agentes de IA para exec
 Tipos de bloco disponíveis (kind) e seus campos de config:
 ${KINDS.map((k) => `- ${k} (${BLOCKS[k].label}: ${BLOCKS[k].help}) → ${FIELDS[k]}`).join("\n")}
 
-Saídas (handle) de cada tipo: condition tem uma saída para cada criteria.id e a saída final "no" para nenhum critério atendido; approval tem "yes" e "no"; loop tem "repeat" e "done"; end não tem saída; os demais têm uma única saída (handle omitido).
+Saídas (handle) de cada tipo: condition tem uma saída para cada criteria.id e a saída final "no" para nenhum critério atendido; approval tem "yes" e "no"; loop e end não têm saída (loop volta ao bloco target até limit e então encerra com limitMessage); os demais têm uma única saída (handle omitido).
 
 Regras:
 - Exatamente um bloco start, com nome Início. end é opcional: agent e llm sem saída entregam a resposta final.
 - Todo bloco precisa ser alcançável a partir do start e chegar a um end ou agent/llm terminal.
 - Condições avaliam critérios em ordem, seguem o primeiro atendido e usam "no" caso nenhum seja atendido. Cada critério tem id único, diferente de "no", e a condição deve ter pelo menos um critério.
 - Cada saída recebe exatamente uma conexão, exceto agent/llm terminal, que não tem conexão de saída.
-- Só o handle "repeat" de um loop pode voltar a um bloco anterior.
+- Nenhuma conexão pode voltar a um bloco anterior. Para repetir etapas, termine o caminho em um loop com target apontando para o bloco a refazer (normalmente após uma condition que verifica o resultado).
 - Use de 2 a 10 blocos. Prefira agent para tarefas com raciocínio. Não use http nem tool sem o pedido mencionar um serviço ou ferramenta.
 - Textos em português do Brasil, claros e sem jargão técnico. Instruções (system) completas e específicas para o caso.
 - Agente e LLM aceitam memoryEnabled ("true" por padrão; "false" desliga o histórico automático) e memoryType: allMessages (padrão, histórico da conversa e respostas dos agentes anteriores), windowSize (memoryWindowSize: número de mensagens anteriores, padrão "20"), conversationSummary (resumo por IA) ou conversationSummaryBuffer (resumo das antigas e mensagens recentes, memoryMaxTokens: limite aproximado, padrão "2000"). Esses campos são strings. A mensagem da etapa continua sendo enviada em todos os modos. Preserve a memória padrão, salvo pedido explícito para mudar.
@@ -92,6 +92,11 @@ export function parseGenerated(answer: string): Generated {
         target = text(e.target, 80);
       const node = nodes.find((n) => n.id === source);
       const kind = node?.data.kind;
+      // Repetir não tem saída: uma seta "repeat" vira o destino e as demais são descartadas.
+      if (kind === "loop") {
+        if (text(e.handle ?? e.sourceHandle, 20) === "repeat" && !node!.data.config.target) node!.data.config.target = target;
+        return null;
+      }
       // Saída única: qualquer handle informado é ignorado; ramificação: handle obrigatório.
       const handle =
         kind && outputs(kind, node?.data.config).length > 1
@@ -99,7 +104,7 @@ export function parseGenerated(answer: string): Generated {
           : null;
       return { source, target, handle };
     })
-    .filter((e) => ids.has(e.source) && ids.has(e.target))
+    .filter((e): e is { source: string; target: string; handle: string | null } => !!e && ids.has(e.source) && ids.has(e.target))
     .map((e, i) => ({
       id: `g${i + 1}`,
       source: e.source,

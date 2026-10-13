@@ -5,8 +5,10 @@ import {
   connect,
   connectionProblem,
   layout,
+  loopTargets,
   outputLabel,
   outputs,
+  upgradeGraph,
 } from "./flow-graph";
 test("cada tipo de bloco expõe as saídas certas", () => {
   assert.deepEqual(outputs("agent"), [{ id: null, label: "" }]);
@@ -14,10 +16,7 @@ test("cada tipo de bloco expõe as saídas certas", () => {
     outputs("condition").map((o) => o.id),
     ["yes", "no"],
   );
-  assert.deepEqual(
-    outputs("loop").map((o) => o.id),
-    ["repeat", "done"],
-  );
+  assert.deepEqual(outputs("loop"), [], "Repetir volta ao bloco escolhido, sem setas");
   assert.deepEqual(outputs("end"), []);
   assert.equal(outputLabel("approval", "no"), "Rejeitar");
   assert.equal(outputLabel("agent", null), "");
@@ -57,7 +56,30 @@ test("cada saída aceita uma única conexão", () => {
     /já está conectada/,
   );
 });
-test("ciclos só existem pela saída Repetir", () => {
+test("conexões nunca formam ciclo; Repetir escolhe o destino pelo nome e não tem saída", () => {
+  const g: Graph = {
+    nodes: [
+      block("start", "inicio", 0, 0),
+      block("agent", "a", 0, 0),
+      block("condition", "c", 0, 0),
+      block("loop", "rep", 0, 0),
+      block("end", "fim", 0, 0),
+    ],
+    edges: [
+      { id: "1", source: "inicio", target: "a" },
+      { id: "2", source: "a", target: "c" },
+      { id: "3", source: "c", target: "rep", sourceHandle: "no" },
+    ],
+  };
+  assert.match(connectionProblem(g, { source: "rep", target: "a", sourceHandle: "repeat" })!, /não tem saída/);
+  assert.match(connectionProblem(g, { source: "rep", target: "a" })!, /não tem saída/);
+  assert.match(connectionProblem(g, { source: "c", target: "a", sourceHandle: "yes" })!, /ciclo/);
+  assert.equal(connectionProblem(g, { source: "c", target: "fim", sourceHandle: "yes" }), null);
+  const linked = connect(g, { source: "c", target: "fim", sourceHandle: "yes" });
+  assert.equal(linked.edges.at(-1)?.id, "c-yes-fim");
+  assert.deepEqual(loopTargets(g, "rep").map((n) => n.id), ["a", "c"], "sem ele mesmo, Início e Resposta");
+});
+test("fluxos antigos com setas Repetir/Concluir viram destino escolhido", () => {
   const g: Graph = {
     nodes: [
       block("start", "inicio", 0, 0),
@@ -68,24 +90,17 @@ test("ciclos só existem pela saída Repetir", () => {
     edges: [
       { id: "1", source: "inicio", target: "a" },
       { id: "2", source: "a", target: "rep" },
+      { id: "3", source: "rep", target: "a", sourceHandle: "repeat" },
+      { id: "4", source: "rep", target: "fim", sourceHandle: "done" },
     ],
   };
-  assert.equal(
-    connectionProblem(g, { source: "rep", target: "a", sourceHandle: "repeat" }),
-    null,
-  );
-  assert.match(
-    connectionProblem(g, { source: "rep", target: "a", sourceHandle: "done" })!,
-    /ciclo/,
-  );
-  const withLoop = connect(g, { source: "rep", target: "a", sourceHandle: "repeat" });
-  assert.equal(
-    connectionProblem(withLoop, { source: "rep", target: "fim", sourceHandle: "done" }),
-    null,
-  );
-  const done = connect(withLoop, { source: "rep", target: "fim", sourceHandle: "done" });
-  assert.equal(done.edges.at(-1)?.id, "rep-done-fim");
-  assert.equal(done.edges.at(-2)?.sourceHandle, "repeat");
+  const upgraded = upgradeGraph(g);
+  assert.equal(upgraded.nodes.find((n) => n.id === "rep")?.data.config.target, "a");
+  assert.deepEqual(upgraded.edges.map((e) => e.id), ["1", "2"]);
+  assert.equal(upgradeGraph(upgraded), upgraded, "sem setas antigas, o grafo volta intacto");
+  const already = structuredClone(g);
+  already.nodes[2].data.config.target = "inicio";
+  assert.equal(upgradeGraph(already).nodes[2].data.config.target, "inicio", "um destino já escolhido é preservado");
 });
 test("layout distribui blocos em colunas pela distância do Início", () => {
   const g: Graph = {

@@ -48,7 +48,7 @@ export const BLOCKS = {
   loop: {
     label: "Repetir",
     icon: "↻",
-    help: "Repete um caminho com limite de passagens.",
+    help: "Volta a um bloco escolhido até o limite de passagens.",
   },
   whatsapp: {
     label: "Enviar WhatsApp",
@@ -148,7 +148,7 @@ export function block(kind: Kind, id: string, x: number, y: number): Block {
       : kind === "condition"
         ? { value: "{{input}}", operator: "contains", compare: "urgente" }
         : kind === "loop"
-          ? { limit: "3" }
+          ? { target: "", limit: "3", limitMessage: "" }
           : kind === "http"
             ? { url: "", method: "GET", body: "{{input}}" }
             : kind === "state"

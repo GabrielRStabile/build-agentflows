@@ -245,8 +245,12 @@ export async function execute(r: Run, externalSignal?: AbortSignal): Promise<Run
         const matched = conditionCriteria(c).find((row) => matchesCriterion(row.operator, interpolate(row.value, r), interpolate(row.compare, r)));
         handle = matched?.id || FALLBACK_HANDLE;
       }
-      if (k === "loop")
-        handle = r.visits[n.id] <= Number(c.limit) ? "repeat" : "done";
+      // Repetir volta ao bloco escolhido até o limite; depois entrega a mensagem do limite (ou o resultado anterior) e encerra.
+      let jump: string | null = null;
+      if (k === "loop") {
+        if (r.visits[n.id] <= Number(c.limit)) jump = c.target;
+        else if (c.limitMessage?.trim()) output = interpolate(c.limitMessage, r);
+      }
       if (k === "approval") {
         r.status = "waiting";
         // The previous result follows the text unless the text already cites it.
@@ -352,8 +356,8 @@ export async function execute(r: Run, externalSignal?: AbortSignal): Promise<Run
         const values = updates.map((u) => [u.key, interpolate(u.value, r)] as const);
         for (const [key, value] of values) r.state[key] = value;
       }
-      r.next = next(r, n, handle);
-      if (!r.next && (k === "agent" || k === "llm")) r.status = "completed";
+      r.next = jump || next(r, n, handle);
+      if (!r.next && (k === "agent" || k === "llm" || k === "loop")) r.status = "completed";
       await putRun(r);
     }
     if (r.status !== "completed")
