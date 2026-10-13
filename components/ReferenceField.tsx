@@ -1,6 +1,10 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { referenceSegments } from "@/lib/reference-highlight";
 export type Reference = { value: string; label: string; hint?: string };
+// A camada de destaque espelha o campo (fonte, espaçamento, bordas e posição) para colorir as
+// referências sem mexer no texto digitado: o campo fica com o texto transparente por cima dela.
+const MIRRORED = ["font", "lineHeight", "letterSpacing", "wordSpacing", "textIndent", "textTransform", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "borderRadius", "boxSizing"] as const;
 // Campo de texto com autocompletar: ao digitar "{{" aparece a lista de referências (entrada,
 // resultado anterior, variáveis e blocos do fluxo) e a escolha entra como {{...}} no lugar certo.
 export function ReferenceField({
@@ -27,6 +31,28 @@ export function ReferenceField({
   showOnFocus?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
+  const highlight = useRef<HTMLDivElement | null>(null);
+  const segments = referenceSegments(value, references.map((r) => r.value));
+  const highlighted = segments.some((s) => s.kind !== "text");
+  useEffect(() => {
+    const el = ref.current, layer = highlight.current;
+    if (!el || !layer) return;
+    const mirror = () => {
+      const style = getComputedStyle(el);
+      for (const prop of MIRRORED) layer.style[prop] = style[prop];
+      layer.style.top = el.offsetTop + "px";
+      layer.style.left = el.offsetLeft + "px";
+      layer.style.width = el.offsetWidth + "px";
+      layer.style.height = el.offsetHeight + "px";
+      layer.scrollTop = el.scrollTop;
+      layer.scrollLeft = el.scrollLeft;
+    };
+    mirror();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(mirror);
+    observer?.observe(el);
+    window.addEventListener("resize", mirror);
+    return () => { observer?.disconnect(); window.removeEventListener("resize", mirror); };
+  }, [highlighted, value]);
   const [query, setQuery] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const [start, setStart] = useState(0);
@@ -108,11 +134,29 @@ export function ReferenceField({
       }
     },
     onBlur: () => setQuery(null),
+    onScroll: (e: React.UIEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+      const layer = highlight.current;
+      if (!layer) return;
+      layer.scrollTop = e.currentTarget.scrollTop;
+      layer.scrollLeft = e.currentTarget.scrollLeft;
+    },
     onFocus: (e: React.FocusEvent<HTMLTextAreaElement | HTMLInputElement>) => { if (showOnFocus) showReferences(e.currentTarget); },
     onClick: (e: React.MouseEvent<HTMLTextAreaElement | HTMLInputElement>) => showReferences(e.currentTarget),
   };
   return (
-    <div className="reference-field">
+    <div className={"reference-field" + (highlighted ? " has-highlight" : "")}>
+      {highlighted && (
+        <div ref={highlight} className={"reference-highlight" + (multiline ? "" : " single-line")} aria-hidden="true">
+          {segments.map((segment, i) =>
+            segment.kind === "text" ? segment.text : (
+              <mark key={i} className={"reference-token" + (segment.kind === "unknown" ? " is-unknown" : "")} title={segment.kind === "unknown" ? "Esta referência não existe no fluxo" : undefined}>
+                {segment.text}
+              </mark>
+            ),
+          )}
+          {"\u200b"}
+        </div>
+      )}
       {multiline ? (
         <textarea
           ref={(el) => {

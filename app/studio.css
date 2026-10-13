@@ -10,6 +10,10 @@
   --studio-line: #e5e7ef;
   --studio-canvas: #f8f9fc;
   --studio-shadow: 0 7px 24px #252a4810;
+  --studio-reference: #4f3fc4;
+  --studio-reference-soft: #ece9fb;
+  --studio-reference-missing: #c0394f;
+  --studio-reference-missing-soft: #fde8ec;
 }
 :root[data-studio-theme="dark"] {
   --studio-primary: #a397fa;
@@ -22,6 +26,10 @@
   --studio-line: #36394b;
   --studio-canvas: #191b24;
   --studio-shadow: 0 7px 24px #0003;
+  --studio-reference: #b9aeff;
+  --studio-reference-soft: #322c52;
+  --studio-reference-missing: #ff8a9b;
+  --studio-reference-missing-soft: #4a2630;
 }
 .studio-shell,
 .canvas-page,
@@ -2485,6 +2493,48 @@
 .reference-field textarea,
 .reference-field input {
   width: 100%;
+}
+/* Referências {{...}} coloridas: a camada espelha o campo e o texto do campo fica transparente. */
+.reference-field.has-highlight textarea,
+.reference-field.has-highlight input {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--studio-ink);
+}
+.reference-field.has-highlight textarea::selection,
+.reference-field.has-highlight input::selection {
+  color: transparent;
+}
+.reference-highlight {
+  position: absolute;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  color: var(--studio-ink);
+  background: var(--studio-bg);
+  border-style: solid;
+  border-color: transparent;
+}
+.reference-highlight.single-line {
+  white-space: pre;
+}
+.reference-token {
+  color: var(--studio-reference);
+  background: var(--studio-reference-soft);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--studio-reference-soft);
+}
+.reference-token.is-unknown {
+  color: var(--studio-reference-missing);
+  background: var(--studio-reference-missing-soft);
+  box-shadow: 0 0 0 1px var(--studio-reference-missing-soft);
+  text-decoration: underline wavy var(--studio-reference-missing);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
 }
 .reference-menu {
   position: absolute;

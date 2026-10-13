@@ -1,7 +1,7 @@
 import { FlowError } from "./flow-store";
 import type { Run } from "./flow-types";
+import { REFERENCE_PATTERN as REFERENCE } from "./reference-highlight";
 
-const REFERENCE = /\{\{\s*([^{}]+?)\s*\}\}/g;
 function referenceValue(key: string, r: Run): string | undefined {
   if (key === "input") return r.input;
   if (key === "last") return r.output;
