@@ -53,7 +53,7 @@ async function request(token, pathname, data, method, publicAccess = false) {
 }
 `;
 try {
-  await writeFile(envFile, `APP_URL=${origin}\nCHAVE_MESTRA=${randomBytes(32).toString("base64")}\nPOSTGRES_PASSWORD=${randomBytes(32).toString("hex")}\nREDIS_PASSWORD=${randomBytes(32).toString("hex")}\nRESEND_API_KEY=unused\nRESEND_FROM=test@example.com\n`, { mode: 0o600 });
+  await writeFile(envFile, `APP_URL=${origin}\nCHAVE_MESTRA=${randomBytes(32).toString("base64")}\nPOSTGRES_PASSWORD=${randomBytes(32).toString("hex")}\nREDIS_PASSWORD=${randomBytes(32).toString("hex")}\nRESEND_API_KEY=unused\nRESEND_FROM=test@example.com\nFILA_LIMITE_USUARIO=10\n`, { mode: 0o600 });
   await writeFile(override, `services:\n  app:\n    image: ${image}\n${browserPort ? `    ports:\n      - "127.0.0.1:${browserPort}:10000"\n` : ""}    environment:\n      RESEND_API_KEY: ""\n      RESEND_FROM: ""\n  worker:\n    image: ${image}\n    environment:\n      RESEND_API_KEY: ""\n      RESEND_FROM: ""\n`);
   if (!process.env.AGENTFLOWS_TEST_IMAGE) {
     console.log("Docker: compiling image...");

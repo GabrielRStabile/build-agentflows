@@ -27,6 +27,29 @@ export async function verifyEmbedBrowser(origin, fixture) {
     await page.screenshot({ path: "/tmp/agentflows-embed-mobile.png", fullPage: true });
     assert.deepEqual(errors, []);
 
+    // Sair e voltar ao fluxo traz a conversa de teste; depois de limpa, ela não volta.
+    page.on("dialog", dialog => dialog.accept());
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const chatKey = "agentflows-chat:" + fixture.flowId;
+    const reopen = async () => {
+      await page.goto(origin + "/");
+      await page.goto(origin + "/flows/" + fixture.flowId);
+      await page.getByRole("button", { name: "Testar Fluxo Agêntico" }).click();
+    };
+    await page.goto(origin + "/");
+    await page.evaluate(([key, ids]) => localStorage.setItem(key, JSON.stringify(ids)), [chatKey, fixture.runs.slice(0, 2)]);
+    await reopen();
+    const popup = page.locator(".chat-popup");
+    await popup.getByText("Test 1", { exact: true }).waitFor();
+    assert.equal(await popup.getByText("Test 0", { exact: true }).count(), 1);
+    assert.equal(await popup.getByText("Worker completed", { exact: true }).count(), 2);
+    await page.getByRole("button", { name: "Limpar conversa" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Limpar conversa" }).click();
+    await reopen();
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), chatKey), "[]");
+    assert.equal(await popup.getByText("Test 1", { exact: true }).count(), 0);
+    assert.deepEqual(errors, []);
+
     const b = await browser.newContext();
     await b.addCookies([{ name: "agentflows_session", value: fixture.tokenB, url: origin, httpOnly: true, sameSite: "Lax" }]);
     const other = await b.newPage();

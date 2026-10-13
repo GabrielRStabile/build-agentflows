@@ -44,6 +44,7 @@ import { AgentNode, type VisualNode } from "./flow/AgentNode";
 import { AgentEdge, type VisualEdge } from "./flow/AgentEdge";
 import { ConnectionLine } from "./flow/ConnectionLine";
 import type { Attachment } from "@/lib/attachment-types";
+import { readEditorChat, writeEditorChat } from "@/lib/editor-chat";
 const nodeTypes = { block: AgentNode };
 const edgeTypes = { agent: AgentEdge };
 const FIT_VIEW_OPTIONS = { padding: 0.3, maxZoom: 2 };
@@ -477,6 +478,25 @@ export function FlowEditor({ id }: { id: string }) {
         : [...list, r],
     );
   }, [setRun, setSession]);
+  // Ao voltar ao fluxo, a conversa de teste reaparece com a última execução, salvo se foi limpa.
+  const [restoredChat, setRestoredChat] = useState<string | null>(null);
+  useEffect(() => {
+    if (id === "new") return;
+    let alive = true;
+    const ids = readEditorChat(localStorage, id);
+    void Promise.all(ids.map((runId) => request<Run>("/api/runs/" + runId).catch(() => null)))
+      .then((items) => {
+        if (!alive) return;
+        const found = items.filter((r): r is Run => !!r && r.flowId === id);
+        setRestoredChat(id);
+        if (found.length) setSession((list) => [...found.filter((r) => !list.some((x) => x.id === r.id)), ...list]);
+        if (found.length) setRun((current) => current || found[found.length - 1]);
+      });
+    return () => { alive = false; };
+  }, [id]);
+  useEffect(() => {
+    if (id !== "new" && restoredChat === id) writeEditorChat(localStorage, id, session.map((r) => r.id));
+  }, [id, restoredChat, session]);
   // Após aprovar/rejeitar (ou abrir pelo histórico), a execução segue no servidor fora de execute();
   // acompanha até terminar para o chat e o canvas não ficarem presos em "Em execução".
   const following = !running && session.some((r) => r.status === "running");
