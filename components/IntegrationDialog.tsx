@@ -6,7 +6,7 @@ import { Icon, Modal, request } from "./StudioUI";
 const TABS = [
   ["whatsapp", "WhatsApp"],
   ["calls", "Ligações"],
-  ["dev", "Developer"],
+  ["dev", "cURL"],
   ["mcp", "Conector MCP"],
 ] as const;
 type Tab = "embed" | (typeof TABS)[number][0];
@@ -402,7 +402,6 @@ print(dados["id"], dados["queued"])
         </section>
       ) : (
         <>
-        {accessControls}
         <section className="integration-section">
           <div className="integration-code-title">
             <h3>
@@ -439,6 +438,7 @@ print(dados["id"], dados["queued"])
             </p>
           )}
         </section>
+        {accessControls}
         </>
       )}
     </Modal>
