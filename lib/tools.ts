@@ -318,6 +318,14 @@ const BUILTIN: Builtin[] = [
       return out === undefined ? "Caminho não encontrado." : typeof out === "string" ? out : JSON.stringify(out).slice(0, 30000);
     },
   },
+  // Imagens e vídeo: o modelo escolhido nos parâmetros define se aceita imagens de referência.
+  {
+    id: "interno:replicate", name: "replicate", label: "Replicate", category: "Imagens e vídeo", credential: "ai_replicate",
+    available: () => !!getConfig("REPLICATE_API_TOKEN"),
+    description: "Gera imagens ou vídeos com um modelo da Replicate. Modelos que aceitam imagens também recebem referências para edição.",
+    schema: { type: "object", properties: {} },
+    call: async () => { throw new FlowError("Use esta ferramenta em um bloco Agente."); },
+  },
   // Utilidades
   {
     id: "interno:data_hora", name: "data_hora", category: "Utilidades",
@@ -418,6 +426,12 @@ export async function resolveTools(ids: string[], cardsValue = ""): Promise<Agen
         out.push({ name: b.name, description: params.description || b.description, schema: { type: "object", properties: { entrada: { type: "string" } }, required: ["entrada"] }, call: async (args) => {
           return b.call({ entrada: (args as { entrada?: string })?.entrada || "", fluxo: params.flowId });
         } }); continue;
+      }
+      if (b.name === "replicate") {
+        const key = withToolCredential(credentialId, b.credential, () => getConfig("REPLICATE_API_TOKEN"));
+        if (!key) throw new FlowError("Selecione a credencial da Replicate nos parâmetros da ferramenta.");
+        const { replicateAgentTool } = await import("./replicate-tool");
+        out.push(await replicateAgentTool(params, key)); continue;
       }
       if (b.name === "data_hora" && params.timezone) {
         try { new Intl.DateTimeFormat("pt-BR", { timeZone: params.timezone }); } catch { throw new FlowError("Confira o fuso horário da ferramenta."); }

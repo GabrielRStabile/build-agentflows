@@ -57,6 +57,23 @@ export function replicateSchema(model: Json): ReplicateSchema {
   const schemas = ((latest?.openapi_schema as Json | undefined)?.components as Json | undefined)?.schemas as Record<string, Schema> | undefined;
   return { version: typeof latest?.id === "string" && /^[a-f0-9]{64}$/.test(latest.id) ? latest.id : undefined, input: schemas?.Input?.properties, output: schemas?.Output };
 }
+// What a model accepts, from its declared input: the text field and, when present, a reference-image field.
+export function replicateCapabilities(schema: ReplicateSchema) {
+  const fields = schema.input;
+  const promptField = fields ? PROMPT_FIELDS.find((field) => fields[field]?.type === "string" || (fields[field] && !fields[field].type)) : undefined;
+  const imageField = fields ? IMAGE_FIELDS.find((name) => fields[name] && (fields[name].type === "array" || isUri(fields[name]))) : undefined;
+  return { promptField, imageField, multipleImages: !!imageField && fields![imageField].type === "array" };
+}
+// Reading a model is free: it confirms the name and its inputs before any charge.
+export async function readReplicateModel(path: string, key: string, fetcher: typeof globalThis.fetch = globalThis.fetch, signal?: AbortSignal) {
+  let response: Response;
+  try {
+    response = await fetcher(`${origins.replicate}/v1/models/${path}`, { headers: { Authorization: `Bearer ${key}` }, redirect: "error", signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000) });
+  } catch { signal?.throwIfAborted(); throw new FlowError("Não foi possível consultar a Replicate agora. Tente novamente.", 502); }
+  if (response.status === 404) { await response.body?.cancel(); throw new FlowError(`O modelo ${path} não foi encontrado na Replicate. Confira o nome no formato empresa/modelo.`); }
+  if (response.status === 401 || response.status === 403) { await response.body?.cancel(); throw new FlowError("A Replicate recusou a chave. Confira a credencial selecionada."); }
+  return replicateSchema(await readJson(response));
+}
 // Builds the input from the fields the model declares. Unknown models only receive a prompt.
 export function replicateInput(name: string, schema: ReplicateSchema, prompt: string, instructions: string, images: string[]) {
   const fields = schema.input;

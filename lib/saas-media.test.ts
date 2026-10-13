@@ -11,6 +11,7 @@ import { MEDIA_PROVIDERS } from "./media-models";
 import { mediaKey } from "./media-credentials";
 import { runMedia } from "./media-runtime";
 import { generateMedia } from "./media-provider";
+import { replicateAgentTool, toolRunScope } from "./replicate-tool";
 import { template, type Trace } from "./flow-types";
 import { createTenantFlow } from "./tenant-flows";
 import { buildRun, execute } from "./flow-runtime";
@@ -48,7 +49,7 @@ test("credenciais de imagens cifradas, catálogo privado e resultados isolados e
     assert.equal(run.demo, false, "credencial de imagem basta, sem ChatGPT ou OpenRouter");
     await putRun(run);
     const details: Partial<Trace> = {};
-    const output = await runMedia(graph.nodes[1], run, run.input, "", new AbortController().signal, details, async (options) => {
+    const output = await runMedia(graph.nodes[1], run, new AbortController().signal, details, async (options) => {
       assert.equal(options.key, fields.REPLICATE_API_TOKEN);
       // Exercise the production adapter and persistence together, replacing only external IO.
       return generateMedia(options, {
@@ -71,20 +72,49 @@ test("credenciais de imagens cifradas, catálogo privado e resultados isolados e
     // Open Replicate models may return a video or text; uploads still refuse videos.
     const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from("ftypisom"), Buffer.alloc(12)]);
     const videoDetails: Partial<Trace> = {};
-    const videoOutput = await runMedia(graph.nodes[1], run, run.input, "", new AbortController().signal, videoDetails, async () => ({ files: [mp4] }));
+    const videoOutput = await runMedia(graph.nodes[1], run, new AbortController().signal, videoDetails, async () => ({ files: [mp4] }));
     assert.match(videoOutput, /^!\[Vídeo gerado 1\]\(\/api\/attachments\/[a-f0-9-]+ "video"\)$/);
     videoId = videoDetails.images![0].id;
     assert.equal((await getAttachment(videoId)).mime, "video/mp4");
     await assert.rejects(saveAttachment(flow.id, new File([new Uint8Array(mp4)], "video.mp4")), /Formato não aceito/);
     const textDetails: Partial<Trace> = {};
-    assert.equal(await runMedia(graph.nodes[1], run, run.input, "", new AbortController().signal, textDetails, async () => ({ text: "Resposta em texto" })), "Resposta em texto");
+    assert.equal(await runMedia(graph.nodes[1], run, new AbortController().signal, textDetails, async () => ({ text: "Resposta em texto" })), "Resposta em texto");
     assert.equal(textDetails.images, undefined);
-    // Instructions that already cite the message become the whole description, sent once.
-    const cited = structuredClone(graph.nodes[1]); cited.data.config.system = "Desenhe: {{input}}";
-    await runMedia(cited, run, "", "Desenhe: " + run.input, new AbortController().signal, {}, async (options) => {
+    // Only the PROMPT describes the result; message, memory and bases set before choosing the model are ignored.
+    const cited = structuredClone(graph.nodes[1]);
+    Object.assign(cited.data.config, { system: "Desenhe: {{input}}", prompt: "Mensagem ignorada", memoryType: "conversationSummary", knowledgeBase: "base-ignorada" });
+    const citedDetails: Partial<Trace> = {};
+    await runMedia(cited, run, new AbortController().signal, citedDetails, async (options) => {
       assert.equal(options.prompt, "Desenhe: Uma imagem vermelha"); assert.equal(options.instructions, "");
       return { text: "ok" };
     });
+    assert.equal(citedDetails.input, "Desenhe: Uma imagem vermelha");
+    // The default assistant instructions (blocks saved before the PROMPT) mean {{input}}.
+    await runMedia(graph.nodes[1], run, new AbortController().signal, {}, async (options) => {
+      assert.equal(options.prompt, "Uma imagem vermelha");
+      return { text: "ok" };
+    });
+    // Replicate as an Agent tool: the attached image goes as reference, the result becomes a private attachment of the step.
+    const reference = await saveAttachment(flow.id, new File([new Uint8Array(png)], "foto.png"));
+    const toolRun = { ...run, trace: [], attachments: [reference], mediaRequests: [] } as typeof run;
+    await putRun(toolRun);
+    const multimodal = { latest_version: { id: "b".repeat(64), openapi_schema: { components: { schemas: { Input: { properties: { prompt: { type: "string" }, image_input: { type: "array", items: { type: "string", format: "uri" } } } }, Output: { type: "string", format: "uri" } } } } } };
+    const tool = await replicateAgentTool({ model: "google/nano-banana-pro" }, fields.REPLICATE_API_TOKEN, (async () => Response.json(multimodal)) as typeof fetch, async (options) => {
+      assert.equal(options.model, "replicate:google/nano-banana-pro");
+      assert.equal(options.prompt, "Mesma cena ao entardecer");
+      assert.deepEqual(options.images, [`data:image/png;base64,${png.toString("base64")}`]);
+      await options.onSubmitted({ provider: "replicate", model: options.model, requestId: "tool-request", status: "submitted" });
+      return { files: [png] };
+    });
+    const toolTrace: Trace = { type: "tool", status: "running", nodeId: graph.nodes[1].id, label: "Ferramenta: replicate", output: "", at: new Date().toISOString(), ms: 0 };
+    toolRun.trace.push(toolTrace);
+    const reply = await toolRunScope.run({ run: toolRun, nodeId: graph.nodes[1].id, signal: new AbortController().signal, trace: toolTrace }, () => tool.call({ descricao: "Mesma cena ao entardecer", usar_imagens: true }));
+    assert.match(reply, /1 imagem\(ns\), usando 1 imagem\(ns\) de referência/);
+    assert.equal(toolTrace.images?.length, 1);
+    assert.equal((await getAttachment(toolTrace.images![0].id)).flowId, flow.id);
+    assert.deepEqual(toolTrace.media, [{ provider: "replicate", model: "replicate:google/nano-banana-pro", requestId: "tool-request" }]);
+    assert.equal((await getRun(toolRun.id)).mediaRequests?.[0].requestId, "tool-request", "identificador durável antes de baixar");
+    assert.equal(toolRun.mediaRequests?.[0].status, "saved");
     const failure = await buildRun(flow.id, "Teste de falha externa");
     await putRun(failure);
     let submitted = 0;

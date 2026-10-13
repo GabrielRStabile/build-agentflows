@@ -22,8 +22,7 @@ Nano Banana continuam funcionando. O nome é validado ao fechar o bloco.
 Antes de qualquer cobrança, a execução lê o modelo em `GET /v1/models/{empresa}/{modelo}`
 (gratuito). Um nome inexistente falha nesse passo. O schema de entrada define os campos:
 
-- a descrição vai em `prompt` (ou `text`, `input`, `message`, `question`);
-- as instruções vão em `system_prompt` quando o modelo tem esse campo; senão, antecedem a descrição;
+- a descrição (o PROMPT do bloco) vai em `prompt` (ou `text`, `input`, `message`, `question`);
 - imagens anexadas vão no primeiro campo de imagem reconhecido (`image_input`,
   `input_images`, `images`, `reference_images`, `image`, `input_image`, `image_url`,
   `start_image`, `first_frame_image`); um campo único recebe só uma imagem;
@@ -51,12 +50,14 @@ Até cinco referências e 6 MB combinados são enviados como data URIs; os arqui
 continuam privados na aplicação. O provedor selecionado recebe o prompt e as
 referências para processar a geração, conforme sua política de retenção.
 
-As instruções, a mensagem da etapa e o texto dos documentos anexados formam a
-descrição, limitada a 20 mil caracteres. A memória pode usar todas as mensagens
-ou uma janela recente; modelos de mídia não resumem memória, executam ferramentas
-ou consultam bases. Prepare a descrição em um bloco de texto anterior quando
-precisar dessas capacidades. A aplicação rejeita configurações incompatíveis
-antes de executar. Não é necessário conectar ChatGPT para um fluxo que só usa
+Com um modelo de mídia, o bloco recebe texto e gera imagem ou vídeo: o campo
+Instruções passa a se chamar PROMPT e começa preenchido com `{{input}}`. Mensagem
+(opcional), memória e bases de conhecimento ficam ocultas; o que tiver sido
+configurado nelas antes de escolher o modelo é ignorado na execução e volta a
+valer se o bloco retornar a um modelo de texto. O PROMPT e o texto dos documentos
+anexados formam a descrição, limitada a 20 mil caracteres. Modelos de mídia não
+executam ferramentas; prepare a descrição em um bloco de texto anterior e cite
+`{{last}}` quando precisar de pesquisa, bases ou memória. Não é necessário conectar ChatGPT para um fluxo que só usa
 esses modelos; fluxos mistos exigem as conexões selecionadas em cada bloco.
 
 ## Resultados e limites
@@ -115,3 +116,24 @@ Contratos oficiais consultados em 29/09/2026 (Replicate revisada em 13/10/2026):
 - [Replicate HTTP API](https://replicate.com/docs/reference/http), [execução de todos os modelos por `/v1/predictions`](https://replicate.com/changelog/2025-08-05-run-all-models-with-the-same-api-endpoint), [Nano Banana](https://replicate.com/google/nano-banana/api/schema), [arquivos de entrada](https://replicate.com/docs/topics/predictions/input-files) e [saídas](https://replicate.com/docs/topics/predictions/output-files).
 - [Higgsfield Soul 2](https://open.higgsfield.ai/models/higgsfield-ai/soul/v2/standard/api-reference) e [ciclo da solicitação](https://docs.higgsfield.ai/docs/concepts/requests).
 - [MuAPI HTTP API](https://muapi.ai/docs/api-reference) e [OpenAPI](https://api.muapi.ai/openapi.json).
+
+## Replicate como ferramenta do Agente
+
+No bloco Agente, a ferramenta Replicate usa a mesma credencial da Replicate do
+bloco LLM. Nos parâmetros, informe o modelo (`empresa/modelo`): a tela lê o schema
+do modelo (gratuito) e informa se ele é multimodal, isto é, se tem um campo de
+imagem de referência como `image_input` (ex.: `google/nano-banana-pro`), ou se
+recebe apenas texto. Só modelos multimodais oferecem ao agente a opção
+`usar_imagens`, que envia como referência até 5 imagens (ou 1, quando o campo é
+único): as geradas antes nesta execução e as anexadas pela pessoa, das mais
+recentes para as mais antigas. Os arquivos gerados viram anexos privados e
+aparecem abaixo da resposta do agente; o identificador da solicitação fica nos
+detalhes da chamada.
+
+## Custo
+
+O custo aparece na etapa e no total da execução somente quando o provedor o
+informa na resposta, como o `usage.cost` do OpenRouter (em dólares). A API da
+Replicate não devolve valor em dinheiro, apenas tempo e unidades; nesse caso a
+aplicação mostra o identificador da solicitação para consulta no painel do
+provedor e não estima valores.

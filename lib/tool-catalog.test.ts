@@ -19,7 +19,7 @@ const { POST } = await import("../app/api/tools/options/route");
 nodeTest.after(() => rmSync(dir, { recursive: true, force: true }));
 function cards(target: string, params: Record<string, string>, credentialId?: string) { return JSON.stringify([{ id: "one", kind: "tool", target, params, credentialId }]); }
 test("catálogo tem exatamente as 19 ferramentas pedidas, ordenadas, com ícones e implementação", () => {
-  assert.deepEqual(AGENT_TOOL_CATALOG.map((t) => t.name).sort(), ["Agent as a Tool", "BraveSearch", "Calculator", "Code Interpreter by E2B", "Search API", "Tavily API", "Exa AI", "Web Scraper Tool", "Arxiv", "Composio", "CurrentDateTime", "Brave Search MCP", "Browserless MCP", "Postgres MCP", "Github MCP", "Microsoft Teams", "WolframAlpha", "Custom MCP", "OpenAPI Toolkit"].sort());
+  assert.deepEqual(AGENT_TOOL_CATALOG.map((t) => t.name).sort(), ["Agent as a Tool", "BraveSearch", "Calculator", "Code Interpreter by E2B", "Search API", "Tavily API", "Exa AI", "Web Scraper Tool", "Arxiv", "Composio", "CurrentDateTime", "Brave Search MCP", "Browserless MCP", "Postgres MCP", "Github MCP", "Microsoft Teams", "WolframAlpha", "Custom MCP", "OpenAPI Toolkit", "Replicate"].sort());
   assert.deepEqual(AGENT_TOOL_CATALOG.map((t) => t.name), AGENT_TOOL_CATALOG.map((t) => t.name).sort((a,b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" })));
   for (const item of AGENT_TOOL_CATALOG) { assert.ok(builtinTools().some((tool) => tool.id === item.id), item.name); assert.ok(existsSync(join(process.cwd(), "public", item.icon)), item.icon); }
 });

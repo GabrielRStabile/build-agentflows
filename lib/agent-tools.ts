@@ -1,3 +1,4 @@
+import { REPLICATE_MODEL } from "./media-models";
 // O bloco guarda apenas o identificador da credencial; segredos ficam no servidor.
 export type ToolCard = { id: string; kind: "tool" | "mcp"; target: string; credentialId?: string; params?: Record<string, string> };
 function validActions(value: string) {
@@ -8,9 +9,11 @@ export function validateToolCards(encoded: string) {
   let cards: unknown;
   try { cards = JSON.parse(encoded); } catch { throw new Error("Confira as ferramentas deste agente."); }
   if (!Array.isArray(cards) || cards.length > 100 || cards.some((card) => !card || typeof card.id !== "string" || !card.id || !["tool", "mcp"].includes(card.kind) || typeof card.target !== "string" ||
-    (card.params !== undefined && (!card.params || typeof card.params !== "object" || Array.isArray(card.params) || Object.entries(card.params).some(([key, value]) => !["flowId", "description", "timezone", "actions", "app", "connectedAccountId"].includes(key) || typeof value !== "string" || value.length > 10000))) ||
+    (card.params !== undefined && (!card.params || typeof card.params !== "object" || Array.isArray(card.params) || Object.entries(card.params).some(([key, value]) => !["flowId", "description", "timezone", "actions", "app", "connectedAccountId", "model"].includes(key) || typeof value !== "string" || value.length > 10000))) ||
     (card.params?.actions !== undefined && !validActions(card.params.actions)) ||
     (card.credentialId !== undefined && (card.kind !== "tool" || typeof card.credentialId !== "string" || !/^[a-f0-9-]{36}$/.test(card.credentialId))))) throw new Error("Confira as ferramentas e as credenciais selecionadas neste agente.");
+  if ((cards as ToolCard[]).some((card) => card.target === "interno:replicate" && card.params?.model && !REPLICATE_MODEL.test(card.params.model)))
+    throw new Error("Informe o modelo da Replicate no formato empresa/modelo, em letras minúsculas. Ex.: google/nano-banana.");
 }
 export function selectedTools(value: string): string[] {
   return [...new Set(value.split(",").map((v) => v.trim()).filter(Boolean))];

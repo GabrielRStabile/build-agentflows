@@ -4,6 +4,7 @@ import type { Run } from "@/lib/flow-types";
 import { MarkdownContent } from "./MarkdownContent";
 import { TraceDetails, TraceRow } from "./TraceDetails";
 import { Icon, request } from "./StudioUI";
+import { formatCost, runCost } from "@/lib/token-usage";
 export const RUN_STATUS = {
   running: "Em execução",
   waiting: "Aguardando aprovação",
@@ -52,13 +53,14 @@ export function RunView({
   }
   return (
     <section className={"studio-run " + (compact ? "compact" : "")}>
-      {selectedTrace !== null && run.trace[selectedTrace] && <TraceDetails trace={run.trace[selectedTrace]} isModel={["agent", "llm"].includes(run.graph.nodes.find((node) => node.id === run.trace[selectedTrace].nodeId)?.data.kind || "")} onClose={() => setSelectedTrace(null)} />}
+      {selectedTrace !== null && run.trace[selectedTrace] && <TraceDetails trace={run.trace[selectedTrace]} kind={run.graph.nodes.find((node) => node.id === run.trace[selectedTrace].nodeId)?.data.kind} onClose={() => setSelectedTrace(null)} />}
       <header>
         <div>
           <span className="run-provider">
             <Icon name={run.demo ? "play" : "spark"} size={15} />
             {run.demo ? "Demonstração" : "Execução"} ·{" "}
             {run.version ? "v" + run.version : "rascunho"}
+            {runCost(run.trace) !== undefined && <> · <span title="Soma dos custos informados pelos provedores nesta execução">{formatCost(runCost(run.trace)!)}</span></>}
           </span>
           {!compact && <h2>{run.name}</h2>}
         </div>

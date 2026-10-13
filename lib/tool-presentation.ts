@@ -17,6 +17,7 @@ export const AGENT_TOOL_CATALOG = [
   { id: "interno:teams", name: "Microsoft Teams", icon: "/tool-icons/teams.svg" },
   { id: "interno:openapi", name: "OpenAPI Toolkit", icon: "/tool-icons/openapi.svg" },
   { id: "interno:postgres_mcp", name: "Postgres MCP", icon: "/tool-icons/postgres_mcp.svg" },
+  { id: "interno:replicate", name: "Replicate", icon: "/provider-icons/replicate.svg" },
   { id: "interno:searchapi", name: "Search API", icon: "/tool-icons/searchapi.svg" },
   { id: "interno:tavily", name: "Tavily API", icon: "/tool-icons/tavily.svg" },
   { id: "interno:ler_pagina", name: "Web Scraper Tool", icon: "/tool-icons/ler_pagina.svg" },

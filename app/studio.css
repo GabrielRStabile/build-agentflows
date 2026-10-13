@@ -3743,6 +3743,7 @@
 .trace-row > svg { color: var(--studio-muted); flex-shrink: 0; }
 .studio-modal.trace-dialog { width: min(960px, calc(100vw - 32px)); }
 .trace-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.trace-metrics.with-cost { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .trace-metrics > div { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--studio-line); border-radius: 12px; background: var(--studio-bg); }
 .trace-metrics span { font-size: 12px; color: var(--studio-muted); }
 .trace-metrics strong { font-size: 16px; }
@@ -3759,10 +3760,13 @@
 .markdown-content > :first-child { margin-top: 0; }
 .markdown-content > :last-child { margin-bottom: 0; }
 .markdown-content p { margin: 0 0 12px; line-height: inherit; }
-.markdown-media { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 100%; }
+.markdown-media { position: relative; display: inline-flex; flex-direction: column; align-items: flex-start; max-width: 100%; }
 .markdown-media img, .markdown-media video { display: block; max-width: 100%; width: auto; height: auto; max-height: 600px; border-radius: 8px; }
 .markdown-media video { width: 100%; background: #000; }
-.markdown-media-open { font-size: 13px; }
+/* Discreet corner action; stays visible on touch screens, where there is no hover. */
+.markdown-media-open { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: #fff; background: rgb(15 18 30 / 0.55); opacity: 0.8; transition: opacity 0.15s, background 0.15s; }
+.markdown-media-open:hover, .markdown-media-open:focus-visible { opacity: 1; background: rgb(15 18 30 / 0.8); }
+@media (hover: hover) { .markdown-media:not(:hover) .markdown-media-open:not(:focus-visible) { opacity: 0; } }
 .markdown-content h1, .markdown-content h2, .markdown-content h3, .markdown-content h4 { margin: 18px 0 10px; line-height: 1.35; }
 .markdown-content h1 { font-size: 1.35em; } .markdown-content h2 { font-size: 1.2em; } .markdown-content h3, .markdown-content h4 { font-size: 1.05em; }
 .markdown-content ul, .markdown-content ol { padding-left: 24px; margin: 8px 0 14px; }
@@ -3797,7 +3801,7 @@
 .chunk-reference-heading { font-size: 12px; margin: 0 0 10px; }
 .chunk-reference-content { margin: 0; padding: 18px; border: 1px solid var(--studio-line); border-radius: 10px; background: var(--studio-bg); color: var(--studio-ink); white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 13px; line-height: 1.8; }
 @media (max-width: 600px) { .chunk-reference-info { grid-template-columns: 1fr; } }
-@media (max-width: 600px) { .trace-payloads { grid-template-columns: 1fr; } .trace-metrics { gap: 6px; } .trace-metrics > div { padding: 10px; } .trace-metrics strong { font-size: 13px; } }
+@media (max-width: 600px) { .trace-payloads { grid-template-columns: 1fr; } .trace-metrics.with-cost { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trace-metrics { gap: 6px; } .trace-metrics > div { padding: 10px; } .trace-metrics strong { font-size: 13px; } }
 
 /* Identidade da instalação e conta no menu principal. */
 .studio-brand-group { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
@@ -3910,3 +3914,8 @@
   .account-upgrade .studio-button { margin-left: 0; width: 100%; }
   .plan-limit-actions .studio-button { flex: 1; }
 }
+
+.replicate-model-status p { display: flex; gap: 6px; align-items: flex-start; margin: 0; font-size: 12px; line-height: 1.5; }
+.replicate-model-status svg { flex: none; margin-top: 2px; }
+.replicate-model-ok { color: var(--studio-success, #1f8a4c); }
+.replicate-model-text { color: var(--studio-muted); }

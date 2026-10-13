@@ -2,6 +2,7 @@ import type { KnowledgeReference } from "./knowledge-references";
 import type { TokenUsage } from "./token-usage";
 import type { Attachment } from "./attachment-types";
 import { MEMORY_DEFAULTS } from "./memory-settings";
+export const DEFAULT_SYSTEM = "Você é um assistente cuidadoso. Responda em português.";
 export const BLOCKS = {
   start: {
     label: "Início",
@@ -91,6 +92,10 @@ export type Flow = {
 };
 export type Trace = {
   images?: Attachment[];
+  // Media generations submitted by this step; the id lets the user check the job and billing with the provider.
+  media?: { provider: string; model: string; requestId: string }[];
+  // Amount charged in US dollars, only when the provider reports it (e.g. OpenRouter usage.cost).
+  cost?: number;
   knowledge?: { chunks?: KnowledgeReference[]; baseId?: string; count: number; references: boolean; available?: { baseId: string; baseName: string; description: string }[]; bases?: { baseId: string; baseName: string; count: number; references: boolean }[] };
   type?: "step" | "tool";
   status?: "running" | "completed" | "failed";
@@ -156,8 +161,7 @@ export function block(kind: Kind, id: string, x: number, y: number): Block {
                   : kind === "end"
                     ? { text: "{{last}}" }
                     : {
-                        system:
-                          "Você é um assistente cuidadoso. Responda em português.",
+                        system: DEFAULT_SYSTEM,
                         prompt: "",
                         model: "",
                         tools: "",

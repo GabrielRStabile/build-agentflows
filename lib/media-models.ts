@@ -1,5 +1,4 @@
-import { memorySettings } from "./memory-settings";
-import { knowledgeSettings } from "./knowledge-settings";
+import { DEFAULT_SYSTEM } from "./flow-types";
 
 // Shared, public metadata only. API credentials never belong in the model catalogue.
 export const MEDIA_PROVIDERS = [
@@ -32,12 +31,16 @@ export function validateMediaConfig(config: Record<string, string>) {
   if (replicateModelName(config.model) !== undefined && !mediaModel(config.model))
     throw new Error("Informe o modelo da Replicate no formato empresa/modelo, em letras minúsculas. Ex.: google/nano-banana.");
   if (!mediaModel(config.model)) throw new Error("Escolha um modelo de imagens disponível no catálogo.");
-  if (config.tools?.trim() || knowledgeSettings(config).bases.length)
-    throw new Error("Modelos de mídia não consultam ferramentas ou bases. Use um bloco de texto anterior para preparar a descrição da imagem.");
-  const memory = memorySettings(config);
-  if (memory.enabled && ["conversationSummary", "conversationSummaryBuffer"].includes(memory.type))
-    throw new Error("Modelos de mídia não resumem a memória. Escolha Todas as mensagens, Últimas mensagens ou desative a memória.");
+  if (config.tools?.trim())
+    throw new Error("Modelos de mídia não consultam ferramentas. Use um bloco de texto anterior para preparar a descrição da imagem.");
 }
 // Open Replicate models referenced by a graph; their image input is confirmed against the model schema.
 export const graphMediaModels = (models: (string | undefined)[]) =>
   [...MEDIA_MODELS, ...models.flatMap((id) => { const model = mediaModel(id); return model?.open ? [model] : []; })];
+// Media blocks take a single PROMPT (stored in system): text in, image or video out.
+// Message, memory and knowledge bases set before choosing the model are ignored.
+export const MEDIA_PROMPT = "{{input}}";
+export function mediaPrompt(config: Record<string, string>) {
+  const prompt = config.system?.trim();
+  return prompt && prompt !== DEFAULT_SYSTEM ? config.system : MEDIA_PROMPT;
+}

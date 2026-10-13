@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateMedia, mediaOutputUrl, type MediaRequest } from "./media-provider";
-import { MEDIA_MODELS, validateMediaConfig } from "./media-models";
+import { MEDIA_MODELS, mediaPrompt, validateMediaConfig } from "./media-models";
+import { DEFAULT_SYSTEM } from "./flow-types";
 import { knowledgeFetch } from "./knowledge-http";
 
 const signal = () => new AbortController().signal;
@@ -88,10 +89,15 @@ test("modelos e recursos incompatíveis são recusados antes de qualquer cobran�
     await assert.rejects(generateMedia({ model, images, prompt, key: "x", signal: signal(), onSubmitted: async () => {} }, dependencies));
   }
   assert.equal(calls, 0);
-  for (const config of [{ tools: "builtin:http" }, { memoryType: "conversationSummary" }, { knowledgeBase: "base" }] as Record<string, string>[])
-    assert.throws(() => validateMediaConfig({ model: NANO, ...config }));
+  assert.throws(() => validateMediaConfig({ model: NANO, tools: "builtin:http" }));
+  // Memory and bases set before choosing a media model are ignored, not rejected.
+  for (const config of [{ memoryType: "conversationSummary" }, { knowledgeBase: "base" }] as Record<string, string>[])
+    validateMediaConfig({ model: NANO, ...config });
   for (const model of ["replicate:", "replicate:Google/Nano", "replicate:google", "replicate:google/nano/banana"]) assert.throws(() => validateMediaConfig({ model }), /empresa\/modelo/);
   validateMediaConfig({ model: NANO, memoryType: "windowSize" });
+  assert.equal(mediaPrompt({ system: "" }), "{{input}}");
+  assert.equal(mediaPrompt({ system: DEFAULT_SYSTEM }), "{{input}}");
+  assert.equal(mediaPrompt({ system: "Gato em aquarela: {{input}}", prompt: "ignorada" }), "Gato em aquarela: {{input}}");
   validateMediaConfig({ model: "replicate:meta/meta-llama-3-8b-instruct" });
 });
 test("respostas inválidas, excesso de bytes e saída sem imagens falham sem baixar", async () => {

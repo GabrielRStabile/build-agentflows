@@ -3,14 +3,14 @@ import { KnowledgeAgentFields } from "./KnowledgeAgentFields";
 import { knowledgeSettings } from "@/lib/knowledge-settings";
 import { useEffect, useState } from "react";
 import { conditionCriteria, COMPARISONS, type Criterion } from "@/lib/flow-conditions";
-import { BLOCKS, type Block, type Kind } from "@/lib/flow-types";
+import { BLOCKS, DEFAULT_SYSTEM, type Block, type Kind } from "@/lib/flow-types";
 import { NODE_STYLE } from "@/lib/flow-presets";
 import { Icon, IconButton, Modal, request } from "./StudioUI";
 import { ReferenceField, type Reference } from "./ReferenceField";
 import { ToolPicker } from "./ToolPicker";
 import { ModelPicker } from "./ModelPicker";
 import { memorySettings } from "@/lib/memory-settings";
-import { isMediaModel, validateMediaConfig } from "@/lib/media-models";
+import { isMediaModel, MEDIA_PROMPT, validateMediaConfig } from "@/lib/media-models";
 import { modelSettings } from "@/lib/ai-providers";
 import { MemoryFields } from "./MemoryFields";
 const fields: Record<Kind, string[]> = {
@@ -106,6 +106,8 @@ export function NodeDialog({
   const invalidVariables = variables.some((v) => !/^[a-zA-Z][a-zA-Z0-9_]{0,60}$/.test(v.key)) || new Set(variables.map((v) => v.key)).size !== variables.length;
   const c = draft.data.config,
     k = draft.data.kind;
+  // Image/video models: one PROMPT in, media out. Message, memory and bases are hidden and ignored.
+  const media = (k === "llm" || k === "agent") && isMediaModel(c.model);
   useEffect(() => {
     if (k !== "tool") return;
     let alive = true;
@@ -116,6 +118,16 @@ export function NodeDialog({
       alive = false;
     };
   }, [k]);
+  function changeModel(values: Record<string, string>) {
+    setDraft((d) => {
+      const config = { ...d.data.config, ...values };
+      const was = isMediaModel(d.data.config.model), now = isMediaModel(config.model);
+      // Instructions written for a text assistant do not describe an image; the PROMPT starts from the chat message.
+      if (now && !was) config.system = MEDIA_PROMPT;
+      if (was && !now && config.system === MEDIA_PROMPT) config.system = DEFAULT_SYSTEM;
+      return { ...d, data: { ...d.data, config } };
+    });
+  }
   function change(key: string, value: string) {
     setDraft((d) => ({
       ...d,
@@ -134,14 +146,14 @@ export function NodeDialog({
     setTimeout(() => setNameSaved(false), 1800);
   }
   function saveAndClose() {
-    if (k === "agent" || k === "llm") {
+    if ((k === "agent" || k === "llm") && !media) {
       try { knowledgeSettings(c); } catch (error) {
         setCloseError((error as Error).message);
         return false;
       }
     }
     if (k === "agent" || k === "llm") {
-      try { memorySettings(c); modelSettings(c); validateMediaConfig(c); } catch (error) {
+      try { if (!media) memorySettings(c); modelSettings(c); validateMediaConfig(c); } catch (error) {
         setCloseError((error as Error).message);
         return false;
       }
@@ -271,12 +283,12 @@ export function NodeDialog({
           <button className="studio-button" disabled={criteria.length >= 119} onClick={() => setCriteria([...criteria, { id: 'criterion_' + crypto.randomUUID(), value: '{{last}}', operator: 'equals', compare: '' }])}><Icon name="plus" size={16} />Adicionar critério</button>
         </section>}
 
-        {fields[k].map((key) => (
+        {fields[k].filter((key) => !media || !["memoryType", "prompt"].includes(key)).map((key) => (
           <div className="node-field" key={key}>
             {key !== "memoryType" && <span className="field-title">
               {k === "approval" && key === "prompt"
                 ? "O que a pessoa deve revisar"
-                : labels[key][0]}
+                : media && key === "system" ? "PROMPT" : labels[key][0]}
             </span>}
             {key === "memoryType" ? (
               <MemoryFields config={c} onChange={change} />
@@ -288,10 +300,10 @@ export function NodeDialog({
                 chatModels={models}
                 connected={connected}
                 config={c}
-                onConfigChange={(values) => setDraft(d => ({ ...d, data: { ...d.data, config: { ...d.data.config, ...values } } }))}
+                onConfigChange={changeModel}
                 onConnect={onConnect}
               />
-              {isMediaModel(c.model) && <small>Use as instruções e a mensagem para descrever o que será gerado. Remova ferramentas e bases deste bloco; elas podem ser usadas em um bloco de texto anterior. A memória aceita Todas as mensagens ou Últimas mensagens, sem resumo.</small>}
+              {media && <small>Recebe texto e gera imagem ou vídeo. Descreva o resultado no PROMPT; para pesquisar ou consultar bases, use um bloco de texto anterior e cite {"{{last}}"}.</small>}
               </>
             ) : key === "operator" || key === "method" ? (
               <select
@@ -338,8 +350,8 @@ export function NodeDialog({
               <ReferenceField
                 multiline
                 rows={key === "system" ? 5 : 3}
-                ariaLabel={labels[key][0]}
-                placeholder={key === "prompt" && (k === "agent" || k === "llm") ? "Define a mensagem desta etapa, sem uma chamada extra à IA. Use {{last}} para incluir a resposta anterior. Em branco, usa a conversa ou o resultado anterior." : undefined}
+                ariaLabel={media && key === "system" ? "PROMPT" : labels[key][0]}
+                placeholder={media && key === "system" ? "Descreva a imagem ou o vídeo. {{input}} é a mensagem do chat; {{last}}, o resultado anterior." : key === "prompt" && (k === "agent" || k === "llm") ? "Define a mensagem desta etapa, sem uma chamada extra à IA. Use {{last}} para incluir a resposta anterior. Em branco, usa a conversa ou o resultado anterior." : undefined}
                 spellCheck={key === "system" || key === "prompt"}
                 value={c[key] || ""}
                 references={references}
@@ -369,7 +381,7 @@ export function NodeDialog({
             )}
           </div>
         ))}
-        {(k === "agent" || k === "llm") && <KnowledgeAgentFields config={c} onChange={change} />}
+        {(k === "agent" || k === "llm") && !media && <KnowledgeAgentFields config={c} onChange={change} />}
         {(k === "agent" || k === "llm") && <section className="node-fields node-completion">
           <span className="node-completion-title">Ao concluir esta etapa</span>
           {updates.map((u, i) => <div className="node-field node-variable-card" role="group" aria-label={`Atualização de variável ${i + 1}`} key={i}>

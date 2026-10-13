@@ -1,5 +1,7 @@
 "use client";
-import type { Trace } from "@/lib/flow-types";
+import type { Kind, Trace } from "@/lib/flow-types";
+import { formatCost, traceCost } from "@/lib/token-usage";
+import { MEDIA_PROVIDERS, mediaModel } from "@/lib/media-models";
 import { Icon, Modal } from "./StudioUI";
 import { MarkdownContent } from "./MarkdownContent";
 export function traceDuration(ms: number) { return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`; }
@@ -17,15 +19,19 @@ function Payload({ text, empty }: { text?: string; empty: string }) {
   if (json !== undefined) return <pre className="trace-json">{json}</pre>;
   return text ? <MarkdownContent>{text}</MarkdownContent> : <p className="trace-empty">Conteúdo vazio.</p>;
 }
-export function TraceDetails({ trace, isModel, onClose }: { trace: Trace; isModel: boolean; onClose: () => void }) {
+export function TraceDetails({ trace, kind, onClose }: { trace: Trace; kind?: Kind; onClose: () => void }) {
   const count = (value: number) => value.toLocaleString("pt-BR");
+  const isModel = kind === "agent" || kind === "llm";
+  const cost = traceCost(trace);
   return <Modal title={trace.label} onClose={onClose} wide className="trace-dialog">
-    <div className="trace-metrics">
+    <div className={cost === undefined ? "trace-metrics" : "trace-metrics with-cost"}>
       <div><span>Status</span><strong>{statusLabel(trace)}</strong></div>
       <div><span>Tempo</span><strong>{trace.status === "running" ? "Em andamento" : traceDuration(trace.ms)}</strong></div>
-      <div><span>Tokens{trace.usage?.partial ? " (parcial)" : ""}</span><strong>{trace.usage ? count(trace.usage.total) : trace.type === "tool" || !isModel ? "Não se aplica" : "Não informado"}</strong></div>
+      <div><span>Tokens{trace.usage?.partial ? " (parcial)" : ""}</span><strong>{trace.usage ? count(trace.usage.total) : trace.type === "tool" || !isModel || trace.media?.length ? "Não se aplica" : "Não informado"}</strong></div>
+      {cost !== undefined && <div><span>Custo{trace.usage?.partial ? " (parcial)" : ""}</span><strong title="Valor informado pelo provedor">{formatCost(cost)}</strong></div>}
     </div>
-    {trace.usage ? <div className="trace-token-breakdown"><span>Entrada: <strong>{count(trace.usage.input)}</strong></span><span>Saída: <strong>{count(trace.usage.output)}</strong></span>{trace.usage.cachedInput !== undefined && <span>Em cache: <strong>{count(trace.usage.cachedInput)}</strong></span>}{trace.usage.reasoning !== undefined && <span>Raciocínio: <strong>{count(trace.usage.reasoning)}</strong></span>}</div> : trace.type === "tool" ? <p className="trace-note">O consumo de tokens fica na etapa do agente que chamou esta ferramenta.</p> : isModel ? <p className="trace-note">O consumo não foi informado pelo provedor ou não foi registrado nesta execução.</p> : null}
+    {trace.usage ? <div className="trace-token-breakdown"><span>Entrada: <strong>{count(trace.usage.input)}</strong></span><span>Saída: <strong>{count(trace.usage.output)}</strong></span>{trace.usage.cachedInput !== undefined && <span>Em cache: <strong>{count(trace.usage.cachedInput)}</strong></span>}{trace.usage.reasoning !== undefined && <span>Raciocínio: <strong>{count(trace.usage.reasoning)}</strong></span>}</div> : trace.type === "tool" ? <p className="trace-note">O consumo de tokens fica na etapa do agente que chamou esta ferramenta.</p> : trace.media?.length ? null : isModel ? <p className="trace-note">O consumo não foi informado pelo provedor ou não foi registrado nesta execução.</p> : null}
+    {!!trace.media?.length && <p className="trace-note">{trace.media.map((request) => <span key={request.requestId}>{MEDIA_PROVIDERS.find((provider) => provider.id === request.provider)?.name} · {mediaModel(request.model)?.name || request.model} · solicitação <code>{request.requestId}</code>. </span>)}{cost === undefined ? "O provedor não informa o valor pela API; consulte a cobrança no painel dele com este identificador." : ""}</p>}
     {!!trace.knowledge?.available?.length && <section className="trace-knowledge">
       <h3>Bases disponíveis como ferramentas</h3>
       <p>O modelo recebeu estas bases e suas descrições. As chamadas realizadas aparecem separadamente nas etapas da execução.</p>
@@ -36,6 +42,6 @@ export function TraceDetails({ trace, isModel, onClose }: { trace: Trace; isMode
       <section><h3>Entrada</h3><Payload text={trace.input} empty="Entrada não registrada nesta execução." /></section>
       <section><h3>Saída</h3><Payload text={trace.output} empty="Aguardando resultado…" /></section>
     </div>
-    {trace.instructions && <details className="trace-instructions"><summary>Instruções do agente</summary><pre>{trace.instructions}</pre></details>}
+    {trace.instructions && <details className="trace-instructions"><summary>{kind === "agent" ? "Instruções do agente" : "Instruções"}</summary><pre>{trace.instructions}</pre></details>}
   </Modal>;
 }

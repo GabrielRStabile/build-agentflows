@@ -4,7 +4,8 @@ import type { ToolInfo } from "@/lib/tools";
 import type { ToolCard } from "@/lib/agent-tools";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
 import { ToolCredentialFields } from "./ToolCredentialFields";
-import { request } from "./StudioUI";
+import { Icon, request } from "./StudioUI";
+import { REPLICATE_MODEL } from "@/lib/media-models";
 export const ACTION_TOOLS = ["brave_mcp", "browserless", "postgres_mcp", "github_mcp", "custom_mcp", "composio", "openapi"];
 type Option = { id: string; name: string; description?: string };
 export function ToolParameters({ tool, card, credentials, onChange, onSaved }: {
@@ -41,6 +42,7 @@ export function ToolParameters({ tool, card, credentials, onChange, onSaved }: {
       <label>Fluxo Agêntico<select value={params.flowId || ""} onChange={(event) => change("flowId", event.target.value)}><option value="">Selecione um fluxo publicado</option>{flows.map((flow) => <option key={flow.id} value={flow.id}>{flow.name}</option>)}{params.flowId && !flows.some((flow) => flow.id === params.flowId) && <option value={params.flowId}>Fluxo indisponível</option>}</select></label>
       <label>Descrição<textarea rows={2} placeholder="Quando o agente deve usar este fluxo?" value={params.description || ""} onChange={(event) => change("description", event.target.value)} /></label>
     </>}
+    {tool.name === "replicate" && <ReplicateModelField credentialId={connection} params={params} onChange={(model) => onChange({ params: { ...params, model } })} onDescription={(description) => change("description", description)} />}
     {tool.name === "data_hora" && <label>Fuso horário<select value={params.timezone || "America/Sao_Paulo"} onChange={(event) => change("timezone", event.target.value)}>{["America/Sao_Paulo", "America/Manaus", "America/Belem", "America/Fortaleza", "America/Recife", "America/Cuiaba", "America/Rio_Branco", "America/Noronha", "Europe/Lisbon", "UTC"].map((zone) => <option key={zone} value={zone}>{zone}</option>)}</select></label>}
     {tool.name === "composio" && <>
       <label>Aplicativo<select value={params.app || ""} onChange={(event) => { generation.current++; setBusy(false); setAccounts([]); setActions([]); onChange({ params: { ...params, app: event.target.value, connectedAccountId: "", actions: "[]" } }); }}><option value="">Selecione um aplicativo</option>{apps.map((app) => <option key={app.id} value={app.id}>{app.name}</option>)}{params.app && !apps.some((app) => app.id === params.app) && <option value={params.app}>{params.app}</option>}</select></label>
@@ -54,7 +56,45 @@ export function ToolParameters({ tool, card, credentials, onChange, onSaved }: {
       {!actions.length && !selected.length && <small>Atualize a lista para selecionar as ações.</small>}
       {params.actions === undefined && <small>Este fluxo anterior usa todas as ações. Marque as que deseja manter.</small>}
     </div>}
-    {!tool.credentialProvider && !["executar_fluxo", "data_hora"].includes(tool.name) && <small>Não há parâmetros adicionais.</small>}
+    {!tool.credentialProvider && !["executar_fluxo", "data_hora", "replicate"].includes(tool.name) && <small>Não há parâmetros adicionais.</small>}
     {error && <p className="studio-error" role="alert">{error}</p>}
   </div>;
+}
+
+type ReplicateReport = { model: string; promptField?: string; imageField?: string; multipleImages: boolean };
+// Reading the model is free; the feedback tells whether the agent can send reference images.
+function ReplicateModelField({ credentialId, params, onChange, onDescription }: {
+  credentialId?: string; params: Record<string, string>; onChange: (model: string) => void; onDescription: (value: string) => void;
+}) {
+  const model = params.model || "";
+  const [report, setReport] = useState<ReplicateReport | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const generation = useRef(0);
+  useEffect(() => {
+    const current = ++generation.current;
+    const timer = setTimeout(() => {
+      setReport(null); setError("");
+      if (!model || !credentialId) return;
+      if (!REPLICATE_MODEL.test(model)) { setError("Use o formato empresa/modelo, em letras minúsculas. Ex.: google/nano-banana."); return; }
+      setBusy(true);
+      request<ReplicateReport>("/api/tools/options", "POST", { tool: "interno:replicate", credentialId, params: { model }, kind: "model" })
+        .then((result) => { if (current === generation.current) setReport(result); })
+        .catch((e) => { if (current === generation.current) setError(e instanceof Error ? e.message : "Não foi possível verificar o modelo."); })
+        .finally(() => { if (current === generation.current) setBusy(false); });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [model, credentialId]);
+  return <>
+    <label>Modelo da Replicate<input aria-label="Modelo da Replicate" placeholder="empresa/modelo" spellCheck={false} autoCapitalize="none" value={model}
+      onChange={(event) => onChange(event.target.value.trim().toLowerCase())} /></label>
+    <div className="replicate-model-status" role="status" aria-live="polite">
+      {!credentialId ? <small>Selecione a credencial para verificar o modelo.</small>
+        : !model ? <small>Ex.: google/nano-banana-pro. <a href="https://replicate.com/explore" target="_blank" rel="noreferrer">Explorar modelos</a></small>
+        : busy ? <small>Verificando o modelo…</small>
+        : error ? <p className="studio-error">{error}</p>
+        : report && (report.imageField
+          ? <p className="replicate-model-ok"><Icon name="check" size={15} />Multimodal: recebe texto e {report.multipleImages ? "até 5 imagens" : "1 imagem"} de referência (<code>{report.imageField}</code>). O agente pode editar imagens anexadas ou geradas.</p>
+          : <p className="replicate-model-text"><Icon name="info" size={15} />Recebe apenas texto. Imagens anexadas não serão enviadas a este modelo; para editar imagens, escolha um modelo multimodal, como google/nano-banana-pro.</p>)}
+    </div>
+    <label>Quando usar (opcional)<textarea rows={2} placeholder="Ex.: use para criar as artes dos posts." value={params.description || ""} onChange={(event) => onDescription(event.target.value)} /></label>
+  </>;
 }

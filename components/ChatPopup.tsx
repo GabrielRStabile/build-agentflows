@@ -10,6 +10,7 @@ import { imageIssues, type ModelCapability } from "@/lib/model-capabilities";
 import { ChatAttachments } from "./ChatAttachments";
 import type { RouterModel } from "./ModelPicker";
 import { ChatEvidence } from "./ChatEvidence";
+import { formatCost, runCost } from "@/lib/token-usage";
 import { TraceDetails, TraceRow } from "./TraceDetails";
 import { Icon, request } from "./StudioUI";
 const STATUS: Record<Run["status"], string> = {
@@ -49,6 +50,7 @@ function BotMessage({
   onChange: (r: Run) => void;
 }) {
   const [selectedTrace, setSelectedTrace] = useState<number | null>(null);
+  const cost = runCost(run.trace);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   async function act(action: string, decision?: string) {
@@ -66,7 +68,7 @@ function BotMessage({
   }
   return (
     <div className={"chat-msg bot " + run.status}>
-      {selectedTrace !== null && run.trace[selectedTrace] && <TraceDetails trace={run.trace[selectedTrace]} isModel={["agent", "llm"].includes(run.graph.nodes.find((node) => node.id === run.trace[selectedTrace].nodeId)?.data.kind || "")} onClose={() => setSelectedTrace(null)} />}
+      {selectedTrace !== null && run.trace[selectedTrace] && <TraceDetails trace={run.trace[selectedTrace]} kind={run.graph.nodes.find((node) => node.id === run.trace[selectedTrace].nodeId)?.data.kind} onClose={() => setSelectedTrace(null)} />}
       <span className="chat-avatar">
         <Icon name="agent" size={16} />
       </span>
@@ -126,6 +128,7 @@ function BotMessage({
         )}
         <footer>
           <MessageTime date={run.updatedAt || run.createdAt} active={active} />
+          {cost !== undefined && <span className="chat-run-cost" title="Soma dos custos informados pelos provedores nesta execução">{formatCost(cost)}</span>}
           {run.status !== "completed" && <span>{STATUS[run.status]}</span>}
           {["waiting", "running"].includes(run.status) && (
             <button disabled={busy} onClick={() => act("cancel")}>

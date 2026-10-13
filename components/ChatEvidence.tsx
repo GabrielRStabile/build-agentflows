@@ -6,7 +6,6 @@ import { chatReferences, referenceUrl, type KnowledgeReference } from "@/lib/kno
 import { Icon, Modal } from "./StudioUI";
 import { MarkdownContent } from "./MarkdownContent";
 import { traceDuration } from "./TraceDetails";
-import { MEDIA_PROVIDERS, mediaModel } from "@/lib/media-models";
 
 export function ChatEvidence({ run, onOpenTool }: { run: Run; onOpenTool: (index: number) => void }) {
   const [selected, setSelected] = useState<KnowledgeReference | null>(null);
@@ -15,14 +14,6 @@ export function ChatEvidence({ run, onOpenTool }: { run: Run; onOpenTool: (index
   const url = referenceUrl(selected?.source);
   return <>
     <MarkdownContent>{text || (run.status === "running" ? "Pensando…" : "Sem resposta.")}</MarkdownContent>
-    {!!run.mediaRequests?.length && <details className="chat-steps">
-      <summary>Solicitações de mídia</summary>
-      <p>Use o identificador para consultar a geração e a cobrança no painel do provedor.</p>
-      <ul>{run.mediaRequests.map((request, index) => <li key={index}>
-        {MEDIA_PROVIDERS.find((provider) => provider.id === request.provider)?.name} · {mediaModel(request.model)?.name} · <code>{request.requestId}</code>
-        {request.status === "saved" ? " · imagem salva" : run.status === "running" ? " · aguardando resultado" : " · confira o resultado no provedor"}
-      </li>)}</ul>
-    </details>}
     {!!chunks.length && <section className="chat-evidence" aria-label="Referências">
       <h3>Referências <span>{chunks.length}</span></h3>
       <div className="chat-evidence-badges">{chunks.map((chunk, index) => <button type="button" className="chat-evidence-badge" key={JSON.stringify([chunk.baseId, chunk.id, chunk.pageContent])} onClick={() => setSelected(chunk)} title={`${chunk.baseName} · ${chunk.sourceName} · Chunk ${chunk.ordinal}`} aria-label={`Abrir referência ${index + 1}: ${chunk.sourceName}, chunk ${chunk.ordinal}`}>
