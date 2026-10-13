@@ -1916,8 +1916,37 @@
   overflow: hidden;
   transition: width 0.2s;
 }
+/* Expandido: o chat vira um modal grande sobre o editor, com fundo escurecido (.chat-modal-backdrop). */
+.chat-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: #15172b65;
+  backdrop-filter: blur(2px);
+}
 .chat-popup.expanded {
-  width: min(880px, calc(100% - 48px));
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(1120px, calc(100vw - 48px));
+  height: min(920px, calc(100dvh - 48px));
+  z-index: 41;
+  border-radius: 18px;
+  box-shadow: 0 24px 100px #1a193745;
+  transition: none;
+}
+.chat-popup.expanded .chat-scroll {
+  padding: 24px 32px;
+}
+.chat-popup.expanded .chat-exchange,
+.chat-popup.expanded .chat-empty,
+.chat-popup.expanded .chat-composer > * {
+  width: 100%;
+  max-width: 900px;
+  margin-inline: auto;
+}
+.chat-popup.expanded .chat-composer {
+  padding: 16px 32px 20px;
 }
 .chat-popup > header {
   display: flex;
@@ -3409,13 +3438,24 @@
   }
 }
 @media (max-width: 720px) {
-  .chat-popup,
-  .chat-popup.expanded {
+  .chat-popup {
     left: 12px;
     right: 12px;
     top: 70px;
     width: auto;
     height: calc(100% - 92px);
+  }
+  .chat-popup.expanded {
+    inset: 8px;
+    width: auto;
+    height: auto;
+    border-radius: 14px;
+  }
+  .chat-popup.expanded .chat-scroll {
+    padding: 16px;
+  }
+  .chat-popup.expanded .chat-composer {
+    padding: 12px;
   }
   .node-palette.anchored {
     left: 12px !important;
@@ -3575,7 +3615,7 @@
 }
 @media (max-width: 540px) {
   .chat-popup { width: calc(100% - 24px); right: 12px; }
-  .chat-popup.expanded { width: calc(100% - 24px); }
+  .chat-popup.expanded { width: auto; right: 8px; }
   .chat-composer { padding: 10px; }
   .channel-card { padding: 15px; }
   .channel-card > header { gap: 8px; }

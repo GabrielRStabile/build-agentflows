@@ -13,7 +13,7 @@ import { ChatEvidence } from "./ChatEvidence";
 import { formatCost, runCost } from "@/lib/token-usage";
 import { queueExplanation, queueLabel } from "@/lib/queue-status";
 import { TraceDetails, TraceRow } from "./TraceDetails";
-import { Icon, pollRun, request, RequestError } from "./StudioUI";
+import { Icon, IconButton, pollRun, request, RequestError } from "./StudioUI";
 const STATUS: Record<Run["status"], string> = {
   running: "Em execução",
   waiting: "Aguardando sua decisão",
@@ -158,6 +158,9 @@ export function ChatPopup({
   demo,
   connected,
   expanded,
+  onClear,
+  onCollapse,
+  onClose,
   voice = false,
   voiceId,
   onVoiceSettings,
@@ -176,7 +179,11 @@ export function ChatPopup({
   running: boolean;
   demo: boolean;
   connected: boolean;
+  /** true: o chat ocupa um modal grande sobre o editor, com cabeçalho próprio. */
   expanded: boolean;
+  onClear: () => void;
+  onCollapse: () => void;
+  onClose: () => void;
   voice?: boolean;
   voiceId: string;
   onVoiceSettings: () => void;
@@ -373,8 +380,18 @@ export function ChatPopup({
     <section
       hidden={!open}
       className={"chat-popup" + (expanded ? " expanded" : "")}
+      role={expanded ? "dialog" : undefined}
+      aria-modal={expanded || undefined}
       aria-label="Testar Fluxo Agêntico"
     >
+      {expanded && <header>
+        <div><Icon name="chat" size={18} /><h2>Testar Fluxo Agêntico</h2></div>
+        <div>
+          <IconButton icon="eraser" label="Limpar conversa" disabled={!session.length || running} onClick={onClear} />
+          <IconButton icon="shrink" label="Reduzir" onClick={onCollapse} />
+          <IconButton icon="close" label="Fechar chat" onClick={onClose} />
+        </div>
+      </header>}
       {voiceMode ? <div className={"voice-conversation " + voiceState.phase} aria-label="Conversa por voz">
         <div className="voice-mode-heading"><Icon name="wave" size={16} />Conversa por voz</div>
         <button className="voice-orb" type="button" aria-label={voiceState.phase === "speaking" ? "Interromper resposta e falar" : "Atividade da voz"} disabled={voiceState.phase !== "speaking"} onClick={() => conversation.current?.interrupt()} style={{ "--voice-level": voiceState.level } as CSSProperties}><span /><span /><span /></button>

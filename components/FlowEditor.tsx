@@ -136,7 +136,7 @@ export function FlowEditor({ id }: { id: string }) {
       const target = event.target;
       if (!(target instanceof Element) || target.closest("dialog[open]")) return;
       if (!target.closest(".react-flow__node, .af-toolbar")) setGraph((g) => g.nodes.some((n) => n.selected) ? { ...g, nodes: g.nodes.map((n) => ({ ...n, selected: false })) } : g);
-      if (!target.closest(".chat-popup, .canvas-right-actions")) setChat(false);
+      if (!target.closest(".chat-popup, .canvas-right-actions, .chat-modal-backdrop")) setChat(false);
       if (!target.closest(".node-palette, .add-node-button")) {
         setPalette(false); setPending(null); setSearch("");
       }
@@ -144,6 +144,8 @@ export function FlowEditor({ id }: { id: string }) {
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
+      // The chat modal behaves like a dialog: Esc brings it back to the side panel.
+      if (document.querySelector(".chat-popup.expanded:not([hidden])")) { setExpanded(false); return; }
       setGraph((g) => g.nodes.some((n) => n.selected) ? { ...g, nodes: g.nodes.map((n) => ({ ...n, selected: false })) } : g);
       setChat(false); setPalette(false); setPending(null); setSearch(""); setHistory(false);
     };
@@ -989,7 +991,7 @@ export function FlowEditor({ id }: { id: string }) {
           <div className="canvas-right-actions">
             {chat && <>
               <IconButton icon="eraser" label="Limpar conversa" disabled={!session.length || running} onClick={() => setClearChat(true)} />
-              <IconButton icon="expand" label={expanded ? "Reduzir" : "Expandir"} active={expanded} onClick={() => setExpanded(!expanded)} />
+              <IconButton icon="expand" label="Expandir" onClick={() => setExpanded(true)} />
             </>}
             <button
               className={"chat-fab" + (chat ? " active" : "")}
@@ -1003,6 +1005,7 @@ export function FlowEditor({ id }: { id: string }) {
               <Icon name={chat ? "close" : "chat"} size={22} />
             </button>
           </div>
+            {chat && expanded && <div className="chat-modal-backdrop" onClick={() => setExpanded(false)} />}
             <ChatPopup
               open={chat}
               session={session}
@@ -1015,6 +1018,9 @@ export function FlowEditor({ id }: { id: string }) {
               demo={false}
               connected={aiConnected}
               expanded={expanded}
+              onClear={() => setClearChat(true)}
+              onCollapse={() => setExpanded(false)}
+              onClose={() => { setChat(false); setHistory(false); }}
               voice={voice.voz}
               voiceId={flow.voiceId || ""}
               onVoiceSettings={() => { if (flow.id === "new") void act(async () => { await save(); }); else setRename(true); }}

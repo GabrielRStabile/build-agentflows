@@ -28,6 +28,7 @@ export function useDismissMenus() {
 }
 export type IconName =
   | "lock"
+  | "shrink"
   | "user"
   | "shield"
   | "flows"
@@ -223,6 +224,7 @@ const paths: Record<string, ReactNode> = {
     <path d="m19 20-9 0M5 14l9-9 6 6-7 7H8zM12 7l6 6" />
   ),
   expand: <path d="M16 4h4v4m-4-4-6 6M8 20H4v-4m4 4 6-6" />,
+  shrink: <path d="M20 4l-6 6m0 0h4m-4 0V6M4 20l6-6m0 0H6m4 0v4" />,
   external: <path d="M14 4h6v6m0-6-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />,
   pencil: <path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16zm9.5-13.5 4 4" />,
   history: <path d="M12 8v4l3 3M3.05 11a9 9 0 1 0 .5-4M3 3v5h5" />,
