@@ -1,9 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Run } from "@/lib/flow-types";
 import { MarkdownContent } from "./MarkdownContent";
 import { TraceDetails, TraceRow } from "./TraceDetails";
-import { Icon, request } from "./StudioUI";
+import { Icon, pollRun, request } from "./StudioUI";
 import { formatCost, runCost } from "@/lib/token-usage";
 import { queueLabel } from "@/lib/queue-status";
 export const RUN_STATUS = {
@@ -24,14 +24,17 @@ export function RunView({
 }) {
   const [received, setReceived] = useState<Run | null>(null);
   const run = received?.id === initialRun.id && received.updatedAt >= initialRun.updatedAt ? received : initialRun;
+  // The poll sends the newest timestamp without restarting the interval on every update.
+  const latest = useRef(run.updatedAt);
+  useEffect(() => { latest.current = run.updatedAt; }, [run.updatedAt]);
   useEffect(() => {
     if (run.status !== "running") return;
     let active = true, fetching = false;
     const timer = setInterval(() => {
       if (fetching) return;
       fetching = true;
-      void request<Run>("/api/runs/" + run.id).then((next) => {
-        if (active) { setReceived(next); onChange?.(next); }
+      void pollRun<Run>(run.id, latest.current).then((next) => {
+        if (active && next) { setReceived(next); onChange?.(next); }
       }).catch(() => {}).finally(() => { fetching = false; });
     }, 2500);
     return () => { active = false; clearInterval(timer); };

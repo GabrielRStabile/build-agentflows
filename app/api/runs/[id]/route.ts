@@ -3,9 +3,16 @@ import { requestApi, body } from "@/lib/flow-api";
 import { describeRun, enqueueResume } from "@/lib/saas-jobs";
 import { notifyJob } from "@/lib/saas-queue";
 import { tenantApi } from "@/lib/saas-http";
+import { isUnchangedRun } from "@/lib/run-page";
 type C = { params: Promise<{ id: string }> };
+/** Polling clients send the updatedAt they already hold; an unchanged run answers 204 without a body. */
 export async function GET(req: Request, c: C) {
-  return tenantApi(req, async () => describeRun((await c.params).id));
+  return tenantApi(req, async () => {
+    const run = await describeRun((await c.params).id);
+    const after = new URL(req.url).searchParams.get("after");
+    if (after && isUnchangedRun(run, after)) return new Response(null, { status: 204 });
+    return run;
+  });
 }
 export async function POST(req: Request, c: C) {
   return requestApi(req, async () => {

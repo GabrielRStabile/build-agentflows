@@ -1,4 +1,10 @@
-import type { RunPage, RunSummary } from "./flow-types";
+import type { Run, RunPage, RunSummary } from "./flow-types";
+
+/** Conditional polling: the client sends the updatedAt it holds and gets 204 when nothing moved.
+ * A queued run keeps its timestamp while its queue position changes, so it is always sent. */
+export function isUnchangedRun(run: Run, after: string) {
+  return !run.queued && !run.queue && !!run.updatedAt && run.updatedAt === after;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);

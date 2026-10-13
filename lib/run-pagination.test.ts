@@ -35,3 +35,23 @@ test("parâmetros inválidos são recusados e o contrato do editor é preservado
   const anonymous = await tenant.connect(() => GET(new Request("https://app.example.com/api/runs")));
   assert.equal(anonymous.status,401);
 });
+
+test("lista por ids em uma requisição, limite na lista do editor e 204 quando a execução não mudou", async () => {
+  const { GET: getRun } = await import("../app/api/runs/[id]/route");
+  const byIds = await get("ids=run-1,run-2,desconhecida,run-1");
+  assert.equal(byIds.status, 200);
+  const items = await byIds.json() as Run[];
+  assert.deepEqual(items.map((r) => r.id), ["run-1", "run-2"]);
+  assert.ok(items[0].trace !== undefined && items[0].graph !== undefined);
+  const limited = await get(`flowId=${a.id}&limit=3`);
+  assert.equal(limited.status, 200);
+  assert.equal((await limited.json() as Run[]).length, 3);
+  assert.equal((await get(`flowId=${a.id}&limit=500`)).status, 400);
+  const one = (await tenant.asTenant(() => getTenantRun("run-3")));
+  const read = (after?: string) => tenant.connect(() => getRun(tenant.request(`/api/runs/run-3${after ? `?after=${encodeURIComponent(after)}` : ""}`), { params: Promise.resolve({ id: "run-3" }) }));
+  assert.equal((await read()).status, 200);
+  assert.equal((await read(one.updatedAt)).status, 204);
+  assert.equal((await read("2000-01-01T00:00:00.000Z")).status, 200);
+  const other = await tenant.asTenant(() => putTenantRun({ ...one, id: "run-queued", status: "running", queued: true, createdAt: new Date().toISOString() }));
+  assert.equal((await tenant.connect(() => getRun(tenant.request(`/api/runs/run-queued?after=${encodeURIComponent(other.updatedAt)}`), { params: Promise.resolve({ id: "run-queued" }) }))).status, 200);
+});

@@ -307,6 +307,15 @@ export async function request<T>(
   if (data === undefined) throw new Error(unavailableMessage(r.status));
   return data as T;
 }
+/** Polls one run; null means "unchanged since `after`" (HTTP 204), so callers keep what they have. */
+export async function pollRun<T extends { updatedAt: string }>(id: string, after?: string): Promise<T | null> {
+  const r = await fetch("/api/runs/" + encodeURIComponent(id) + (after ? "?after=" + encodeURIComponent(after) : ""));
+  if (r.status === 204) return null;
+  const data = await readJson(r);
+  if (!r.ok) throw new Error(data?.error || unavailableMessage(r.status));
+  if (data === undefined) throw new Error(unavailableMessage(r.status));
+  return data as T;
+}
 // Proxies and gateways answer with plain text ("no available server") when the app is down.
 export async function readJson(r: Response): Promise<{ error?: string; code?: string; upgradeUrl?: string } | undefined> {
   const text = await r.text();

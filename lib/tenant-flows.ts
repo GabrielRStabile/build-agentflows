@@ -133,10 +133,19 @@ export async function cancelTenantRun(id: string) {
     return run;
   });
 }
-export async function listTenantRuns(flowId?: string) {
+export async function listTenantRuns(flowId?: string, limit = 100) {
   const { db, user } = currentTenant();
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new FlowError("Limite inválido.");
   if (flowId) await getTenantFlow(flowId);
-  const { rows } = await db.query<{ body: Run }>(`SELECT body FROM runs WHERE user_id=$1${flowId ? " AND flow_id=$2" : ""} ORDER BY sequence DESC LIMIT 100`, [user.id, ...(flowId ? [flowId] : [])]);
+  const { rows } = await db.query<{ body: Run }>(`SELECT body FROM runs WHERE user_id=$1${flowId ? " AND flow_id=$2" : ""} ORDER BY sequence DESC LIMIT $${flowId ? 3 : 2}`, [user.id, ...(flowId ? [flowId] : []), limit]);
+  return rows.map((row) => row.body);
+}
+/** Up to 50 runs by id in one request (the editor restores its test conversation this way). Unknown or foreign ids are omitted. */
+export async function getTenantRuns(ids: string[]) {
+  const { db, user } = currentTenant();
+  const wanted = [...new Set(ids.filter((id) => typeof id === "string" && id.length > 0 && id.length <= 100))].slice(0, 50);
+  if (!wanted.length) return [];
+  const { rows } = await db.query<{ body: Run }>("SELECT body FROM runs WHERE user_id=$1 AND id=ANY($2::text[]) ORDER BY sequence", [user.id, wanted]);
   return rows.map((row) => row.body);
 }
 export async function tenantRunPage({ page = 1, pageSize = 20, status = "all", flowId }: { page?: number; pageSize?: number; status?: string; flowId?: string } = {}): Promise<RunPage> {

@@ -31,7 +31,7 @@ import {
   outputLabel,
   outputs,
 } from "@/lib/flow-graph";
-import { Icon, IconButton, Modal, request, useDismissMenus } from "./StudioUI";
+import { Icon, IconButton, Modal, pollRun, request, useDismissMenus } from "./StudioUI";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
 import { NodeDialog } from "./NodeDialog";
 import { ChatPopup } from "./ChatPopup";
@@ -231,6 +231,8 @@ export function FlowEditor({ id }: { id: string }) {
     if (!flow) throw new Error("Fluxo não carregado.");
     if (firstName.current) return null;
     const isNew = flow.id === "new";
+    // Nothing changed since the last save: the server already holds this graph.
+    if (!isNew && !dirty) return flow;
     let name = flow.name;
     if (isNew) {
       setNameDraft("");
@@ -246,7 +248,7 @@ export function FlowEditor({ id }: { id: string }) {
     setFlow(saved);
     setDirty(false);
     return saved;
-  }, [flow, graph, router, setFlow, setDirty, setNameDraft, setNaming]);
+  }, [flow, graph, dirty, router, setFlow, setDirty, setNameDraft, setNaming]);
   const act = useCallback(
     async (fn: () => Promise<void>) => {
       setBusy(true);
@@ -305,7 +307,7 @@ export function FlowEditor({ id }: { id: string }) {
   ]);
   useEffect(() => {
     if (!history) return;
-    void request<Run[]>("/api/runs?flowId=" + id)
+    void request<Run[]>("/api/runs?flowId=" + id + "&limit=30")
       .then(setRuns)
       .catch((e) => setError(e.message));
   }, [history, id]);
@@ -484,11 +486,11 @@ export function FlowEditor({ id }: { id: string }) {
   useEffect(() => {
     if (id === "new") return;
     let alive = true;
-    const ids = readEditorChat(localStorage, id);
-    void Promise.all(ids.map((runId) => request<Run>("/api/runs/" + runId).catch(() => null)))
+    const ids = readEditorChat(localStorage, id).slice(-50);
+    void (ids.length ? request<Run[]>("/api/runs?ids=" + ids.map(encodeURIComponent).join(",")).catch(() => [] as Run[]) : Promise.resolve([] as Run[]))
       .then((items) => {
         if (!alive) return;
-        const found = items.filter((r): r is Run => !!r && r.flowId === id);
+        const found = items.filter((r) => r.flowId === id);
         setRestoredChat(id);
         if (found.length) setSession((list) => [...found.filter((r) => !list.some((x) => x.id === r.id)), ...list]);
         if (found.length) setRun((current) => current || found[found.length - 1]);
@@ -505,13 +507,19 @@ export function FlowEditor({ id }: { id: string }) {
   useEffect(() => {
     if (!followIds) return;
     let active = true;
+    const known = new Map<string, string>(session.filter((r) => r.status === "running").map((r) => [r.id, r.updatedAt]));
+    const inFlight = new Set<string>();
     const timer = setInterval(() => {
-      for (const runId of followIds.split(","))
-        void request<Run>("/api/runs/" + runId)
-          .then((r) => { if (active && executionLifetime.current.active) updateRun(r); })
-          .catch(() => {});
+      for (const runId of followIds.split(",")) {
+        if (inFlight.has(runId)) continue;
+        inFlight.add(runId);
+        void pollRun<Run>(runId, known.get(runId))
+          .then((r) => { if (r && active && executionLifetime.current.active) { known.set(runId, r.updatedAt); updateRun(r); } })
+          .catch(() => {}).finally(() => inFlight.delete(runId));
+      }
     }, 1500);
     return () => { active = false; clearInterval(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followIds, updateRun]);
   async function execute(input: string, attachments: Attachment[]): Promise<Run | null> {
     const lifetime = executionLifetime.current;
@@ -525,12 +533,15 @@ export function FlowEditor({ id }: { id: string }) {
       const saved = await save();
       if (!saved || !lifetime.active) return null;
       const from = new Date().toISOString();
+      // While the POST is pending, a cheap summary query reveals the run as soon as it is queued.
       timer = setInterval(() => {
         if (!lifetime.active) { clearInterval(timer); return; }
-        void request<Run[]>("/api/runs?flowId=" + saved.id)
-          .then((items) => {
-            const latest = items.find((r) => r.createdAt >= from);
-            if (latest && lifetime.active) updateRun(latest);
+        void request<{ items: { id: string; createdAt: string }[] }>("/api/runs?flowId=" + saved.id + "&page=1&pageSize=1")
+          .then(async (page) => {
+            const latest = page.items.find((r) => r.createdAt >= from);
+            if (!latest || !lifetime.active) return;
+            const full = await pollRun<Run>(latest.id);
+            if (full && lifetime.active) updateRun(full);
           })
           .catch(() => {});
       }, 800);
@@ -548,8 +559,10 @@ export function FlowEditor({ id }: { id: string }) {
         if (Date.now() > deadline) throw new Error("A tarefa continua no histórico. Abra a execução para acompanhar.");
         await new Promise((resolve) => setTimeout(resolve, 2000));
         if (!lifetime.active) return null;
-        result = await request<Run>("/api/runs/" + result.id);
+        const fresh = await pollRun<Run>(result.id, result.updatedAt);
         if (!lifetime.active) return null;
+        if (!fresh) continue;
+        result = fresh;
         updateRun(result);
       }
       return result;
