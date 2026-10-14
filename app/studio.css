@@ -2455,6 +2455,16 @@
   flex-shrink: 0;
   margin-top: 2px;
 }
+.chat-progress strong {
+  color: var(--studio-ink);
+  font-weight: 650;
+}
+.chat-progress small {
+  display: block;
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--studio-muted);
+}
 .node-dialog-type {
   display: flex;
   gap: 13px;

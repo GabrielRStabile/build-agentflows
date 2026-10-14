@@ -4,7 +4,7 @@ import { graphMediaModels } from "@/lib/media-models";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { INITIAL_VOICE, VoiceSession, type VoiceState } from "@/lib/voice-session";
 import { openVoiceAudio } from "@/lib/voice-browser";
-import type { Graph, Run } from "@/lib/flow-types";
+import { BLOCKS, type Graph, type Run } from "@/lib/flow-types";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_FILE_BYTES, MAX_TOTAL_BYTES, type Attachment } from "@/lib/attachment-types";
 import { imageIssues, type ModelCapability } from "@/lib/model-capabilities";
 import { ChatAttachments } from "./ChatAttachments";
@@ -52,6 +52,10 @@ function BotMessage({
 }) {
   const [selectedTrace, setSelectedTrace] = useState<number | null>(null);
   const cost = runCost(run.trace);
+  // Enquanto roda, a bolha mostra só o bloco em andamento (e a ferramenta em uso); resultados
+  // parciais ficam em "Etapas executadas" e a resposta aparece quando a execução termina.
+  const currentNode = run.status === "running" ? run.graph.nodes.find((node) => node.id === run.next) : undefined;
+  const activeTool = run.status === "running" ? [...run.trace].reverse().find((t) => t.type === "tool" && t.status === "running") : undefined;
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   async function act(action: string, decision?: string) {
@@ -99,9 +103,19 @@ function BotMessage({
           </details>
         )}
         <div className="chat-text">
-          {run.queued && run.status === "running"
-            ? <p className="chat-queue" role="status"><span className="studio-spinner" />{queueExplanation(run.queue)}</p>
-            : <ChatEvidence run={run} onOpenTool={setSelectedTrace} />}
+          {run.status === "running" ? (
+            <p className="chat-queue chat-progress" role="status">
+              <span className="studio-spinner" />
+              {run.queued ? queueExplanation(run.queue) : currentNode ? (
+                <span>
+                  <strong>{currentNode.data.label}</strong> · {BLOCKS[currentNode.data.kind].label} em execução
+                  {activeTool && <small>{activeTool.label}</small>}
+                </span>
+              ) : "Pensando…"}
+            </p>
+          ) : run.status === "failed" || run.status === "cancelled" ? null : (
+            <ChatEvidence run={run} onOpenTool={setSelectedTrace} />
+          )}
         </div>
         {run.error && (
           <p className="studio-error" role="alert">
