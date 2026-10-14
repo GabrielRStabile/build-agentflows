@@ -399,7 +399,7 @@ export function ChatPopup({
       {expanded && <header>
         <div><Icon name="chat" size={18} /><h2>Testar Fluxo Agêntico</h2></div>
         <div>
-          <IconButton icon="eraser" label="Limpar conversa" disabled={!session.length || running} onClick={onClear} />
+          <IconButton icon="eraser" label="Limpar conversa" danger disabled={!session.length || running} onClick={onClear} />
           <IconButton icon="shrink" label="Reduzir" onClick={onCollapse} />
           <IconButton icon="close" label="Fechar chat" onClick={onClose} />
         </div>

@@ -991,7 +991,7 @@ export function FlowEditor({ id }: { id: string }) {
           )}
           <div className="canvas-right-actions">
             {chat && <>
-              <IconButton icon="eraser" label="Limpar conversa" disabled={!session.length || running} onClick={() => setClearChat(true)} />
+              <IconButton icon="eraser" label="Limpar conversa" danger disabled={!session.length || running} onClick={() => setClearChat(true)} />
               <IconButton icon="expand" label="Expandir" onClick={() => setExpanded(true)} />
             </>}
             <button

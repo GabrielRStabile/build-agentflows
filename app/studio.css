@@ -278,6 +278,9 @@
   background: var(--studio-primary-soft);
   color: var(--studio-primary);
 }
+.studio-icon-button.danger:hover {
+  background: rgba(196, 83, 96, .12);
+}
 .studio-search {
   display: flex;
   align-items: center;
@@ -1977,7 +1980,7 @@
   font-size: 14px;
   font-weight: 700;
 }
-.chat-popup > header .studio-icon-button svg {
+.chat-popup > header .studio-icon-button:not(.danger) svg {
   color: var(--studio-muted);
 }
 .chat-exchange {
