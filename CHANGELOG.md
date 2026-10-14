@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.42.1 — 14/10/2026
+
+- Base de conhecimento: a credencial OpenAI compartilhada aparece no provedor de embeddings como **StartSe OpenAI Embedding API** (nome configurável por `OPENAI_CHAVE_COMPARTILHADA_NOME_EMBEDDINGS`), em vez de repetir "StartSe OpenAI API (free tier)". Nos blocos LLM/Agente o nome continua o mesmo.
+
 ## 0.42.0 — 14/10/2026
 
 - Confirmação de e-mail: abrir o link já confirma a conta, sem botão. Em seguida a pessoa vai para a página de entrar, com o aviso "E-mail confirmado", ou para a tela do convite (Seu acesso) quando já está na conta. A tela não oferece mais reenvio; se o link falhar, orienta a entrar para pedir um novo. Um link já usado com a conta confirmada segue em frente em vez de mostrar erro.
