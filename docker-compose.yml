@@ -12,7 +12,7 @@ services:
     extends:
       file: docker-compose.coolify.yml
       service: postgres
-    ports: ["127.0.0.1:${POSTGRES_PORT:-5436}:5432"]
+    ports: !override ["127.0.0.1:${POSTGRES_PORT:-5436}:5432"]
   redis:
     extends:
       file: docker-compose.coolify.yml

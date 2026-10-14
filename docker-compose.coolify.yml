@@ -96,6 +96,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Informe senha base64url}
     volumes:
       - postgres-dados:/var/lib/postgresql/data
+    # Publica o PostgreSQL no host do Coolify (POSTGRES_PORTA_HOST, padrão 5437) para
+    # administração e backup; proteja a porta no firewall ou acesse por túnel SSH.
+    ports: ["${POSTGRES_PORTA_HOST:-5437}:5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agentflows -d agentflows"]
       interval: 10s

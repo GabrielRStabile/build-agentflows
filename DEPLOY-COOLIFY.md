@@ -11,9 +11,14 @@ o serviço `app` com domínio, por exemplo `https://fluxos.exemplo.com:10000`.
 O sufixo informa a porta interna ao proxy; `APP_URL` deve ser
 `https://fluxos.exemplo.com`, sem essa porta.
 
-O Compose cria `app`, `worker`, PostgreSQL 17 e Redis 8. Não publica portas do
-banco, Redis ou worker no host. Os quatro serviços têm limites de memória/CPU e
-healthchecks. Os limites somam aproximadamente 4,5 GiB de memória; reserve também
+O Compose cria `app`, `worker`, PostgreSQL 17 e Redis 8. Publica somente o
+PostgreSQL no host, na porta `POSTGRES_PORTA_HOST` (padrão 5437, mapeada para a
+5432 do container), para administração e backup; Redis e worker não são
+publicados. Essa porta fica aberta em todas as interfaces do servidor: libere-a
+no firewall apenas para os IPs de administração ou use um túnel SSH
+(`ssh -L 5437:127.0.0.1:5437 usuario@servidor`) e conecte com
+`postgresql://agentflows:<POSTGRES_PASSWORD>@127.0.0.1:5437/agentflows`.
+Os quatro serviços têm limites de memória/CPU e healthchecks. Os limites somam aproximadamente 4,5 GiB de memória; reserve também
 memória para o sistema, Coolify e o build. Ajuste após medir sua carga real.
 
 ## Variáveis
@@ -31,6 +36,9 @@ Defina no ambiente de execução do Coolify:
   registra `email_remetente` na partida e `/api/health` mostra `mail.sender`.
 - `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`: opcionais; quando configurados,
   autorize o callback exato `APP_URL/api/auth/google/callback` no Google.
+- `POSTGRES_PORTA_HOST`: opcional (padrão 5437); porta do host publicada para o
+  PostgreSQL do container. Ferramentas externas conectam com o usuário
+  `agentflows`, o banco `agentflows` e `POSTGRES_PASSWORD`.
 
 Gere a chave e cada senha separadamente, em ambiente privado:
 
