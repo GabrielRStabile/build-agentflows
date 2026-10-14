@@ -8,7 +8,7 @@ import { NODE_STYLE } from "@/lib/flow-presets";
 import { Icon, IconButton, Modal, request } from "./StudioUI";
 import { ReferenceField, type Reference } from "./ReferenceField";
 import { loopTargets } from "@/lib/flow-graph";
-import { nodeAlias } from "@/lib/reference-display";
+import { BUILT_IN_ALIASES, nodeAlias } from "@/lib/reference-display";
 import { ToolPicker } from "./ToolPicker";
 import { ModelPicker } from "./ModelPicker";
 import { memorySettings } from "@/lib/memory-settings";
@@ -56,7 +56,7 @@ const labels: Record<string, [string, string]> = {
   limit: ["Máximo de repetições", "Entre 1 e 20 passagens."],
   limitMessage: ["Mensagem ao atingir o limite", "Entregue como resultado quando o limite chega sem concluir. Em branco, mantém o resultado anterior."],
   text: ["Resposta final", "Texto entregue a quem chamou o fluxo."],
-  to: ["Número de destino", "Com DDI e DDD, ex.: 5511999990000. Aceita {{state.telefone}}."],
+  to: ["Número de destino", "Com DDI e DDD, ex.: 5511999990000. Aceita {{fluxo.telefone}}."],
   context: ["Contexto da ligação", "O que o agente de voz deve saber e fazer nesta chamada."],
 };
 const TEXTAREAS = ["system", "prompt", "state", "body", "args", "text", "context", "limitMessage"];
@@ -187,14 +187,15 @@ export function NodeDialog({
   }
   const updateKeys = new Set<string>();
   try { Object.keys(JSON.parse(nodes.find((n) => n.data.kind === "start")?.data.config.state || "{}")).forEach((key) => updateKeys.add(key)); } catch {}
+  const alias = (value: string) => BUILT_IN_ALIASES.find((a) => a.value === value)?.display;
   const references: Reference[] = [
-    { value: "{{input}}", label: "Conversa", hint: "o que a pessoa enviou" },
-    { value: "{{last}}", label: "Etapa anterior", hint: "resultado do bloco anterior" },
+    { value: "{{input}}", label: "Conversa", hint: "o que a pessoa enviou", alias: alias("{{input}}") },
+    { value: "{{last}}", label: "Etapa anterior", hint: "resultado do bloco anterior", alias: alias("{{last}}") },
     ...[...stateKeys].map((k) => ({
       value: `{{fluxo.${k}}}`,
       label: "Variável " + k,
     })),
-    { value: "{{state.approval}}", label: "Decisão da aprovação", hint: "yes ou no" },
+    { value: "{{state.approval}}", label: "Decisão da aprovação", hint: "yes ou no", alias: alias("{{state.approval}}") },
     ...nodes
       .filter(
         (o) => o.id !== node.id && !["start", "end"].includes(o.data.kind),
@@ -280,7 +281,7 @@ export function NodeDialog({
             <div className="condition-criterion-heading"><span>Critério {index + 1} <small>Saída {index + 1}</small></span>
               <IconButton icon="trash" label={`Remover critério ${index + 1}`} disabled={criteria.length === 1} onClick={() => setCriteria(criteria.filter((item) => item.id !== row.id))} />
             </div>
-            <label>Valor a avaliar<ReferenceField ariaLabel={`Valor do critério ${index + 1}`} value={row.value} references={references} placeholder="Ex.: {{last}}" onChange={(value) => setCriteria(criteria.map((item) => item.id === row.id ? { ...item, value } : item))} /></label>
+            <label>Valor a avaliar<ReferenceField ariaLabel={`Valor do critério ${index + 1}`} value={row.value} references={references} placeholder="Ex.: {{Etapa anterior}}" onChange={(value) => setCriteria(criteria.map((item) => item.id === row.id ? { ...item, value } : item))} /></label>
             <label>Comparação<select aria-label={`Comparação do critério ${index + 1}`} value={row.operator} onChange={(event) => setCriteria(criteria.map((item) => item.id === row.id ? { ...item, operator: event.target.value } : item))}>
               {COMPARISONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select></label>
@@ -309,7 +310,7 @@ export function NodeDialog({
                 onConfigChange={changeModel}
                 onConnect={onConnect}
               />
-              {media && <small>Recebe texto e gera imagem ou vídeo. Descreva o resultado no PROMPT; para pesquisar ou consultar bases, use um bloco de texto anterior e cite {"{{last}}"}.</small>}
+              {media && <small>Recebe texto e gera imagem ou vídeo. Descreva o resultado no PROMPT; para pesquisar ou consultar bases, use um bloco de texto anterior e cite {"{{Etapa anterior}}"}.</small>}
               </>
             ) : key === "operator" || key === "method" ? (
               <select
@@ -372,7 +373,7 @@ export function NodeDialog({
                 multiline
                 rows={key === "system" ? 5 : 3}
                 ariaLabel={media && key === "system" ? "PROMPT" : labels[key][0]}
-                placeholder={media && key === "system" ? "Descreva a imagem ou o vídeo. {{input}} é a mensagem do chat; {{last}}, o resultado anterior." : key === "prompt" && (k === "agent" || k === "llm") ? "Define a mensagem desta etapa, sem uma chamada extra à IA. Use {{last}} para incluir a resposta anterior. Em branco, usa a conversa ou o resultado anterior." : undefined}
+                placeholder={media && key === "system" ? "Descreva a imagem ou o vídeo. {{Conversa}} é a mensagem do chat; {{Etapa anterior}}, o resultado anterior." : key === "prompt" && (k === "agent" || k === "llm") ? "Define a mensagem desta etapa, sem uma chamada extra à IA. Use {{Etapa anterior}} para incluir a resposta anterior. Em branco, usa a conversa ou o resultado anterior." : undefined}
                 spellCheck={key === "system" || key === "prompt"}
                 value={c[key] || ""}
                 references={references}

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { displayReferences, nodeAlias, storedReferences, type ReferenceAlias } from "./reference-display";
+import { BUILT_IN_ALIASES, displayReferences, nodeAlias, storedReferences, type ReferenceAlias } from "./reference-display";
 
 const aliases = [nodeAlias("a1", "Analista"), nodeAlias("r2", "Revisor"), nodeAlias("a3", "Analista")].filter((a): a is ReferenceAlias => !!a);
 
@@ -18,6 +18,15 @@ test("nomes repetidos preservam o id de cada ocorrência enquanto o texto é edi
   assert.equal(storedReferences(shown, aliases, stored), stored);
   assert.equal(storedReferences(shown + " {{Analista}}", aliases, stored), stored + " {{nodes.a1}}", "ocorrência nova usa o primeiro bloco com o nome");
   assert.equal(storedReferences("{{Analista}}", aliases), "{{nodes.a1}}");
+});
+
+test("referências nativas aparecem em português e voltam às chaves do motor", () => {
+  const all = [...BUILT_IN_ALIASES, ...aliases];
+  assert.equal(displayReferences("{{input}} → {{ last }} ({{state.approval}}) {{fluxo.cliente}} {{nodes.r2}}", all), "{{Conversa}} → {{Etapa anterior}} ({{Decisão da aprovação}}) {{fluxo.cliente}} {{Revisor}}");
+  assert.equal(storedReferences("{{Conversa}} → {{Etapa anterior}} ({{Decisão da aprovação}}) {{fluxo.cliente}} {{Revisor}}", all), "{{input}} → {{last}} ({{state.approval}}) {{fluxo.cliente}} {{nodes.r2}}");
+  assert.equal(storedReferences("{{last}} digitado à mão", all), "{{last}} digitado à mão", "a chave do motor continua aceita");
+  assert.equal(nodeAlias("x", "Etapa anterior"), null, "bloco com o nome de uma referência nativa segue pelo id");
+  assert.equal(nodeAlias("x", "conversa"), null);
 });
 
 test("nomes que confundiriam com referências nativas não ganham apelido", () => {

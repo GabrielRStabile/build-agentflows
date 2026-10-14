@@ -8,10 +8,18 @@ export type ReferenceAlias = { value: string; display: string };
 const BUILT_IN = /^(input|last|state\..+|fluxo\..+|nodes\..+)$/;
 const strip = (token: string) => token.replace(/^\{\{\s*|\s*\}\}$/g, "");
 
-/** Monta o apelido de um bloco; nomes com chaves ou iguais a referências nativas não ganham apelido. */
+/** Referências nativas mostradas em português nos campos; o motor continua lendo input, last e state.approval. */
+export const BUILT_IN_ALIASES: ReferenceAlias[] = [
+  { value: "{{input}}", display: "{{Conversa}}" },
+  { value: "{{last}}", display: "{{Etapa anterior}}" },
+  { value: "{{state.approval}}", display: "{{Decisão da aprovação}}" },
+];
+const RESERVED = new Set(BUILT_IN_ALIASES.map((a) => strip(a.display).toLowerCase()));
+
+/** Monta o apelido de um bloco; nomes com chaves, iguais a referências nativas ou aos seus apelidos não ganham apelido. */
 export function nodeAlias(id: string, label: string): ReferenceAlias | null {
   const name = label.trim();
-  if (!name || /[{}]/.test(name) || BUILT_IN.test(name)) return null;
+  if (!name || /[{}]/.test(name) || BUILT_IN.test(name) || RESERVED.has(name.toLowerCase())) return null;
   return { value: `{{nodes.${id}}}`, display: `{{${name}}}` };
 }
 
