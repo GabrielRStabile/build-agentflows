@@ -1024,7 +1024,6 @@ export function FlowEditor({ id }: { id: string }) {
               onClose={() => { setChat(false); setHistory(false); }}
               voice={voice.voz}
               voiceId={flow.voiceId || ""}
-              onVoiceSettings={() => { if (flow.id === "new") void act(async () => { await save(); }); else setRename(true); }}
               flowId={id}
               onSend={execute}
               onChange={updateRun}
