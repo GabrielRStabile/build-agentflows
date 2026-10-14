@@ -2636,6 +2636,18 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+.field-role {
+  margin-left: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--studio-primary);
+  background: var(--studio-primary-soft);
+  text-transform: lowercase;
+}
 .node-completion-title { color: var(--studio-muted); font-size: 12px; font-weight: 400; }
 .node-completion .studio-button { font-weight: 400; }
 .reference-chips {

@@ -2,6 +2,9 @@ import type { Run } from "./flow-types";
 import { memorySettings } from "./memory-settings";
 import { citedValues } from "./flow-references";
 
+import { type ConversationTurn, transcript } from "./conversation-turns";
+export { transcript, type ConversationTurn };
+
 type MemoryMessage = { role: "user" | "assistant"; content: string; name?: string };
 type Summarize = (history: string) => Promise<string>;
 
@@ -28,14 +31,28 @@ function estimatedTokens(message: MemoryMessage) {
   return Math.ceil(JSON.stringify(message).length / 4);
 }
 
-export async function memoryPrompt(run: Run, config: Record<string, string>, currentMessage: string, summarize: Summarize) {
+// Mensagem preenchida com memória ligada: a conversa vira a primeira pergunta, o resultado
+// anterior a primeira resposta e a Mensagem a pergunta seguinte, como duas interações.
+// Turnos já citados por referência não se repetem; sem resultado anterior não há troca.
+export function previousExchange(run: Run, config: Record<string, string>): ConversationTurn[] {
+  if (!config.prompt?.trim() || !memorySettings(config).enabled) return [];
+  if (!run.trace.some((entry) => entry.type === "step" || !entry.type) || !run.output.trim() || run.output === run.input) return [];
+  const cited = citedValues(run, config.system, config.prompt);
+  if (cited.has(run.output)) return [];
+  return [
+    ...(run.input.trim() && !cited.has(run.input) ? [{ role: "user" as const, content: run.input }] : []),
+    { role: "assistant", content: run.output },
+  ];
+}
+export async function memoryPrompt(run: Run, config: Record<string, string>, currentMessage: string, summarize: Summarize, sent: ConversationTurn[] = []) {
   const settings = memorySettings(config);
   if (!settings.enabled) return currentMessage;
-  // Mensagens desta execução já presentes na etapa (enviadas como mensagem ou citadas
-  // nas instruções/mensagem por qualquer referência) ficam fora do histórico: sem duplicação
-  // e preservadas sem resumo. Turnos de conversas anteriores continuam no histórico.
+  // Mensagens desta execução já presentes na etapa (enviadas como mensagem, como turnos da
+  // troca anterior ou citadas nas instruções/mensagem por qualquer referência) ficam fora do
+  // histórico: sem duplicação e preservadas sem resumo. Conversas anteriores continuam no histórico.
   const cited = citedValues(run, config.system, config.prompt);
   if (!config.prompt?.trim() && currentMessage.trim()) cited.add(currentMessage);
+  for (const turn of sent) cited.add(turn.content);
   const earlier = (run.conversation?.length || 0) * 2;
   const all = memoryMessages(run);
   // A janela conta a conversa real; só depois retira o que a etapa já envia.

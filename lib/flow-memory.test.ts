@@ -12,7 +12,7 @@ process.env.DATA_DIR = dir;
 const { createFlow, saveFlow, getFlow, getRun, validateGraph } = await import("./flow-service");
 const { prepareRun, execute, startRun } = await import("./flow-runtime");
 const { block } = await import("./flow-types");
-const { memoryMessages, memoryPrompt } = await import("./flow-memory");
+const { memoryMessages, memoryPrompt, transcript } = await import("./flow-memory");
 const { tenantConversationHistory: conversationHistory } = await import("./conversation");
 const { chatGPT } = await import("./chatgpt");
 const bridge = await testTenant.asTenant(chatGPT);
@@ -52,6 +52,33 @@ test("Agente e LLM novos e antigos recebem a conversa e todas as respostas anter
   assert.equal((await getRun(result.id)).trace.filter((entry) => entry.type === "step").length, 4);
 });
 
+test("Mensagem preenchida vira a pergunta seguinte, depois da conversa e do resultado anterior", async () => {
+  const f = await flow();
+  const [, , b, c] = f.graph.nodes;
+  b.data.config.prompt = "Agora traduza para o inglês";
+  c.data.config.prompt = "Confira {{Etapa anterior}}".replace("Etapa anterior", "last");
+  await saveFlow(f.id, f);
+  const calls: { prompt: string; history?: { role: string; content: string }[] }[] = [];
+  bridge.run = async ({ prompt, history }) => { calls.push({ prompt, history }); return ["Primeira resposta", "First answer", "Ok"][calls.length - 1]; };
+  const run = await prepareRun(f.id, "Pedido original", false, false);
+  run.conversation = [{ input: "Pergunta passada", output: "Resposta passada" }];
+  const result = await execute(run);
+  assert.equal(result.status, "completed");
+  // A: primeiro bloco, sem resultado anterior: nenhuma troca simulada.
+  assert.deepEqual(calls[0].history, []);
+  // B: a conversa é a primeira pergunta, a resposta de A a primeira resposta e a Mensagem a seguinte.
+  assert.deepEqual(calls[1].history, [{ role: "user", content: "Pedido original" }, { role: "assistant", content: "Primeira resposta" }]);
+  assert.match(calls[1].prompt, /Agora traduza para o inglês$/);
+  assert.doesNotMatch(calls[1].prompt, /Primeira resposta|Pedido original/, "turnos enviados não se repetem na memória");
+  assert.match(calls[1].prompt, /Pergunta passada/, "conversas anteriores continuam na memória");
+  // C: o resultado anterior citado na Mensagem não vira turno; a conversa continua como primeira pergunta.
+  assert.deepEqual(calls[2].history, []);
+  assert.equal(calls[2].prompt.split("First answer").length - 1, 1);
+  const trace = (await getRun(result.id)).trace.filter((entry) => entry.type === "step");
+  assert.match(trace[2].input ?? "", /^Pessoa: Pedido original\n\nAssistente: Primeira resposta\n\nPessoa: /);
+  assert.equal(transcript([], "Só a mensagem"), "Só a mensagem");
+});
+
 test("memória desligada isola o contexto do bloco, mas sua resposta continua disponível aos próximos", async () => {
   const f = (await flow());
   f.graph.nodes[2].data.config.memoryEnabled = "false";
@@ -59,7 +86,7 @@ test("memória desligada isola o contexto do bloco, mas sua resposta continua di
   (await saveFlow(f.id, f));
   assert.equal((await getFlow(f.id)).graph.nodes[2].data.config.memoryEnabled, "false");
   const prompts: string[] = [];
-  bridge.run = async ({ prompt }) => { prompts.push(prompt); return "Resposta " + prompts.length; };
+  bridge.run = async ({ prompt, history }) => { prompts.push(prompt); assert.deepEqual(history, []); return "Resposta " + prompts.length; };
   const result = await startRun(f.id, "Pedido original", false, false);
   assert.equal(result.status, "completed");
   assert.equal(prompts[1], "Tarefa independente");
@@ -211,8 +238,8 @@ test("referências nas instruções ou na mensagem não duplicam o conteúdo env
   b.data.config.system = "Revise {{nodes.a}} considerando {{input}}";
   c.data.config.prompt = "Pedido: {{input}}";
   await saveFlow(f.id, f);
-  const calls: { system: string; prompt: string }[] = [];
-  bridge.run = async ({ system, prompt }) => { calls.push({ system, prompt }); return ["Rascunho exclusivo", "Revisão exclusiva", "Final"][calls.length - 1]; };
+  const calls: { system: string; prompt: string; history?: { role: string; content: string }[] }[] = [];
+  bridge.run = async ({ system, prompt, history }) => { calls.push({ system, prompt, history }); return ["Rascunho exclusivo", "Revisão exclusiva", "Final"][calls.length - 1]; };
   const run = await prepareRun(f.id, "Pedido original", false, false);
   run.conversation = [{ input: "Pergunta passada", output: "Resposta passada" }];
   const result = await execute(run);
@@ -225,9 +252,10 @@ test("referências nas instruções ou na mensagem não duplicam o conteúdo env
   // B: a saída anterior (mensagem automática) e a entrada já estão nas instruções.
   assert.equal(count(calls[1], "Rascunho exclusivo"), 1);
   assert.equal(count(calls[1], "Pedido original"), 1);
-  // C: a entrada citada na mensagem sai do histórico; respostas não citadas continuam.
+  // C: a entrada citada na mensagem sai do histórico e da troca; a resposta anterior vira o turno do assistente.
   assert.equal(count(calls[2], "Pedido original"), 1);
-  assert.match(calls[2].prompt, /Revisão exclusiva/);
+  assert.deepEqual(calls[2].history, [{ role: "assistant", content: "Revisão exclusiva" }]);
+  assert.doesNotMatch(calls[2].prompt, /Revisão exclusiva/);
 });
 
 test("aprovação não repete o resultado anterior já citado no texto de revisão", async () => {

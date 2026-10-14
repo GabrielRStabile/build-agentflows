@@ -3,11 +3,13 @@ import { providerFailure } from "./ai-provider-error";
 import type { runChatCompletion } from "./chat-completion";
 
 type Content = { type: string; text?: string; id?: string; name?: string; input?: unknown; [key: string]: unknown };
-export async function runAnthropic({ key, model, system, prompt, images = [], tools = [], signal, onText, onUsage, fetcher = fetch, settings = {} }:
+export async function runAnthropic({ key, model, system, prompt, images = [], tools = [], history = [], signal, onText, onUsage, fetcher = fetch, settings = {} }:
   Omit<Parameters<typeof runChatCompletion>[0], "url" | "parameters"> & { settings?: { temperature?: number; maxTokens?: number } }) {
   if (settings.temperature !== undefined && (settings.temperature > 1 || /(?:opus|sonnet)-[5-9]/.test(model || ""))) throw new Error("Este modelo Claude não aceita a temperatura configurada.");
-  const messages: { role: string; content: Content[] }[] = [{ role: "user", content: [
-    { type: "text", text: prompt },
+  // A conversa precisa começar pela pessoa: um turno inicial do assistente vira texto da mensagem atual.
+  const leading = history[0]?.role === "assistant" ? history[0] : undefined;
+  const messages: { role: string; content: Content[] }[] = [...history.slice(leading ? 1 : 0).map((turn) => ({ role: turn.role, content: [{ type: "text", text: turn.content }] })), { role: "user", content: [
+    { type: "text", text: leading ? `Sua resposta anterior:\n${leading.content}\n\n${prompt}` : prompt },
     ...images.map(url => {
       const data = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/.exec(url);
       if (!data) throw new Error("Formato de imagem não suportado pelo Claude.");

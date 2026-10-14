@@ -6,6 +6,7 @@ import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { transcript } from "./conversation-turns";
 import { tenantId, currentTenant } from "./tenant-context";
 import { AuthError } from "./saas-security";
 import { ChatSessionLease, readChatSession, revokeChatSession } from "./chatgpt-session";
@@ -485,6 +486,7 @@ export class ChatGPTBridge {
     model,
     tools = [],
     images = [],
+    history = [],
     signal,
     onText,
     onUsage,
@@ -496,6 +498,8 @@ export class ChatGPTBridge {
     model?: string;
     tools?: AgentTool[];
     images?: string[];
+    /** Turnos anteriores (pessoa e assistente). O App Server só recebe texto da pessoa: a troca é simulada em texto. */
+    history?: { role: "user" | "assistant"; content: string }[];
     signal?: AbortSignal;
     onText?: (text: string) => void;
     onUsage?: (usage: TokenUsage) => void;
@@ -584,7 +588,7 @@ export class ChatGPTBridge {
       }
       void this.rpc<{ turn: { id: string } }>("turn/start", {
         threadId: id,
-        input: [{ type: "text", text: prompt }, ...images.map((url) => ({ type: "image", url }))],
+        input: [{ type: "text", text: transcript(history, prompt) }, ...images.map((url) => ({ type: "image", url }))],
         environments: [],
       })
         .then((result) => {

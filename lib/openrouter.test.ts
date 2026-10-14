@@ -34,6 +34,12 @@ test("sem chave o OpenRouter recusa e pede a conexão", async () => {
   assert.equal(isOpenRouterModel("openrouter:x/y"), true);
   assert.equal(isOpenRouterModel("gpt-5"), false);
 });
+test("turnos anteriores entram com seus papéis antes da mensagem atual", async () => {
+  setConfig("OPENROUTER_API_KEY", "sk-or-teste");
+  const { fetcher, calls } = fakeFetch([{ usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 }, choices: [{ finish_reason: "stop", message: { content: "Pronto" } }] }]);
+  await runOpenRouter({ system: "Instruções", prompt: "Agora traduza", model: "openrouter:a/b", fetcher, history: [{ role: "user", content: "Pedido" }, { role: "assistant", content: "Resposta" }] });
+  assert.deepEqual((calls[0].body.messages as { role: string; content: string }[]).map((message: { role: string; content: string }) => [message.role, message.content]), [["system", "Instruções"], ["user", "Pedido"], ["assistant", "Resposta"], ["user", "Agora traduza"]]);
+});
 test("executa ferramentas em ciclo e devolve o texto final com a chave da conexão", async () => {
   setConfig("OPENROUTER_API_KEY", "sk-or-teste");
   const { fetcher, calls } = fakeFetch([

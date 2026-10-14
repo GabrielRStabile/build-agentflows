@@ -21,6 +21,7 @@ export async function runChatCompletion({
   model,
   tools = [],
   images = [],
+  history: previous = [],
   signal,
   onText,
   onUsage,
@@ -34,6 +35,8 @@ export async function runChatCompletion({
   model?: string;
   tools?: AgentTool[];
   images?: string[];
+  /** Turnos anteriores da conversa (pessoa e assistente), enviados com seus papéis antes da mensagem atual. */
+  history?: { role: "user" | "assistant"; content: string }[];
   signal?: AbortSignal;
   onText?: (text: string) => void;
   onUsage?: (usage: TokenUsage) => void;
@@ -41,6 +44,7 @@ export async function runChatCompletion({
 }): Promise<string> {
   const history: Msg[] = [
     { role: "system", content: system },
+    ...previous.map((turn): Msg => ({ role: turn.role, content: turn.content })),
     { role: "user", content: images.length ? [{ type: "text", text: prompt }, ...images.map((url) => ({ type: "image_url" as const, image_url: { url } }))] : prompt },
   ];
   let consumed: TokenUsage | undefined;

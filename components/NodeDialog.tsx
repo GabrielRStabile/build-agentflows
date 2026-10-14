@@ -297,6 +297,7 @@ export function NodeDialog({
               {k === "approval" && key === "prompt"
                 ? "O que a pessoa deve revisar"
                 : media && key === "system" ? "PROMPT" : labels[key][0]}
+              {key === "prompt" && (k === "agent" || k === "llm") && <span className="field-role" title="Enviada ao modelo como mensagem da pessoa (role user)">role: user</span>}
             </span>}
             {key === "memoryType" ? (
               <MemoryFields config={c} onChange={change} />
@@ -399,6 +400,8 @@ export function NodeDialog({
               <small>Mostrado junto com o resultado, antes da decisão.</small>
             ) : k === "whatsapp" && key === "text" ? (
               <small>Mensagem enviada. Em branco não envia nada.</small>
+            ) : key === "prompt" && (k === "agent" || k === "llm") ? (
+              <small>Enviada ao modelo com o papel user, depois das Instruções (system). Em branco, usa a conversa ou o resultado anterior.</small>
             ) : (
               labels[key][1] && <small>{labels[key][1]}</small>
             )}
