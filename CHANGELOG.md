@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.41.1 — 14/10/2026
+
+- Base de conhecimento: na etapa do Record Manager (versionamento dos chunks), a opção **Registro interno** volta a mostrar o ícone do SQLite; desde a migração para o registro por conta ela reutilizava o ícone do Postgres e ficava idêntica ao Postgres Record Manager.
+
 ## 0.41.0 — 14/10/2026
 
 - Nível da senha: ao criar conta, redefinir senha e alterar a senha em Minha conta, quatro barras abaixo do campo mostram **Senha fraca**, **razoável**, **boa** ou **forte** enquanto a pessoa digita, com a regra ao lado. Senha que ainda não cumpre a regra do servidor nunca passa de razoável; o rótulo é anunciado por leitores de tela. Cores adaptadas ao tema escuro.
