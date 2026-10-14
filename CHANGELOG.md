@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.30.2 — 13/10/2026
+
+- Chat de teste: o botão da conversa por voz fica oculto enquanto a voz não está configurada (ElevenLabs em Configurações). Antes ele aparecia e abria as configurações do fluxo.
+
 ## 0.30.1 — 13/10/2026
 
 - Chat de teste expandido: o modal cresce até 1600×1000 e as mensagens, a tela vazia e o campo de envio ocupam toda a largura disponível (antes limitada a 900 px). O campo de mensagem aceita até seis linhas antes de rolar; a bolha da pessoa fica em até 70% da largura.
