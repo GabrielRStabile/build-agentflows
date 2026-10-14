@@ -9,7 +9,7 @@ import { FlowError } from "./flow-store";
 import { TOOL_CREDENTIALS, TOOL_CREDENTIAL_LABELS, type Credential } from "./tool-credentials";
 import { withToolConfig } from "./tool-config-context";
 import { readToolCards } from "./agent-tools";
-import { isSharedCredentialId, resolveSharedCredential, sharedCredentialEntry, sharedOpenAiCredential, SHARED_CREDENTIALS } from "./shared-credential";
+import { isSharedCredentialId, resolveSharedCredential, sharedCredentialEntry, sharedCredentialName, sharedOpenAiCredential, SHARED_CREDENTIALS } from "./shared-credential";
 
 export type SavedToolCredential = {
   id: string; name: string; provider: string; providerLabel: string;
@@ -57,7 +57,7 @@ function sharedSummaries(provider?: string): SavedToolCredential[] {
   const shared = sharedOpenAiCredential();
   if (!shared?.active || !shared.expiresAt) return [];
   return SHARED_CREDENTIALS.filter((entry) => !provider || entry.provider === provider).map((entry) => ({
-    id: entry.id, name: shared.name, provider: entry.provider, providerLabel: TOOL_CREDENTIAL_LABELS[entry.provider] || entry.provider,
+    id: entry.id, name: sharedCredentialName(entry, shared), provider: entry.provider, providerLabel: TOOL_CREDENTIAL_LABELS[entry.provider] || entry.provider,
     configured: true, readOnly: true, expiresAt: shared.expiresAt!,
     fields: schema(entry.provider).map((field) => ({ ...field, definido: true, valor: field.secret ? undefined : (entry.values as Record<string, string>)[field.chave] || "" })),
   }));

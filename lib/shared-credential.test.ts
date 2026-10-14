@@ -59,7 +59,7 @@ nodeTest("a mesma chave vale para embeddings OpenAI e é o padrão da base de co
   await testTenant.asTenant(async () => {
     const [embedding] = listToolCredentials("embedding_openai");
     assert.equal(embedding.id, SHARED_OPENAI_EMBEDDING_ID);
-    assert.equal(embedding.name, "StartSe OpenAI API (free tier)");
+    assert.equal(embedding.name, "StartSe OpenAI Embedding API");
     assert.equal(embedding.readOnly, true);
     assert.equal(embedding.fields.find(f => f.chave === "EMBEDDING_OPENAI_URL")?.valor, "https://api.openai.com/v1");
     assert.equal(listToolCredentials("embedding_gemini").some(c => c.readOnly), false);
@@ -121,5 +121,6 @@ nodeTest("sem a variável no ambiente nada é oferecido e os blocos que a escolh
       assert.throws(() => modelCredentialKey("openai", SHARED_OPENAI_ID), /não está mais disponível/);
     });
   } finally { process.env.OPENAI_CHAVE_COMPARTILHADA = key; }
-  assert.deepEqual(sharedOpenAiSettings({ OPENAI_CHAVE_COMPARTILHADA: " sk ", OPENAI_CHAVE_COMPARTILHADA_NOME: "Turma 12", OPENAI_CHAVE_COMPARTILHADA_HORAS: "0" }), { key: "sk", name: "Turma 12 (free tier)", hours: 72 });
+  assert.deepEqual(sharedOpenAiSettings({ OPENAI_CHAVE_COMPARTILHADA: " sk ", OPENAI_CHAVE_COMPARTILHADA_NOME: "Turma 12", OPENAI_CHAVE_COMPARTILHADA_HORAS: "0" }), { key: "sk", name: "Turma 12 (free tier)", embeddingName: "StartSe OpenAI Embedding API", hours: 72 });
+  assert.equal(sharedOpenAiSettings({ OPENAI_CHAVE_COMPARTILHADA: "sk", OPENAI_CHAVE_COMPARTILHADA_NOME_EMBEDDINGS: " Turma 12 Embeddings " })?.embeddingName, "Turma 12 Embeddings");
 });

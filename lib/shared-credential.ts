@@ -1,6 +1,6 @@
 // Credencial OpenAI compartilhada pelo ambiente (Coolify): contas que entraram por convite a veem
-// como "<nome> (free tier)" durante as horas seguintes ao resgate, tanto para modelos (ai_openai)
-// quanto para embeddings das bases de conhecimento (embedding_openai). A chave fica só em
+// durante as horas seguintes ao resgate, como "<nome> (free tier)" para modelos (ai_openai) e como
+// "StartSe OpenAI Embedding API" para embeddings das bases de conhecimento (embedding_openai). A chave fica só em
 // process.env e é lida no momento da chamada; nunca é copiada para o banco nem devolvida ao navegador.
 import { aiCredentialProvider } from "./ai-providers";
 import { embeddingCredentialProvider, embeddingCredentialKey, embeddingCredentialUrl } from "./embedding-credentials";
@@ -21,9 +21,10 @@ export const SHARED_CREDENTIALS = [
 ] as const;
 export type SharedCredentialEntry = typeof SHARED_CREDENTIALS[number];
 const DEFAULT_NAME = "StartSe OpenAI API";
+const DEFAULT_EMBEDDING_NAME = "StartSe OpenAI Embedding API";
 const DEFAULT_HOURS = 72;
 
-export type SharedCredentialSettings = { key: string; name: string; hours: number };
+export type SharedCredentialSettings = { key: string; name: string; embeddingName: string; hours: number };
 export type SharedCredentialStatus = SharedCredentialSettings & {
   /** Instante (ISO) em que a conta perde o acesso; null quando a conta não entrou por convite. */
   expiresAt: string | null;
@@ -37,8 +38,13 @@ export function sharedOpenAiSettings(env: Record<string, string | undefined> = p
   if (!key) return null;
   const hours = Number(env.OPENAI_CHAVE_COMPARTILHADA_HORAS);
   const name = env.OPENAI_CHAVE_COMPARTILHADA_NOME?.trim().slice(0, 80) || DEFAULT_NAME;
-  return { key, name: `${name} (free tier)`, hours: Number.isFinite(hours) && hours > 0 ? hours : DEFAULT_HOURS };
+  const embeddingName = env.OPENAI_CHAVE_COMPARTILHADA_NOME_EMBEDDINGS?.trim().slice(0, 80) || DEFAULT_EMBEDDING_NAME;
+  return { key, name: `${name} (free tier)`, embeddingName, hours: Number.isFinite(hours) && hours > 0 ? hours : DEFAULT_HOURS };
 }
+
+/** Nome exibido de cada face da credencial: a de embeddings tem nome próprio, sem "(free tier)". */
+export const sharedCredentialName = (entry: Pick<SharedCredentialEntry, "id">, settings: SharedCredentialSettings) =>
+  entry.id === SHARED_OPENAI_EMBEDDING_ID ? settings.embeddingName : settings.name;
 
 export function sharedExpiry(invitedAt: Date | string | null | undefined, hours: number): Date | null {
   if (!invitedAt) return null;
@@ -64,8 +70,9 @@ export function resolveSharedCredential(id: string, provider: string, now = new 
   if (!entry || entry.provider !== provider) throw new FlowError("A credencial não pertence ao fornecedor selecionado.");
   const shared = sharedOpenAiCredential(now);
   if (!shared) throw new FlowError("A credencial compartilhada da OpenAI não está mais disponível. Cadastre sua própria chave da OpenAI.", 409);
-  if (!shared.expiresAt) throw new FlowError(`A credencial ${shared.name} é oferecida apenas a contas que entraram por convite. Cadastre sua própria chave da OpenAI.`, 409);
-  if (!shared.active) throw new FlowError(`O período gratuito da credencial ${shared.name} terminou em ${formatCredentialExpiry(shared.expiresAt)}. Cadastre sua própria chave da OpenAI.`, 409);
+  const name = sharedCredentialName(entry, shared);
+  if (!shared.expiresAt) throw new FlowError(`A credencial ${name} é oferecida apenas a contas que entraram por convite. Cadastre sua própria chave da OpenAI.`, 409);
+  if (!shared.active) throw new FlowError(`O período gratuito da credencial ${name} terminou em ${formatCredentialExpiry(shared.expiresAt)}. Cadastre sua própria chave da OpenAI.`, 409);
   return { entry, key: shared.key };
 }
 export function resolveSharedOpenAiKey(provider: string, key: string, now = new Date()): string {

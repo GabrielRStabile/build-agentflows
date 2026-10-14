@@ -89,9 +89,9 @@ nos logs.
 
 Opcional. Com `OPENAI_CHAVE_COMPARTILHADA` definida, toda conta que entrou por
 convite vê, em Credenciais, no seletor de credencial dos blocos LLM/Agente com
-OpenAI e no provedor de embeddings OpenAI das bases de conhecimento, a
-credencial **StartSe OpenAI API (free tier)** durante as 72 horas seguintes ao
-resgate do convite. Bases de conhecimento novas já nascem com o fluxo básico
+OpenAI, a credencial **StartSe OpenAI API (free tier)** durante as 72 horas
+seguintes ao resgate do convite; no provedor de embeddings OpenAI das bases de
+conhecimento a mesma chave aparece como **StartSe OpenAI Embedding API**. Bases de conhecimento novas já nascem com o fluxo básico
 (embeddings OpenAI com essa credencial, Faiss e registro interno) e podem ser
 indexadas sem configurar nada; tudo continua editável. Ela aparece primeiro na lista, é somente
 leitura (sem editar nem excluir) e a chave fica apenas no ambiente: nada é
@@ -101,6 +101,8 @@ copiado para o banco das contas nem enviado ao navegador.
   oferecido.
 - `OPENAI_CHAVE_COMPARTILHADA_NOME`: nome exibido antes de "(free tier)";
   padrão `StartSe OpenAI API`.
+- `OPENAI_CHAVE_COMPARTILHADA_NOME_EMBEDDINGS`: nome exibido no provedor de
+  embeddings, sem sufixo; padrão `StartSe OpenAI Embedding API`.
 - `OPENAI_CHAVE_COMPARTILHADA_HORAS`: duração contada a partir do resgate do
   convite; padrão `72`.
 
