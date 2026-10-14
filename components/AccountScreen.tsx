@@ -9,6 +9,7 @@ import { PasswordStrength } from "./PasswordStrength";
 
 type Mode = "login" | "register" | "forgot-password" | "verify-email" | "reset-password" | "access";
 type User = { name: string; email: string; email_verified_at: string | null; beta_status: "pending" | "approved" | "blocked" };
+const released = (user: User | null | undefined) => !!user?.email_verified_at && user.beta_status === "approved";
 const titles: Record<Mode, string> = { login: "Entrar", register: "Criar sua conta", "forgot-password": "Recuperar senha", "verify-email": "Confirmar e-mail", "reset-password": "Nova senha", access: "Seu acesso ao beta" };
 function nextDestination() {
   const next = new URLSearchParams(window.location.search).get("next") || "/";
@@ -125,6 +126,8 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
         try {
           const data = await request("session");
           if (!live) return;
+          // Conta já liberada (o proxy normalmente redireciona antes; aqui cobre a navegação no cliente).
+          if (released(data.user)) { router.replace("/"); router.refresh(); return; }
           setUser(data.user); setCode(linked); setInvitePending(!!(linked || data.invitePending)); setLoaded(true);
           // A confirmed account waiting for release uses the invite link without another click.
           if (data.user?.email_verified_at && data.user.beta_status === "pending" && (linked || data.invitePending)) {
@@ -153,7 +156,7 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
       const action = mode === "access" ? "invite" : mode;
       const result = await request(action, { name, email, password, confirmPassword, token, code });
       if (mode === "login") {
-        router.replace(result.user.email_verified_at && result.user.beta_status === "approved" ? nextDestination() : withInvite("/acesso"));
+        router.replace(released(result.user) ? nextDestination() : withInvite("/acesso"));
         router.refresh();
       } else if (mode === "access") { router.replace("/"); router.refresh(); }
       else {
@@ -204,7 +207,7 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
                 </form>
                 <div className="flex items-center gap-3 my-5 text-xs text-muted" aria-hidden="true"><span className="h-px flex-1 bg-line" />ou<span className="h-px flex-1 bg-line" /></div>
                 <p className="text-sm text-muted mb-3">Sem convite? A equipe libera novos acessos aos poucos. Você pode conferir se já foi liberado.</p>
-                <button className="btn-secundario" disabled={busy} onClick={() => void act(async () => { const result = await request("session"); setUser(result.user); if (result.user?.beta_status !== "approved") setMessage("Seu acesso ainda está na lista de espera."); })}>Verificar liberação</button></>}
+                <button className="btn-secundario" disabled={busy} onClick={() => void act(async () => { const result = await request("session"); if (released(result.user)) { router.replace("/"); router.refresh(); return; } setUser(result.user); if (result.user?.beta_status !== "approved") setMessage("Seu acesso ainda está na lista de espera."); })}>Verificar liberação</button></>}
           </>}
         </> : mode === "verify-email" ? <>
           {confirming ? <p role="status" className="text-sm text-center">Confirmando seu e-mail…</p>

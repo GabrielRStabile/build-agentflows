@@ -39,6 +39,17 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
+  if (pathname === "/acesso") {
+    // Conta já liberada não tem o que fazer em Seu acesso: vai direto para o espaço, sem convite pendente.
+    try {
+      const user = await findSession(saasDatabase(), sessionToken(request));
+      if (user?.email_verified_at && user.beta_status === "approved") {
+        const response = NextResponse.redirect(new URL("/", request.url));
+        response.headers.append("Set-Cookie", inviteCookie("", true));
+        return response;
+      }
+    } catch { /* sem banco, a página mostra o aviso de serviço indisponível */ }
+  }
   const publicAuth = ["/entrar", "/conta", "/acesso", "/verificar-email", "/recuperar-senha", "/redefinir-senha"];
   if (publicAuth.includes(pathname)) return withInvite(await permitir());
   if (pathname.startsWith("/api/auth/") || pathname.startsWith("/_next/") || pathname === "/icon.png" || pathname === "/apple-icon.png" || pathname === "/api/health") return permitir();
