@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.42.2 — 14/10/2026
+
+- Seu acesso (/acesso): conta com e-mail confirmado e acesso liberado é redirecionada direto para o espaço, em vez de ver o botão "Abrir meu espaço". Vale ao abrir o endereço (redirecionamento no servidor, descartando convite pendente) e ao clicar em "Verificar liberação".
+
 ## 0.42.1 — 14/10/2026
 
 - Base de conhecimento: a credencial OpenAI compartilhada aparece no provedor de embeddings como **StartSe OpenAI Embedding API** (nome configurável por `OPENAI_CHAVE_COMPARTILHADA_NOME_EMBEDDINGS`), em vez de repetir "StartSe OpenAI API (free tier)". Nos blocos LLM/Agente o nome continua o mesmo.
