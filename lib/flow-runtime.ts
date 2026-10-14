@@ -170,7 +170,13 @@ async function agent(n: Block, r: Run, signal: AbortSignal, details: Partial<Tra
     shown = current.message;
     details.memory = current.memory;
   }
-  details.input = transcript(exchange, shown) + (r.attachments?.length ? "\n\nAnexos enviados ao modelo (conteúdo omitido neste registro): " + r.attachments.map((item) => item.name).join(", ") : "") + (r.embedSessionId ? "\n\nO contexto da página também foi enviado ao modelo e não está incluído neste registro." : "");
+  const notes = [
+    r.attachments?.length ? "Anexos enviados ao modelo (conteúdo omitido neste registro): " + r.attachments.map((item) => item.name).join(", ") : "",
+    r.embedSessionId ? "O contexto da página também foi enviado ao modelo e não está incluído neste registro." : "",
+  ].filter(Boolean).join("\n\n");
+  details.input = transcript(exchange, shown) + (notes ? "\n\n" + notes : "");
+  details.turns = [...exchange, { role: "user", content: shown }];
+  if (notes) details.notes = notes;
   const result = await turn({
     prompt: opened ? originalMessage : originalMessage + context.text + knowledge.context + pageContext,
     history: sent,

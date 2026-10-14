@@ -106,6 +106,8 @@ test("primeiro bloco com Mensagem: responde à conversa e recebe a Mensagem em s
   const step = (await getRun(result.id)).trace.find((entry) => entry.nodeId === supervisor.id)!;
   assert.equal(step.input, "Usuário: HIC\n\nAssistente: Entendido o pedido.\n\nUsuário: Padronize a resposta apenas como o nome do próximo agente a agir.");
   assert.equal(step.memory, undefined, "sem conversas anteriores não há memória a mostrar");
+  assert.deepEqual(step.turns, [{ role: "user", content: "HIC" }, { role: "assistant", content: "Entendido o pedido." }, { role: "user", content: "Padronize a resposta apenas como o nome do próximo agente a agir." }]);
+  assert.equal(step.notes, undefined);
   assert.equal(step.output, "ESCRITOR");
   assert.equal(step.instructions, "Você é o supervisor.");
 });

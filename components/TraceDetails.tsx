@@ -15,6 +15,13 @@ export function TraceRow({ trace, onOpen }: { trace: Trace; onOpen: () => void }
 function pretty(text: string) {
   try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; }
 }
+// Troca da etapa: só os papéis em negrito e o conteúdo como texto puro, sem formatação.
+function Turns({ turns, notes }: { turns: NonNullable<Trace["turns"]>; notes?: string }) {
+  return <>
+    <div className="trace-turns">{turns.map((turn, i) => <div key={i}><strong>{turn.role === "user" ? "Usuário" : "Assistente"}</strong><pre className="trace-plain">{turn.content || "(vazio)"}</pre></div>)}</div>
+    {notes && <p className="trace-note">{notes}</p>}
+  </>;
+}
 function Payload({ text, empty }: { text?: string; empty: string }) {
   if (text === undefined) return <p className="trace-empty">{empty}</p>;
   let json: string | undefined;
@@ -41,10 +48,10 @@ export function TraceDetails({ trace, kind, onClose }: { trace: Trace; kind?: Ki
       <ul>{trace.knowledge.available.map(base => <li key={base.baseId}><strong>{base.baseName}</strong><small>{base.description}</small></li>)}</ul>
       <p>{trace.knowledge.count} trecho(s) recuperado(s) em {trace.knowledge.bases?.length || 0} base(s).</p>
     </section>}
-    {trace.instructions && <details className="trace-instructions" open><summary>{kind === "agent" ? "Instruções do agente" : "Instruções"}</summary><pre>{trace.instructions}</pre></details>}
-    {trace.memory && <details className="trace-instructions trace-memory" open><summary>Memória</summary><pre>{pretty(trace.memory)}</pre></details>}
+    {trace.instructions && <details className="trace-instructions"><summary>{kind === "agent" ? "Instruções do agente" : "Instruções"}</summary><pre>{trace.instructions}</pre></details>}
+    {trace.memory && <details className="trace-instructions trace-memory"><summary>Memória</summary><pre>{pretty(trace.memory)}</pre></details>}
     <div className="trace-payloads">
-      <section><h3>Entrada</h3><Payload text={trace.input} empty="Entrada não registrada nesta execução." /></section>
+      <section><h3>Entrada</h3>{trace.turns?.length ? <Turns turns={trace.turns} notes={trace.notes} /> : <Payload text={trace.input} empty="Entrada não registrada nesta execução." />}</section>
       <section><h3>Saída</h3><Payload text={trace.output} empty="Aguardando resultado…" /></section>
     </div>
   </Modal>;

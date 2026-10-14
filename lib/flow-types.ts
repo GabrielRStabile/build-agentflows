@@ -104,6 +104,10 @@ export type Trace = {
   instructions?: string;
   // Memória enviada ao modelo nesta etapa (JSON com resumo e mensagens anteriores), separada da entrada.
   memory?: string;
+  // Troca da etapa em turnos (conversa, resposta anterior e Mensagem), para exibição; input guarda a transcrição.
+  turns?: { role: "user" | "assistant"; content: string }[];
+  // Observações sobre o que foi enviado além do texto (anexos, contexto da página).
+  notes?: string;
   usage?: TokenUsage;
   nodeId: string;
   label: string;
