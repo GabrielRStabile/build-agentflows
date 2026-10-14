@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 0.33.0 — 14/10/2026
+
+- Implantar › cURL: o endereço publicado aceita `multipart/form-data` com o campo `input` e até cinco arquivos em `file`, que viram anexos da execução (JSON `{"input"}` continua aceito). Novo bloco **Requisição HTTP** com o endereço da API e botão "Copiar link", método, tipo de envio, campos, autenticação e formato da resposta. Os exemplos em cURL, JavaScript e Python usam multipart.
+- Editor: a seleção de texto volta a aparecer nos campos Instruções e Mensagem do LLM/Agente quando há referências destacadas (o fundo da seleção não era pintado com o texto transparente).
+- Modal da etapa: Instruções e Memória abrem recolhidas; a Entrada mostra a troca em turnos, com só "Usuário" e "Assistente" em negrito e o conteúdo como texto sem formatação.
+
 ## 0.32.0 — 14/10/2026
 
 - Implantar › cURL: seletor **Acesso** com "Público" (padrão) e "Com autenticação". No modo público o endereço `/webhook/flows/<id>` executa fluxos publicados sem chave e os exemplos saem sem o cabeçalho Authorization; no modo com autenticação a chave da conta continua obrigatória e só então a seção Chave de acesso (gerar, copiar, revogar) aparece na aba. O Conector MCP segue sempre com chave. A escolha é salva por fluxo (GET/PUT /api/flows/[id]/acesso). Fluxos não publicados não respondem ao público.
