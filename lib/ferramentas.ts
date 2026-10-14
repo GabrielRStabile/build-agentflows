@@ -1,3 +1,4 @@
+import { saveAttachment } from "./attachment-service";
 import { type Ferramenta, integrationExecutionLimit } from "./mcp";
 import { listTenantFlows, getTenantRun } from "./tenant-flows";
 import { enqueueRun, enqueueResume } from "./saas-jobs";
@@ -13,10 +14,14 @@ export function integrationId(value: unknown) {
   if (typeof value !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value)) throw new FlowError("Identificador inválido.");
   return value;
 }
-export async function enqueueIntegrationRun(id: unknown, input: unknown) {
+export async function enqueueIntegrationRun(id: unknown, input: unknown, files: File[] = []) {
   const flowId = integrationId(id);
   await integrationExecutionLimit();
-  const { run, job } = await enqueueRun(flowId, input, true);
+  if (typeof input !== "string" || !input.trim()) throw new FlowError("Envie o campo input com a mensagem para o fluxo.");
+  // Arquivos do multipart viram anexos privados do fluxo e seguem as mesmas regras do chat de teste.
+  const attachments: string[] = [];
+  for (const file of files) attachments.push((await saveAttachment(flowId, file)).id);
+  const { run, job } = await enqueueRun(flowId, input, true, undefined, attachments);
   await notifyJob(job.id);
   return executionSummary(run);
 }

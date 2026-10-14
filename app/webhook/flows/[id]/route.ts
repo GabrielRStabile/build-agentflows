@@ -1,7 +1,7 @@
 import { extrairCodigo, integrationApi } from "@/lib/mcp";
 import { publicIntegrationApi } from "@/lib/http-access";
 import { enqueueIntegrationRun, executionSummary, integrationId } from "@/lib/ferramentas";
-import { body } from "@/lib/flow-api";
+import { integrationPayload } from "@/lib/integration-body";
 import { privateJson } from "@/lib/saas-http";
 import { getTenantFlow, getTenantRun } from "@/lib/tenant-flows";
 import { FlowError } from "@/lib/flow-store";
@@ -12,8 +12,8 @@ async function handle(req: Request, c: Context, action: () => Promise<unknown>) 
 }
 export async function POST(req: Request, c: Context) {
   return handle(req, c, async () => {
-    const b = await body(req);
-    return privateJson(await enqueueIntegrationRun((await c.params).id, b.input), { status: 202 });
+    const { input, files } = await integrationPayload(req);
+    return privateJson(await enqueueIntegrationRun((await c.params).id, input, files), { status: 202 });
   });
 }
 export async function GET(req: Request, c: Context) {

@@ -94,14 +94,15 @@ export function IntegrationDialog({
   const codeTab: CodeTab = tab === "mcp" ? "mcp" : devLanguage;
   const snippets: Record<CodeTab, string> = {
     curl: `curl -X POST '${url}' \\
-${authenticated ? `  -H 'Authorization: Bearer ${bearer}' \\\n` : ""}  -H 'Content-Type: application/json' \\
-  -d '{"input":"Sua mensagem"}'`,
-    javascript: `const resposta = await fetch("${url}", {
+${authenticated ? `  -H 'Authorization: Bearer ${bearer}' \\\n` : ""}  -F 'input=Sua mensagem' \\
+  -F 'file=@/caminho/documento.pdf'`,
+    javascript: `const form = new FormData();
+form.append("input", "Sua mensagem");
+form.append("file", arquivo); // opcional: File ou Blob, até 5 arquivos
+
+const resposta = await fetch("${url}", {
   method: "POST",
-  headers: {
-${authenticated ? `    Authorization: "Bearer ${bearer}",\n` : ""}    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({ input: "Sua mensagem" }),
+${authenticated ? `  headers: { Authorization: "Bearer ${bearer}" },\n` : ""}  body: form, // multipart/form-data; o navegador define o boundary
 });
 const { id, queued } = await resposta.json();
 // Consulte depois: GET ${url}?runId=ID_RECEBIDO
@@ -110,7 +111,8 @@ ${authenticated ? "// Envie o mesmo cabeçalho Authorization." : "// Acesso púb
 
 resposta = requests.post(
     "${url}",
-${authenticated ? `    headers={"Authorization": "Bearer ${bearer}"},\n` : ""}    json={"input": "Sua mensagem"},
+${authenticated ? `    headers={"Authorization": "Bearer ${bearer}"},\n` : ""}    data={"input": "Sua mensagem"},
+    files=[("file", open("documento.pdf", "rb"))],  # opcional, até 5 arquivos
     timeout=180,
 )
 dados = resposta.json()
@@ -425,8 +427,23 @@ ${authenticated ? "# Envie o mesmo cabeçalho Authorization." : "# Acesso públi
           <p>
             {tab === "mcp"
               ? "Cole esta configuração no cliente MCP do seu assistente. Ele passa a listar seus fluxos publicados, enfileirar execuções, consultar resultados e responder aprovações."
-              : (authenticated ? "O POST retorna HTTP 202 com id e queued. Consulte o resultado com GET neste mesmo endereço, adicionando ?runId=ID_RECEBIDO e o mesmo Bearer." : "O POST retorna HTTP 202 com id e queued. Consulte o resultado com GET neste mesmo endereço, adicionando ?runId=ID_RECEBIDO, sem chave.") + " Enquanto queued for true, a tarefa aguarda na fila; waiting indica aprovação pendente."}
+              : "Envie um POST multipart/form-data com o campo input (e arquivos opcionais em file). A resposta é HTTP 202 com id e queued; consulte o resultado com GET neste mesmo endereço, adicionando ?runId=ID_RECEBIDO" + (authenticated ? " e o mesmo Bearer." : ", sem chave.") + " Enquanto queued for true, a tarefa aguarda na fila; waiting indica aprovação pendente."}
           </p>
+          {tab === "dev" && <div className="integration-request" aria-label="Requisição HTTP">
+            <div className="integration-request-url">
+              <span>Endereço da API</span>
+              <code>{url}</code>
+              <button className="studio-button subtle" onClick={() => copy(url, "url")}><Icon name="copy" size={16} />{copied === "url" ? "Copiado" : "Copiar link"}</button>
+            </div>
+            <dl className="integration-request-spec">
+              <div><dt>Método</dt><dd><code>POST</code> para executar; <code>GET ?runId=</code> para consultar</dd></div>
+              <div><dt>Content-Type</dt><dd><code>multipart/form-data</code> (JSON <code>{'{"input"}'}</code> também é aceito)</dd></div>
+              <div><dt>Campo input</dt><dd>texto da mensagem, obrigatório, até 20 mil caracteres</dd></div>
+              <div><dt>Campo file</dt><dd>opcional, até 5 arquivos de 10 MB (20 MB no total): PNG, JPG, WebP, PDF, TXT, MD, CSV e JSON; exige um bloco de IA no fluxo</dd></div>
+              <div><dt>Autenticação</dt><dd>{authenticated ? <>cabeçalho <code>Authorization: Bearer CHAVE</code></> : "nenhuma (acesso público)"}</dd></div>
+              <div><dt>Resposta</dt><dd><code>202</code> com <code>{'{"id","status","queued"}'}</code>; a consulta devolve <code>status</code> e <code>output</code></dd></div>
+            </dl>
+          </div>}
           {tab === "dev" && <fieldset className="integration-access-mode">
             <legend>Acesso</legend>
             {([["publico", "Público", "Qualquer sistema com o endereço executa o fluxo, sem chave."], ["autenticado", "Com autenticação", "Exige a chave de acesso da conta no cabeçalho Authorization."]] as const).map(([value, label, help]) => (

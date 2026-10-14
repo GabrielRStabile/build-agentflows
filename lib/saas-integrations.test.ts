@@ -118,6 +118,27 @@ test("acesso HTTP público por padrão dispensa a chave; com autenticação, exi
   assert.equal((await post()).status, 202);
 });
 
+test("execução publicada aceita multipart/form-data com input e arquivos no campo file", async t => {
+  const x = await setup(t);
+  const multipart = (form: FormData, id = x.flow.id) => x.connect(() => webhook.POST(new Request(`https://app.example.com/webhook/flows/${id}`, { method: "POST", body: form }), { params: Promise.resolve({ id }) }));
+  const simple = new FormData(); simple.set("input", "Olá por formulário");
+  const accepted = await multipart(simple); assert.equal(accepted.status, 202);
+  const acceptedId = (await accepted.json()).id as string;
+  const run = await x.asTenant(() => getTenantRun(acceptedId));
+  assert.equal(run.input, "Olá por formulário"); assert.equal(run.attachments?.length || 0, 0);
+  // Arquivo anexado: o fluxo sem bloco de IA não pode analisá-lo, mas o formulário foi lido e o anexo salvo.
+  const withFile = new FormData(); withFile.set("input", "Leia o anexo"); withFile.append("file", new File(["conteúdo de teste"], "nota.txt", { type: "text/plain" }));
+  const refused = await multipart(withFile); assert.equal(refused.status, 400);
+  assert.match((await refused.json()).error, /bloco de IA/);
+  // Sem input, o formulário é recusado com orientação; mais de cinco arquivos também.
+  const empty = new FormData(); empty.append("file", new File(["x"], "a.txt"));
+  assert.match((await (await multipart(empty)).json()).error, /campo input/);
+  const many = new FormData(); many.set("input", "Olá"); for (let i = 0; i < 6; i++) many.append("file", new File(["x"], `a${i}.txt`));
+  assert.match((await (await multipart(many)).json()).error, /até 5 arquivos/);
+  // JSON continua aceito pelas integrações existentes.
+  assert.equal((await x.post()).status, 202);
+});
+
 test("MCP enfileira aprovação uma vez e consulta progresso pelo mesmo worker", async t => {
   const x = await setup(t, true);
   const accepted = toolData(await (await x.rpc(x.codeA, "executar_fluxo", { id: x.flow.id, input: "Aprovar" })).json());
