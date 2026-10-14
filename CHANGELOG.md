@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.35.0 — 14/10/2026
+
+- Endereço publicado e MCP: campo opcional `session` para continuar a mesma conversa. Sem ele, o servidor gera um id e o devolve na resposta; reenviado, a nova chamada recebe as interações concluídas anteriores dessa sessão como histórico, que os blocos com memória ligada usam. Ids inválidos são recusados; sessões são isoladas por conta e por fluxo. Chamadas sem o campo continuam funcionando como antes. Detalhes da requisição e exemplos atualizados em Implantar › cURL.
+
 ## 0.34.0 — 14/10/2026
 
 - Endereço publicado (`/webhook/flows/<id>`): a resposta passa a ser síncrona. O POST espera a execução terminar e devolve `200` com `id`, `status` e `output` (waiting quando há aprovação pendente); só volta `202` com `queued`/running se a execução passar do limite de tempo, e `?wait=0` responde na hora. O Conector MCP segue assíncrono.
