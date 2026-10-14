@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.31.2 — 14/10/2026
+
+- LLM e Agente: no primeiro bloco com Mensagem (opcional) e memória ligada, o modelo responde primeiro à conversa do chat e só então recebe a Mensagem como pergunta seguinte, com o histórico dessa troca. A Entrada da etapa mostra Pessoa, Assistente e Pessoa; os tokens somam as duas chamadas. Blocos seguintes continuam em uma chamada, com o resultado anterior no papel da resposta.
+
 ## 0.31.1 — 14/10/2026
 
 - LLM e Agente: no primeiro bloco com Mensagem (opcional) e memória ligada, a conversa do chat vai ao modelo como mensagem da pessoa, seguida da Mensagem, em vez de ficar só como "dados de contexto" na memória. A Entrada da etapa mostra essa transcrição.
