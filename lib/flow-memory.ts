@@ -20,6 +20,9 @@ export function memoryMessages(run: Run): MemoryMessage[] {
     const node = run.graph.nodes.find((node) => node.id === entry.nodeId);
     if (!node || !["agent", "llm"].includes(node.data.kind)) continue;
     if (entry.type === "tool" || (!entry.type && entry.label !== node.data.label)) continue;
+    // Etapa com duas interações: a resposta à conversa (que costuma ter o conteúdo útil) também é
+    // uma resposta deste bloco; a Mensagem que a seguiu era instrução só para ele e fica de fora.
+    if (entry.opening?.trim()) messages.push({ role: "assistant", content: entry.opening, name: node.data.label });
     messages.push({ role: "assistant", content: entry.output, name: node.data.label });
   }
   return messages;

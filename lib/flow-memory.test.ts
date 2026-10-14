@@ -185,6 +185,33 @@ test("resumo com recentes só resume o excesso, preserva a ordem e mantém a men
   assert.equal(await memoryPrompt(run, { memoryType: "conversationSummary" }, run.input, noSummary), "Mensagem atual");
 });
 
+test("a resposta de abertura do bloco com Mensagem entra na memória dos próximos; a Mensagem não", async () => {
+  const f = await flow();
+  const [supervisor, escritor] = [f.graph.nodes[1], f.graph.nodes[2]];
+  supervisor.data.label = "Supervisor";
+  supervisor.data.config.prompt = "Padronize a resposta apenas como o nome do próximo agente a agir.";
+  escritor.data.label = "Escritor";
+  await saveFlow(f.id, f);
+  const calls: { prompt: string; history?: { role: string; content: string }[] }[] = [];
+  const answers = ["Próximo agente: Escritor. Atividade: elaborar um texto sobre o futuro do trabalho.", "ESCRITOR", "Texto escrito.", "Revisado."];
+  bridge.run = async ({ prompt, history }) => { calls.push({ prompt, history }); return answers[calls.length - 1]; };
+  const result = await startRun(f.id, "O futuro do trabalho", false, false);
+  assert.equal(result.status, "completed");
+  const run = await getRun(result.id);
+  const step = run.trace.find((entry) => entry.nodeId === supervisor.id)!;
+  assert.equal(step.opening, answers[0]);
+  assert.equal(step.output, "ESCRITOR");
+  const next = run.trace.find((entry) => entry.nodeId === escritor.id)!;
+  assert.deepEqual(JSON.parse(next.memory!), { mensagens: [
+    { role: "user", content: "O futuro do trabalho" },
+    { role: "assistant", content: answers[0], name: "Supervisor" },
+  ] });
+  assert.match(calls[2].prompt, /Atividade: elaborar um texto/);
+  assert.doesNotMatch(calls[2].prompt, /Padronize a resposta/);
+  assert.match(calls[2].prompt, /Mensagem desta etapa:\nESCRITOR$/);
+  assert.deepEqual(memoryMessages(run).map((m) => m.content), ["O futuro do trabalho", answers[0], "ESCRITOR", "Texto escrito.", "Revisado."]);
+});
+
 test("memória preserva passagens repetidas e exclui chamadas internas de ferramentas", async () => {
   const run = await prepareRun((await flow()).id, "Pedido", false, false);
   const entry = { nodeId: "a", label: "Agente", output: "Primeira passagem", at: "", ms: 1 };

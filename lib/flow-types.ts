@@ -106,6 +106,9 @@ export type Trace = {
   memory?: string;
   // Troca da etapa em turnos (conversa, resposta anterior e Mensagem), para exibição; input guarda a transcrição.
   turns?: { role: "user" | "assistant"; content: string }[];
+  // Resposta de abertura da etapa com duas interações (à conversa, antes da Mensagem): entra na
+  // memória dos blocos seguintes como resposta deste bloco; a Mensagem em si não entra.
+  opening?: string;
   // Observações sobre o que foi enviado além do texto (anexos, contexto da página).
   notes?: string;
   usage?: TokenUsage;

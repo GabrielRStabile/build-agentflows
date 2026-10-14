@@ -163,6 +163,7 @@ async function agent(n: Block, r: Run, signal: AbortSignal, details: Partial<Tra
     sent = [{ role: "user", content: openingContext.prompt + context.text + knowledge.context + pageContext }, { role: "assistant", content: opening }];
     originalMessage = shown = interpolate(c.prompt, r);
     details.memory = openingContext.memory;
+    details.opening = opening;
     opened = true;
   } else {
     const current = await memoryContext(r, c, message(c, r) || CITED_MESSAGE, summarize, exchange);
