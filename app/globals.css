@@ -159,3 +159,13 @@ body { @apply bg-bg text-ink font-sans text-[15px] leading-[1.55] min-h-screen; 
 @media print { .flows-main { padding: 0; }.run-view { box-shadow: none; }.delete-button,.toolbar { display:none; } }
 .flows-main .toolbar .btn-primary { width: auto; min-width: 130px; }
 @media(min-width:1101px) { .flow-workspace { height: 650px; min-height: 650px; }.flow-sidebar,.flow-inspector { max-height: 650px; }.flow-canvas { min-height: 650px; } }
+
+/* Nível da senha (components/PasswordStrength.tsx): quatro barras e o rótulo de forcaSenha. Fica em
+   globals.css porque aparece tanto nas telas de conta (Tailwind) quanto em Minha conta (studio.css). */
+.password-strength { display: grid; gap: 4px; margin-top: 6px; font-size: 11px; font-weight: 400; color: var(--color-muted); min-height: 1.1em; }
+.password-strength-bars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.password-strength-bars span { height: 4px; border-radius: 2px; background: var(--studio-line, var(--color-line)); transition: background-color 0.2s; }
+.password-strength[data-level="1"] .filled { background: var(--color-danger); }
+.password-strength[data-level="2"] .filled { background: var(--color-warn); }
+.password-strength[data-level="3"] .filled, .password-strength[data-level="4"] .filled { background: var(--color-ok); }
+.password-strength-label:empty::before { content: "\00a0"; }

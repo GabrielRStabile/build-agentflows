@@ -4124,6 +4124,8 @@
 .account-coupon { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .account-coupon code { padding: 6px 10px; border: 1px dashed var(--studio-primary); border-radius: 8px; background: var(--studio-primary-soft); color: var(--studio-ink); font-size: 13px; font-weight: 700; letter-spacing: 0.06em; user-select: all; }
 .account-password { display: grid; gap: 12px; max-width: 420px; }
+.account-new-password { display: grid; gap: 6px; }
+.account-new-password .password-strength { margin-top: 0; }
 .account-field { display: grid; gap: 6px; font-size: 12px; font-weight: 600; color: var(--studio-ink); }
 .account-field input { width: 100%; padding: 10px 12px; border: 1px solid var(--studio-line); border-radius: 8px; background: var(--studio-bg); color: var(--studio-ink); font: inherit; font-weight: 400; }
 .account-field input:focus { outline: none; border-color: var(--studio-primary); box-shadow: 0 0 0 3px var(--studio-primary-soft); }
@@ -4149,3 +4151,7 @@
 .replicate-model-status svg { flex: none; margin-top: 2px; }
 .replicate-model-ok { color: var(--studio-success, #1f8a4c); }
 .replicate-model-text { color: var(--studio-muted); }
+:root[data-studio-theme="dark"] .password-strength { color: var(--studio-muted); }
+:root[data-studio-theme="dark"] .password-strength[data-level="1"] .filled { background: #f0899a; }
+:root[data-studio-theme="dark"] .password-strength[data-level="2"] .filled { background: #e4b65d; }
+:root[data-studio-theme="dark"] .password-strength[data-level="3"] .filled, :root[data-studio-theme="dark"] .password-strength[data-level="4"] .filled { background: #6fd19c; }

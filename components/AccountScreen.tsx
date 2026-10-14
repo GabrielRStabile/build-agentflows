@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { REGRA_SENHA } from "@/lib/conta-comum";
 import { readJson, unavailableMessage } from "./StudioUI";
 import { ConnectionsBackground } from "./ConnectionsBackground";
+import { PasswordStrength } from "./PasswordStrength";
 
 type Mode = "login" | "register" | "forgot-password" | "verify-email" | "reset-password" | "access";
 type User = { name: string; email: string; email_verified_at: string | null; beta_status: "pending" | "approved" | "blocked" };
@@ -177,7 +178,10 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
           <form onSubmit={submit} className="space-y-4">
           {mode === "register" && <label className="block text-sm" htmlFor="name">Seu nome<input id="name" className="input mt-1" value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} autoComplete="name" /></label>}
           {emailField && <label className="block text-sm" htmlFor="email">E-mail<input id="email" className="input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required maxLength={254} autoComplete="email" /></label>}
-          {passwordField && <label className="block text-sm" htmlFor="password">Senha<input id="password" className="input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required maxLength={256} autoComplete={mode === "login" ? "current-password" : "new-password"} />{mode !== "login" && <span className="text-muted text-xs block mt-1">{REGRA_SENHA}</span>}</label>}
+          {passwordField && <div>
+            <label className="block text-sm" htmlFor="password">Senha<input id="password" className="input mt-1" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required maxLength={256} autoComplete={mode === "login" ? "current-password" : "new-password"} aria-describedby={mode === "login" ? undefined : "password-rule"} /></label>
+            {mode !== "login" && <><span id="password-rule" className="text-muted text-xs block mt-1">{REGRA_SENHA}</span><PasswordStrength password={password} /></>}
+          </div>}
           {mode === "login" && <p className="-mt-2 text-right"><Link href={withInvite("/recuperar-senha")} className="btn-link text-xs">Esqueci minha senha</Link></p>}
           {(mode === "register" || mode === "reset-password") && <label className="block text-sm" htmlFor="confirm-password">Confirmar senha<input id="confirm-password" className="input mt-1" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required maxLength={256} autoComplete="new-password" /></label>}
           {(mode === "verify-email" || mode === "reset-password") && !token && <p className="text-sm">Abra o link recebido por e-mail para continuar.</p>}

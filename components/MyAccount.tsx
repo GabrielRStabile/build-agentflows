@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { AccountUsage } from "@/lib/saas-plan";
 import { REGRA_SENHA } from "@/lib/conta-comum";
 import { Icon, StudioShell, request } from "./StudioUI";
+import { PasswordStrength } from "./PasswordStrength";
 
 type Account = { name: string; email: string; hasPassword: boolean; google: boolean; usage: AccountUsage };
 
@@ -58,9 +59,12 @@ function PasswordForm() {
   return (
     <form className="account-password" onSubmit={submit}>
       <label className="account-field">Senha atual<input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} required maxLength={256} autoComplete="current-password" /></label>
-      <label className="account-field">Nova senha<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required maxLength={256} autoComplete="new-password" aria-describedby="password-rule" /></label>
+      <div className="account-new-password">
+        <label className="account-field">Nova senha<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required maxLength={256} autoComplete="new-password" aria-describedby="password-rule" /></label>
+        <small id="password-rule">{REGRA_SENHA}</small>
+        <PasswordStrength password={password} />
+      </div>
       <label className="account-field">Confirmar nova senha<input type="password" value={confirmPassword} onChange={(e) => setConfirm(e.target.value)} required maxLength={256} autoComplete="new-password" /></label>
-      <small id="password-rule">{REGRA_SENHA}</small>
       {error && <p role="alert" className="account-error">{error}</p>}
       {message && <p role="status" className="account-success">{message}</p>}
       <div><button type="submit" className="studio-button primary" disabled={busy}>{busy ? "Alterando…" : "Alterar senha"}</button></div>
