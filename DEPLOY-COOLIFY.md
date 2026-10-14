@@ -232,6 +232,29 @@ host Coolify e das integrações externas continua necessária antes da publica�
 A jornada opcional com Playwright também passou em desktop e celular; veja
 [EMBED-TENANTS.md](EMBED-TENANTS.md) para reproduzir.
 
+## Disco do host e imagens antigas
+
+Cada deploy pelo Compose gera uma imagem nova para `app` e outra para `worker`
+(mesmo Dockerfile, camadas compartilhadas quando o cache acerta) e mantém as
+anteriores até a limpeza do Coolify. O cache de build guarda ainda a camada do
+`npm ci` com as ferramentas nativas (cerca de 2 GB), que não entra na imagem final.
+Em dias com muitos deploys o disco sobe em "dente de serra" até a limpeza diária.
+
+- No Coolify, em Servers → servidor → Advanced → Docker Cleanup, reduza o intervalo
+  (cron, padrão diário à meia-noite UTC) e defina o limiar de uso de disco que dispara
+  a limpeza fora do horário. Não existe "manter N builds" por aplicação: a poda vale
+  para o servidor inteiro e preserva as imagens dos containers em execução.
+- Para aliviar na hora, no host: `docker system df` mostra o uso; `docker image prune
+  -af --filter "until=24h"` e `docker builder prune -af --filter "until=24h"` removem
+  imagens e cache com mais de 24 horas sem derrubar containers.
+- O deploy automático a cada push na `main` multiplica as imagens; com commits pequenos
+  e frequentes, prefira disparar o deploy por release.
+
+A imagem final leva o `node_modules` de produção completo porque o worker executa
+`lib/*.ts` fora do Next (o rastreamento do standalone cobre só o que o servidor usa).
+O Dockerfile apaga o `node_modules` do standalone antes da cópia, para não deixar
+uma camada duplicada de cerca de 400 MB por imagem.
+
 ## Persistência e recuperação
 
 - `postgres-dados`: contas, sessões, credenciais cifradas, fluxos, anexos,

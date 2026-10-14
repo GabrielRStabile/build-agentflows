@@ -9,7 +9,11 @@ WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+# O standalone traz um node_modules rastreado (~400 MB) que a imagem final cobre com o
+# node_modules de produção completo, no mesmo caminho: sem apagá-lo aqui, a cópia ficava
+# perdida numa camada de baixo e cada imagem crescia esse tanto. O worker roda lib/*.ts fora
+# do Next e precisa do node_modules completo; só o rastreado não basta.
+RUN npm run build && rm -rf .next/standalone/node_modules
 
 FROM deps AS production-deps
 RUN npm prune --omit=dev
