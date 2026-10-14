@@ -104,8 +104,8 @@ const resposta = await fetch("${url}", {
   method: "POST",
 ${authenticated ? `  headers: { Authorization: "Bearer ${bearer}" },\n` : ""}  body: form, // multipart/form-data; o navegador define o boundary
 });
-const { id, queued } = await resposta.json();
-// Consulte depois: GET ${url}?runId=ID_RECEBIDO
+const { id, status, output } = await resposta.json(); // responde quando a execução termina
+// Se vier 202 (limite de tempo), consulte: GET ${url}?runId=ID_RECEBIDO
 ${authenticated ? "// Envie o mesmo cabeçalho Authorization." : "// Acesso público: nenhuma chave é necessária."}`,
     python: `import requests
 
@@ -115,9 +115,9 @@ ${authenticated ? `    headers={"Authorization": "Bearer ${bearer}"},\n` : ""}  
     files=[("file", open("documento.pdf", "rb"))],  # opcional, até 5 arquivos
     timeout=180,
 )
-dados = resposta.json()
-print(dados["id"], dados["queued"])
-# Consulte depois: GET ${url}?runId=ID_RECEBIDO
+dados = resposta.json()  # responde quando a execução termina
+print(dados["status"], dados["output"])
+# Se vier 202 (limite de tempo), consulte: GET ${url}?runId=ID_RECEBIDO
 ${authenticated ? "# Envie o mesmo cabeçalho Authorization." : "# Acesso público: nenhuma chave é necessária."}`,
     mcp: JSON.stringify(
       {
@@ -415,34 +415,33 @@ ${authenticated ? "# Envie o mesmo cabeçalho Authorization." : "# Acesso públi
                 ? "Conecte seu assistente"
                 : "Execute seu fluxo"}
             </h3>
-            <button
+            {tab === "mcp" && <button
               className="studio-button subtle"
-              disabled={authenticated && !code}
+              disabled={!code}
               onClick={() => copy(snippets[codeTab], codeTab)}
             >
               <Icon name="copy" size={16} />
               {copied === codeTab ? "Copiado" : "Copiar"}
-            </button>
+            </button>}
           </div>
-          <p>
-            {tab === "mcp"
-              ? "Cole esta configuração no cliente MCP do seu assistente. Ele passa a listar seus fluxos publicados, enfileirar execuções, consultar resultados e responder aprovações."
-              : "Envie um POST multipart/form-data com o campo input (e arquivos opcionais em file). A resposta é HTTP 202 com id e queued; consulte o resultado com GET neste mesmo endereço, adicionando ?runId=ID_RECEBIDO" + (authenticated ? " e o mesmo Bearer." : ", sem chave.") + " Enquanto queued for true, a tarefa aguarda na fila; waiting indica aprovação pendente."}
-          </p>
+          {tab === "mcp" && <p>Cole esta configuração no cliente MCP do seu assistente. Ele passa a listar seus fluxos publicados, enfileirar execuções, consultar resultados e responder aprovações.</p>}
           {tab === "dev" && <div className="integration-request" aria-label="Requisição HTTP">
             <div className="integration-request-url">
               <span>Endereço da API</span>
               <code>{url}</code>
               <button className="studio-button subtle" onClick={() => copy(url, "url")}><Icon name="copy" size={16} />{copied === "url" ? "Copiado" : "Copiar link"}</button>
             </div>
+            <details className="integration-request-details">
+            <summary>Detalhes da requisição</summary>
             <dl className="integration-request-spec">
-              <div><dt>Método</dt><dd><code>POST</code> para executar; <code>GET ?runId=</code> para consultar</dd></div>
+              <div><dt>Método</dt><dd><code>POST</code> executa e responde com o resultado; <code>GET ?runId=</code> consulta uma execução</dd></div>
               <div><dt>Content-Type</dt><dd><code>multipart/form-data</code> (JSON <code>{'{"input"}'}</code> também é aceito)</dd></div>
               <div><dt>Campo input</dt><dd>texto da mensagem, obrigatório, até 20 mil caracteres</dd></div>
               <div><dt>Campo file</dt><dd>opcional, até 5 arquivos de 10 MB (20 MB no total): PNG, JPG, WebP, PDF, TXT, MD, CSV e JSON; exige um bloco de IA no fluxo</dd></div>
               <div><dt>Autenticação</dt><dd>{authenticated ? <>cabeçalho <code>Authorization: Bearer CHAVE</code></> : "nenhuma (acesso público)"}</dd></div>
-              <div><dt>Resposta</dt><dd><code>202</code> com <code>{'{"id","status","queued"}'}</code>; a consulta devolve <code>status</code> e <code>output</code></dd></div>
+              <div><dt>Resposta</dt><dd>síncrona: <code>200</code> com <code>{'{"id","status","output"}'}</code> ao terminar (<code>status</code> completed, failed ou waiting para aprovação pendente). Se a execução passar do limite de tempo, <code>202</code> com <code>queued</code> ou running: consulte com <code>GET ?runId=</code>. <code>?wait=0</code> responde 202 na hora, sem esperar</dd></div>
             </dl>
+            </details>
           </div>}
           {tab === "dev" && <fieldset className="integration-access-mode">
             <legend>Acesso</legend>
