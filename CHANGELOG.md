@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.29.0 — 13/10/2026
+
+- Referências nativas em português nos campos do editor: `{{input}}` aparece como `{{Conversa}}`, `{{last}}` como `{{Etapa anterior}}` e `{{state.approval}}` como `{{Decisão da aprovação}}`, no autocompletar, no destaque colorido e no texto. O fluxo continua gravando as chaves do motor, que seguem aceitas quando digitadas à mão e em arquivos importados. Blocos com um desses nomes seguem pelo id. Placeholders e textos de ajuda atualizados.
+- Validação: 365 testes gerais, lint e build sem erros.
+
 ## 0.28.0 — 13/10/2026
 
 - Chat de teste: enquanto a execução roda, a bolha mostra o bloco em andamento (nome, tipo e ferramenta em uso) com o indicador de carregamento, em vez dos resultados parciais de cada etapa. A resposta aparece só ao terminar; execuções com falha mostram apenas o erro. Os detalhes de cada etapa seguem em "Etapas executadas".
