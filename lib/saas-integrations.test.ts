@@ -7,6 +7,7 @@ import { withTenantSession } from "./tenant-context";
 import { block, type Graph } from "./flow-types";
 import { createTenantFlow, getTenantRun, publishTenantFlow } from "./tenant-flows";
 import { codigoAtivo, gerarCodigo } from "./mcp";
+import { httpAccess, saveHttpAccess } from "./http-access";
 import { claimJob, enqueueRun } from "./saas-jobs";
 import { runClaimedJob } from "./saas-worker";
 import * as tokenApi from "../app/api/mcp/token/route";
@@ -83,6 +84,38 @@ test("webhook retorna 202, worker executa e consulta valida conta e fluxo", asyn
   const another = await x.asTenant(() => createTenantFlow("Another", false, { name: "Another", description: "", graph: graph() }));
   assert.equal((await read(x.codeA, another.id)).status, 404);
   assert.equal((await (await x.rpc(x.codeB, "consultar_execucao", { id: accepted.id })).json()).result.isError, true);
+});
+
+test("acesso HTTP público por padrão dispensa a chave; com autenticação, exige a chave da conta", async t => {
+  const x = await setup(t);
+  const anonymous = (data?: unknown, path = `/webhook/flows/${x.flow.id}`) => new Request("https://app.example.com" + path, { method: data === undefined ? "GET" : "POST", headers: { "content-type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+  const post = (id = x.flow.id) => x.connect(() => webhook.POST(anonymous({ input: "Olá" }, `/webhook/flows/${id}`), { params: Promise.resolve({ id }) }));
+  // Padrão: público. O POST sem Authorization enfileira e o GET sem chave consulta a execução.
+  assert.equal((await x.asTenant(() => httpAccess(x.flow.id))), "publico");
+  const response = await post(); assert.equal(response.status, 202);
+  const accepted = await response.json(); assert.equal(accepted.queued, true);
+  await x.drain();
+  const read = (id = x.flow.id, runId = accepted.id) => x.connect(() => webhook.GET(anonymous(undefined, `/webhook/flows/${id}?runId=${runId}`), { params: Promise.resolve({ id }) }));
+  assert.equal((await (await read()).json()).status, "completed");
+  // A execução de outro fluxo e o fluxo de outra conta não respondem pelo endereço público errado.
+  assert.equal((await read(x.flowB.id)).status, 404);
+  assert.equal((await post(randomUUID())).status, 404);
+  // Fluxo não publicado não responde ao público.
+  const draft = await x.asTenant(() => createTenantFlow("Rascunho"));
+  assert.equal(draft.published, null);
+  assert.equal((await post(draft.id)).status, 404);
+  // Com autenticação: a chamada anônima recebe 401 e a chave continua funcionando.
+  assert.equal(await x.asTenant(() => saveHttpAccess(x.flow.id, "autenticado")), "autenticado");
+  await x.asTenant(() => assert.rejects(saveHttpAccess(x.flow.id, "aberto"), /público e com autenticação/));
+  const denied = await post(); assert.equal(denied.status, 401);
+  assert.match((await denied.json()).error, /chave de acesso/);
+  assert.equal((await read()).status, 401);
+  assert.equal((await x.post()).status, 202);
+  // O outro dono não lê nem altera o acesso deste fluxo.
+  await x.asB(() => assert.rejects(httpAccess(x.flow.id)));
+  await x.asB(() => assert.rejects(saveHttpAccess(x.flow.id, "publico")));
+  assert.equal(await x.asTenant(() => saveHttpAccess(x.flow.id, "publico")), "publico");
+  assert.equal((await post()).status, 202);
 });
 
 test("MCP enfileira aprovação uma vez e consulta progresso pelo mesmo worker", async t => {

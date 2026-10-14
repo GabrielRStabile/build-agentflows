@@ -11,6 +11,7 @@ const TABS = [
 ] as const;
 type Tab = "embed" | (typeof TABS)[number][0];
 type DevLanguage = "curl" | "javascript" | "python";
+type HttpAccess = "publico" | "autenticado";
 type CampoStatus = {
   chave: string;
   rotulo: string;
@@ -35,6 +36,8 @@ export function IntegrationDialog({
   onClose: () => void;
 }) {
   const [devLanguage, setDevLanguage] = useState<DevLanguage>("curl");
+  // Acesso HTTP do fluxo: público (padrão, sem chave) ou com autenticação pela chave da conta.
+  const [httpAccess, setHttpAccess] = useState<HttpAccess>("publico");
   const [access, setAccess] = useState<{
       ativo: boolean;
       mascarado: string | null;
@@ -62,9 +65,12 @@ export function IntegrationDialog({
       .then(setAccess)
       .catch((e) => setError(e.message));
     void loadChannels();
+    void request<{ acesso: HttpAccess }>(`/api/flows/${flow.id}/acesso`)
+      .then((r) => setHttpAccess(r.acesso))
+      .catch((e) => setError(e.message));
     const timer = setTimeout(() => setOrigin(location.origin), 0);
     return () => clearTimeout(timer);
-  }, []);
+  }, [flow.id]);
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(""), 2000);
@@ -82,37 +88,35 @@ export function IntegrationDialog({
     }
   }
   const url = `${origin}/webhook/flows/${flow.id}`,
-    bearer = code || "SUA_CHAVE_DE_ACESSO";
+    bearer = code || "SUA_CHAVE_DE_ACESSO",
+    authenticated = tab === "mcp" || httpAccess === "autenticado";
   type CodeTab = DevLanguage | "mcp";
   const codeTab: CodeTab = tab === "mcp" ? "mcp" : devLanguage;
   const snippets: Record<CodeTab, string> = {
     curl: `curl -X POST '${url}' \\
-  -H 'Authorization: Bearer ${bearer}' \\
-  -H 'Content-Type: application/json' \\
+${authenticated ? `  -H 'Authorization: Bearer ${bearer}' \\\n` : ""}  -H 'Content-Type: application/json' \\
   -d '{"input":"Sua mensagem"}'`,
     javascript: `const resposta = await fetch("${url}", {
   method: "POST",
   headers: {
-    Authorization: "Bearer ${bearer}",
-    "Content-Type": "application/json",
+${authenticated ? `    Authorization: "Bearer ${bearer}",\n` : ""}    "Content-Type": "application/json",
   },
   body: JSON.stringify({ input: "Sua mensagem" }),
 });
 const { id, queued } = await resposta.json();
 // Consulte depois: GET ${url}?runId=ID_RECEBIDO
-// Envie o mesmo cabeçalho Authorization.`,
+${authenticated ? "// Envie o mesmo cabeçalho Authorization." : "// Acesso público: nenhuma chave é necessária."}`,
     python: `import requests
 
 resposta = requests.post(
     "${url}",
-    headers={"Authorization": "Bearer ${bearer}"},
-    json={"input": "Sua mensagem"},
+${authenticated ? `    headers={"Authorization": "Bearer ${bearer}"},\n` : ""}    json={"input": "Sua mensagem"},
     timeout=180,
 )
 dados = resposta.json()
 print(dados["id"], dados["queued"])
 # Consulte depois: GET ${url}?runId=ID_RECEBIDO
-# Envie o mesmo cabeçalho Authorization.`,
+${authenticated ? "# Envie o mesmo cabeçalho Authorization." : "# Acesso público: nenhuma chave é necessária."}`,
     mcp: JSON.stringify(
       {
         mcpServers: {
@@ -411,7 +415,7 @@ print(dados["id"], dados["queued"])
             </h3>
             <button
               className="studio-button subtle"
-              disabled={!code}
+              disabled={authenticated && !code}
               onClick={() => copy(snippets[codeTab], codeTab)}
             >
               <Icon name="copy" size={16} />
@@ -421,8 +425,20 @@ print(dados["id"], dados["queued"])
           <p>
             {tab === "mcp"
               ? "Cole esta configuração no cliente MCP do seu assistente. Ele passa a listar seus fluxos publicados, enfileirar execuções, consultar resultados e responder aprovações."
-              : "O POST retorna HTTP 202 com id e queued. Consulte o resultado com GET neste mesmo endereço, adicionando ?runId=ID_RECEBIDO e o mesmo Bearer. Enquanto queued for true, a tarefa aguarda na fila; waiting indica aprovação pendente."}
+              : (authenticated ? "O POST retorna HTTP 202 com id e queued. Consulte o resultado com GET neste mesmo endereço, adicionando ?runId=ID_RECEBIDO e o mesmo Bearer." : "O POST retorna HTTP 202 com id e queued. Consulte o resultado com GET neste mesmo endereço, adicionando ?runId=ID_RECEBIDO, sem chave.") + " Enquanto queued for true, a tarefa aguarda na fila; waiting indica aprovação pendente."}
           </p>
+          {tab === "dev" && <fieldset className="integration-access-mode">
+            <legend>Acesso</legend>
+            {([["publico", "Público", "Qualquer sistema com o endereço executa o fluxo, sem chave."], ["autenticado", "Com autenticação", "Exige a chave de acesso da conta no cabeçalho Authorization."]] as const).map(([value, label, help]) => (
+              <label key={value} className={httpAccess === value ? "active" : ""}>
+                <input type="radio" name="acesso-http" value={value} checked={httpAccess === value} disabled={busy} onChange={() => act(async () => {
+                  const r = await request<{ acesso: HttpAccess }>(`/api/flows/${flow.id}/acesso`, "PUT", { acesso: value });
+                  setHttpAccess(r.acesso);
+                })} />
+                <span><strong>{label}</strong><small>{help}</small></span>
+              </label>
+            ))}
+          </fieldset>}
           {tab === "dev" && <label className="integration-language">
             Linguagem
             <select value={devLanguage} onChange={(event) => setDevLanguage(event.target.value as DevLanguage)}>
@@ -438,7 +454,7 @@ print(dados["id"], dados["queued"])
             </p>
           )}
         </section>
-        {accessControls}
+        {authenticated && accessControls}
         </>
       )}
     </Modal>
