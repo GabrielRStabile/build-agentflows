@@ -18,7 +18,7 @@ export async function providerModels(provider: AiProvider, credentialId?: string
   do {
     const url = `${p.url}/models${provider === "anthropic" ? `?limit=100${after ? `&after_id=${encodeURIComponent(after)}` : ""}` : ""}`;
     const response = await fetcher(url, { headers, signal: AbortSignal.timeout(20000), redirect: "error" });
-    if (!response.ok) throw providerFailure(response.status);
+    if (!response.ok) throw providerFailure(response.status, await response.text().catch(() => ""));
     const data = await response.json() as { data?: { id: string; display_name?: string; name?: string; active?: boolean; context_window?: number; max_input_tokens?: number; max_tokens?: number; capabilities?: { image_input?: { supported?: boolean } } }[]; has_more?: boolean; last_id?: string };
     if (!Array.isArray(data.data)) throw new Error("O fornecedor não retornou um catálogo válido.");
     for (const m of data.data) {

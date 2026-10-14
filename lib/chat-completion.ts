@@ -79,7 +79,7 @@ export async function runChatCompletion({
       signal,
       redirect: "error",
     });
-    if (!res.ok) throw url.startsWith("https://openrouter.ai/") ? interpretarFalha(res, await res.text().catch(() => "")) : providerFailure(res.status);
+    if (!res.ok) { const detail = await res.text().catch(() => ""); throw url.startsWith("https://openrouter.ai/") ? interpretarFalha(res, detail) : providerFailure(res.status, detail); }
     const data = await res.json();
     const usage = tokenUsage(data?.usage, "openrouter");
     if (usage) { consumed = addTokenUsage(consumed, usage); consumed.partial = missingUsage || undefined; onUsage?.(consumed); }
