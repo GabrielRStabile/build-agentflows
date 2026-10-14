@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 0.31.0 — 13/10/2026
+
+- LLM e Agente: a Mensagem (opcional) é enviada como a pergunta seguinte de uma conversa. Com memória ligada e um resultado anterior, o modelo recebe a conversa como primeira pergunta, o resultado da etapa anterior como primeira resposta e a Mensagem como a nova pergunta (papéis reais no OpenRouter, OpenAI e Anthropic; transcrição "Pessoa:"/"Assistente:" no ChatGPT). Turnos citados por referência não se repetem. O editor mostra o papel `user` ao lado do campo e explica o envio.
+- Chat de teste: o botão Limpar conversa fica vermelho no canvas e no modal expandido.
+- Editor: os ícones de desfazer e refazer foram redesenhados e deixam de aparecer preenchidos nos controles do canvas.
+
 ## 0.30.2 — 13/10/2026
 
 - Chat de teste: o botão da conversa por voz fica oculto enquanto a voz não está configurada (ElevenLabs em Configurações). Antes ele aparecia e abria as configurações do fluxo.
