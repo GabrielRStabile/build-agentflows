@@ -88,9 +88,12 @@ nos logs.
 ### Credencial compartilhada (free tier)
 
 Opcional. Com `OPENAI_CHAVE_COMPARTILHADA` definida, toda conta que entrou por
-convite vê, em Credenciais e no seletor de credencial dos blocos LLM/Agente com
-OpenAI, a credencial **StartSe OpenAI API (free tier)** durante as 72 horas
-seguintes ao resgate do convite. Ela aparece primeiro na lista, é somente
+convite vê, em Credenciais, no seletor de credencial dos blocos LLM/Agente com
+OpenAI e no provedor de embeddings OpenAI das bases de conhecimento, a
+credencial **StartSe OpenAI API (free tier)** durante as 72 horas seguintes ao
+resgate do convite. Bases de conhecimento novas já nascem com o fluxo básico
+(embeddings OpenAI com essa credencial, Faiss e registro interno) e podem ser
+indexadas sem configurar nada; tudo continua editável. Ela aparece primeiro na lista, é somente
 leitura (sem editar nem excluir) e a chave fica apenas no ambiente: nada é
 copiado para o banco das contas nem enviado ao navegador.
 

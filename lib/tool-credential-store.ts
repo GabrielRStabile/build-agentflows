@@ -9,7 +9,7 @@ import { FlowError } from "./flow-store";
 import { TOOL_CREDENTIALS, TOOL_CREDENTIAL_LABELS, type Credential } from "./tool-credentials";
 import { withToolConfig } from "./tool-config-context";
 import { readToolCards } from "./agent-tools";
-import { isSharedCredentialId, resolveSharedOpenAiKey, sharedOpenAiCredential, SHARED_OPENAI_KEY, SHARED_OPENAI_PROVIDER } from "./shared-credential";
+import { isSharedCredentialId, resolveSharedCredential, sharedCredentialEntry, sharedOpenAiCredential, SHARED_CREDENTIALS } from "./shared-credential";
 
 export type SavedToolCredential = {
   id: string; name: string; provider: string; providerLabel: string;
@@ -52,31 +52,36 @@ function summary(r: Row): SavedToolCredential {
     fields: schema(r.provider).map((field) => ({ ...field, definido: !!data[field.chave], valor: field.secret ? undefined : data[field.chave] || "" })),
   };
 }
-// A credencial compartilhada do ambiente aparece primeiro, só enquanto a conta tem acesso a ela.
-function sharedSummary(): SavedToolCredential | null {
+// As credenciais compartilhadas do ambiente aparecem primeiro, só enquanto a conta tem acesso a elas.
+function sharedSummaries(provider?: string): SavedToolCredential[] {
   const shared = sharedOpenAiCredential();
-  if (!shared?.active || !shared.expiresAt) return null;
-  return { id: shared.id, name: shared.name, provider: shared.provider, providerLabel: TOOL_CREDENTIAL_LABELS[shared.provider] || shared.provider,
-    configured: true, readOnly: true, expiresAt: shared.expiresAt,
-    fields: schema(shared.provider).map((field) => ({ ...field, definido: true, valor: undefined })) };
+  if (!shared?.active || !shared.expiresAt) return [];
+  return SHARED_CREDENTIALS.filter((entry) => !provider || entry.provider === provider).map((entry) => ({
+    id: entry.id, name: shared.name, provider: entry.provider, providerLabel: TOOL_CREDENTIAL_LABELS[entry.provider] || entry.provider,
+    configured: true, readOnly: true, expiresAt: shared.expiresAt!,
+    fields: schema(entry.provider).map((field) => ({ ...field, definido: true, valor: field.secret ? undefined : (entry.values as Record<string, string>)[field.chave] || "" })),
+  }));
 }
 const sharedRefusal = () => new FlowError("Esta credencial é oferecida pelo ambiente e não pode ser alterada. Cadastre uma credencial própria.", 403);
 export function listToolCredentials(provider?: string): SavedToolCredential[] {
   if (provider) schema(provider);
   const rows = tenantRows().sort((a, b) => a.name.localeCompare(b.name));
-  const shared = !provider || provider === SHARED_OPENAI_PROVIDER ? sharedSummary() : null;
-  return [...(shared ? [shared] : []), ...rows.filter((r) => !provider || r.provider === provider).map(summary)];
+  return [...sharedSummaries(provider), ...rows.filter((r) => !provider || r.provider === provider).map(summary)];
 }
 export function getToolCredential(id: string) {
   if (isSharedCredentialId(id)) {
-    const shared = sharedSummary();
-    if (!shared) throw new FlowError("Esta credencial não está mais disponível para a sua conta. Escolha outra no agente.", 404);
+    const shared = sharedSummaries().find((c) => c.id === id);
+    if (!shared) throw new FlowError("Esta credencial não está mais disponível para a sua conta. Escolha outra.", 404);
     return shared;
   }
   return summary(row(id));
 }
 export function resolveCredentialKey(id: string, provider: string, key: string) {
-  if (isSharedCredentialId(id)) return resolveSharedOpenAiKey(provider, key);
+  if (isSharedCredentialId(id)) {
+    const shared = resolveSharedCredential(id, provider);
+    if (shared.entry.key !== key) throw new FlowError("A credencial não pertence ao fornecedor selecionado.");
+    return shared.key;
+  }
   const r = row(id);
   if (r.provider !== provider || !schema(provider).some(field => field.chave === key)) throw new FlowError("A credencial não pertence ao fornecedor selecionado.");
   const value = values(r)[key];
@@ -160,8 +165,9 @@ export function deleteToolCredential(id: string) {
 export function withToolCredential<T>(id: string | undefined, provider: string | undefined, action: () => T): T {
   if (!id) { currentTenant(); return action(); }
   if (isSharedCredentialId(id)) {
-    const key = resolveSharedOpenAiKey(provider || "", SHARED_OPENAI_KEY);
-    return withToolConfig({ keys: new Set([SHARED_OPENAI_KEY]), values: { [SHARED_OPENAI_KEY]: key }, save: () => { /* Credencial do ambiente: nada a gravar. */ } }, action);
+    const shared = resolveSharedCredential(id, provider || "");
+    const values = { ...shared.entry.values, [shared.entry.key]: shared.key };
+    return withToolConfig({ keys: new Set(Object.keys(values)), values, save: () => { /* Credencial do ambiente: nada a gravar. */ } }, action);
   }
   const r = row(id);
   if (!provider || r.provider !== provider) throw new FlowError("A credencial escolhida não pertence ao serviço desta ferramenta.");
@@ -178,6 +184,10 @@ export function withToolCredential<T>(id: string | undefined, provider: string |
 
 // Apenas o servidor recebe a chave; o navegador usa o resumo sem segredos.
 export function resolveEmbeddingCredential(id: string, provider: IndexConfig["embeddings"]["provider"]) {
+  if (isSharedCredentialId(id)) {
+    const shared = resolveSharedCredential(id, embeddingCredentialProvider(provider));
+    return { apiKey: shared.key, url: (sharedCredentialEntry(id)!.values as Record<string, string>)[embeddingCredentialUrl(provider)] };
+  }
   const r = row(id);
   if (r.provider !== embeddingCredentialProvider(provider)) throw new FlowError("A credencial não pertence ao provedor de embeddings escolhido.");
   const data = values(r);

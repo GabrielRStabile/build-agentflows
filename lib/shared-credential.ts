@@ -1,20 +1,30 @@
 // Credencial OpenAI compartilhada pelo ambiente (Coolify): contas que entraram por convite a veem
-// como "<nome> (free tier)" durante as horas seguintes ao resgate. A chave fica só em process.env e é
-// lida no momento da chamada; nunca é copiada para o banco de cada conta nem devolvida ao navegador.
+// como "<nome> (free tier)" durante as horas seguintes ao resgate, tanto para modelos (ai_openai)
+// quanto para embeddings das bases de conhecimento (embedding_openai). A chave fica só em
+// process.env e é lida no momento da chamada; nunca é copiada para o banco nem devolvida ao navegador.
 import { aiCredentialProvider } from "./ai-providers";
+import { embeddingCredentialProvider, embeddingCredentialKey, embeddingCredentialUrl } from "./embedding-credentials";
+import { EMBEDDING_PROVIDERS } from "./knowledge-providers";
 import { FlowError } from "./flow-store";
 import { currentTenant } from "./tenant-context";
 import { formatCredentialExpiry } from "./credential-expiry";
 
 export const SHARED_OPENAI_ID = "compartilhada:openai";
+export const SHARED_OPENAI_EMBEDDING_ID = "compartilhada:openai-embeddings";
 export const SHARED_OPENAI_PROVIDER = aiCredentialProvider("openai");
 export const SHARED_OPENAI_KEY = "OPENAI_API_KEY";
+const OPENAI_EMBEDDING_URL = EMBEDDING_PROVIDERS.find((p) => p.id === "openai")!.url;
+/** As duas faces da mesma chave: cada uma com o provedor e o campo que o catálogo de credenciais espera. */
+export const SHARED_CREDENTIALS = [
+  { id: SHARED_OPENAI_ID, provider: SHARED_OPENAI_PROVIDER, key: SHARED_OPENAI_KEY, values: {} as Record<string, string> },
+  { id: SHARED_OPENAI_EMBEDDING_ID, provider: embeddingCredentialProvider("openai"), key: embeddingCredentialKey("openai"), values: { [embeddingCredentialUrl("openai")]: OPENAI_EMBEDDING_URL } },
+] as const;
+export type SharedCredentialEntry = typeof SHARED_CREDENTIALS[number];
 const DEFAULT_NAME = "StartSe OpenAI API";
 const DEFAULT_HOURS = 72;
 
 export type SharedCredentialSettings = { key: string; name: string; hours: number };
 export type SharedCredentialStatus = SharedCredentialSettings & {
-  id: string; provider: string;
   /** Instante (ISO) em que a conta perde o acesso; null quando a conta não entrou por convite. */
   expiresAt: string | null;
   /** true enquanto a conta pode listar e usar a credencial. */
@@ -42,17 +52,24 @@ export function sharedOpenAiCredential(now = new Date()): SharedCredentialStatus
   const settings = sharedOpenAiSettings();
   if (!settings) return null;
   const expiry = sharedExpiry(currentTenant().user.invited_at, settings.hours);
-  return { ...settings, id: SHARED_OPENAI_ID, provider: SHARED_OPENAI_PROVIDER, expiresAt: expiry?.toISOString() ?? null, active: !!expiry && expiry.getTime() > now.getTime() };
+  return { ...settings, expiresAt: expiry?.toISOString() ?? null, active: !!expiry && expiry.getTime() > now.getTime() };
 }
 
-export const isSharedCredentialId = (id: string) => id === SHARED_OPENAI_ID;
+export const sharedCredentialEntry = (id: string) => SHARED_CREDENTIALS.find((entry) => entry.id === id);
+export const isSharedCredentialId = (id: string) => !!sharedCredentialEntry(id);
 
 /** Chave para uso no servidor; recusa com explicação quando a conta não tem (mais) acesso. */
-export function resolveSharedOpenAiKey(provider: string, key: string, now = new Date()): string {
-  if (provider !== SHARED_OPENAI_PROVIDER || key !== SHARED_OPENAI_KEY) throw new FlowError("A credencial não pertence ao fornecedor selecionado.");
+export function resolveSharedCredential(id: string, provider: string, now = new Date()): { entry: SharedCredentialEntry; key: string } {
+  const entry = sharedCredentialEntry(id);
+  if (!entry || entry.provider !== provider) throw new FlowError("A credencial não pertence ao fornecedor selecionado.");
   const shared = sharedOpenAiCredential(now);
-  if (!shared) throw new FlowError("A credencial compartilhada da OpenAI não está mais disponível. Cadastre sua própria chave da OpenAI no bloco.", 409);
-  if (!shared.expiresAt) throw new FlowError(`A credencial ${shared.name} é oferecida apenas a contas que entraram por convite. Cadastre sua própria chave da OpenAI no bloco.`, 409);
-  if (!shared.active) throw new FlowError(`O período gratuito da credencial ${shared.name} terminou em ${formatCredentialExpiry(shared.expiresAt)}. Cadastre sua própria chave da OpenAI no bloco.`, 409);
-  return shared.key;
+  if (!shared) throw new FlowError("A credencial compartilhada da OpenAI não está mais disponível. Cadastre sua própria chave da OpenAI.", 409);
+  if (!shared.expiresAt) throw new FlowError(`A credencial ${shared.name} é oferecida apenas a contas que entraram por convite. Cadastre sua própria chave da OpenAI.`, 409);
+  if (!shared.active) throw new FlowError(`O período gratuito da credencial ${shared.name} terminou em ${formatCredentialExpiry(shared.expiresAt)}. Cadastre sua própria chave da OpenAI.`, 409);
+  return { entry, key: shared.key };
+}
+export function resolveSharedOpenAiKey(provider: string, key: string, now = new Date()): string {
+  const entry = SHARED_CREDENTIALS.find((e) => e.provider === provider);
+  if (!entry || entry.key !== key) throw new FlowError("A credencial não pertence ao fornecedor selecionado.");
+  return resolveSharedCredential(entry.id, provider, now).key;
 }

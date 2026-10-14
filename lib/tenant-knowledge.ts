@@ -11,6 +11,7 @@ import { knowledgeTitle, normalizeKnowledgeSource, type SourceInput } from "./kn
 import { validatedIndexConfig } from "./knowledge-config";
 import { indexingConfigIdentity } from "./knowledge-retrieval";
 import { resolveEmbeddingCredential } from "./tool-credential-store";
+import { isSharedCredentialId, SHARED_OPENAI_EMBEDDING_ID, sharedOpenAiCredential } from "./shared-credential";
 import { postgresConnectionString } from "./knowledge-postgres";
 import { knowledgeBaseIds } from "./knowledge-settings";
 import { assertJobLease, currentJobLease } from "./saas-job-context";
@@ -94,10 +95,17 @@ export async function listKnowledgeBases() {
   const { rows } = await db.query<{ body: KnowledgeBase }>("SELECT body FROM knowledge_bases WHERE user_id=$1 ORDER BY body->>'updatedAt' DESC,id LIMIT 100", [user.id]);
   return rows.map((row) => row.body);
 }
+/** Fluxo básico de uma base nova: embeddings OpenAI, Faiss e registro interno. Com a credencial compartilhada
+ * ativa para a conta, ela já vem selecionada e a base pode ser indexada sem configurar nada; tudo segue editável. */
+export function defaultIndexConfig(): IndexConfig {
+  const config = structuredClone(DEFAULT_INDEX);
+  if (sharedOpenAiCredential()?.active) config.embeddings = { ...config.embeddings, credentialId: SHARED_OPENAI_EMBEDDING_ID, configured: true };
+  return config;
+}
 export async function createKnowledgeBase(input: { name?: unknown; description?: unknown }) {
   const { db, user } = currentTenant();
   const base: KnowledgeBase = { id: randomUUID(), name: knowledgeTitle(input.name, "O nome"), description: typeof input.description === "string" ? input.description.slice(0, 2000) : "",
-    status: "empty", revision: 0, sources: 0, chunks: 0, indexedChunks: 0, config: structuredClone(DEFAULT_INDEX), updatedAt: now() };
+    status: "empty", revision: 0, sources: 0, chunks: 0, indexedChunks: 0, config: defaultIndexConfig(), updatedAt: now() };
   await db.transaction(async (sql) => {
     await sql.query("SELECT id FROM users WHERE id=$1 FOR UPDATE", [user.id]);
     if ((await sql.query<{ n: number }>("SELECT count(*)::int n FROM knowledge_bases WHERE user_id=$1", [user.id])).rows[0].n >= 100) throw new FlowError("Use até 100 bases por conta.", 413);
@@ -141,6 +149,7 @@ export async function getKnowledgePrivate(baseId: string, resourceId: string) {
 }
 async function credentialReferences(sql: Sql, owner: string, config: IndexConfig) {
   for (const id of [config.embeddings.credentialId, config.vectorStore.postgres?.credentialId, config.recordManager.postgres?.credentialId]) {
+    if (id && isSharedCredentialId(id)) continue; // Validada em validatedIndexConfig; não tem linha em credentials.
     if (id && !(await sql.query("SELECT 1 FROM credentials WHERE user_id=$1 AND key=$2", [owner, `TOOL_ACCOUNT_${id}`])).rows.length)
       throw new FlowError("Credencial não encontrada nesta conta.", 404);
   }

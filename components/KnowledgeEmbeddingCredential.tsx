@@ -7,6 +7,7 @@ import {
   embeddingCredentialProvider,
   embeddingCredentialUrl,
 } from "@/lib/embedding-credentials";
+import { formatCredentialExpiry } from "@/lib/credential-expiry";
 import { Icon, request } from "./StudioUI";
 import { ToolCredentialDialog } from "./ToolCredentialDialog";
 export function KnowledgeEmbeddingCredential({
@@ -27,7 +28,11 @@ export function KnowledgeEmbeddingCredential({
       `/api/tool-credentials?provider=${provider}`,
     )
       .then((data) => {
-        if (active) setItems(data);
+        if (!active) return;
+        setItems(data);
+        // Base sem credencial escolhida: a compartilhada do ambiente entra como padrão, trocável a qualquer momento.
+        const shared = data.find((c) => c.readOnly);
+        if (shared && !embedding.credentialId && !embedding.configured) onChange({ credentialId: shared.id, configured: true, apiKey: "", url: shared.fields.find((f) => f.chave === embeddingCredentialUrl(embedding.provider))?.valor || embedding.url });
       })
       .catch((e) => {
         if (active) setError(e.message);
@@ -38,6 +43,8 @@ export function KnowledgeEmbeddingCredential({
     return () => {
       active = false;
     };
+    // Só a troca de provedor recarrega a lista; a seleção inicial lê a configuração daquele momento.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider]);
   const selected = items.find((c) => c.id === embedding.credentialId);
   const endpoint = (c: SavedToolCredential) =>
@@ -87,7 +94,7 @@ export function KnowledgeEmbeddingCredential({
             <option value="new">+ Criar nova credencial</option>
           </select>
         </label>
-        {selected && (
+        {selected && !selected.readOnly && (
           <button
             type="button"
             className="studio-icon-button"
@@ -99,6 +106,9 @@ export function KnowledgeEmbeddingCredential({
         )}
       </div>
       <small>
+        {selected?.expiresAt
+          ? `Credencial gratuita, válida até ${formatCredentialExpiry(selected.expiresAt)}. Depois disso, cadastre sua própria chave. `
+          : ""}
         Conexões compartilhadas em <Link href="/credenciais">Credenciais</Link>.
       </small>
       {selected && endpoint(selected) !== embedding.url && (
