@@ -2565,9 +2565,12 @@
   color: transparent;
   caret-color: var(--studio-ink);
 }
+/* A seleção precisa de fundo explícito: com o texto transparente, o navegador não pinta o destaque sozinho. */
 .reference-field.has-highlight textarea::selection,
 .reference-field.has-highlight input::selection {
   color: transparent;
+  background: rgba(79, 97, 232, 0.28);
+  background: color-mix(in srgb, var(--studio-primary) 28%, transparent);
 }
 .reference-highlight {
   position: absolute;
