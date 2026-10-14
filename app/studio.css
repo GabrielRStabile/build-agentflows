@@ -2646,6 +2646,29 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+.field-expand {
+  margin-left: auto;
+  display: inline-flex;
+}
+.field-expand .studio-icon-button {
+  width: 26px;
+  height: 26px;
+}
+.field-expand .studio-icon-button svg {
+  width: 16px;
+  height: 16px;
+}
+/* Instruções do LLM/Agente em um modal maior: só o campo de edição, ocupando a altura disponível. */
+.studio-modal.instructions-modal {
+  width: min(960px, calc(100vw - 32px));
+}
+.studio-modal.instructions-modal .reference-field textarea {
+  height: calc(100dvh - 180px);
+  min-height: 240px;
+  resize: vertical;
+  font-size: 14px;
+  line-height: 1.6;
+}
 .field-role {
   margin-left: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

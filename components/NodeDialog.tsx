@@ -101,6 +101,8 @@ export function NodeDialog({
   const [nameEditing, setNameEditing] = useState(false);
   const [criteria, setCriteria] = useState<Criterion[]>(() => node.data.kind === "condition" ? conditionCriteria(node.data.config) : []);
   const [closeError, setCloseError] = useState("");
+  // Instruções (system) do LLM/Agente abertas num modal maior, só com o campo de edição.
+  const [expanded, setExpanded] = useState(false);
   const [variables, setVariables] = useState<{ key: string; value: string }[]>(() => {
     try { return Object.entries(JSON.parse(node.data.config.state || "{}")).map(([key, value]) => ({ key, value: String(value) })); } catch { return []; }
   });
@@ -298,6 +300,7 @@ export function NodeDialog({
                 ? "O que a pessoa deve revisar"
                 : media && key === "system" ? "PROMPT" : labels[key][0]}
               {key === "prompt" && (k === "agent" || k === "llm") && <span className="field-role" title="Enviada ao modelo como mensagem da pessoa (role user)">role: user</span>}
+              {key === "system" && (k === "agent" || k === "llm") && <span className="field-expand"><IconButton icon="expand" label={media ? "Expandir o PROMPT" : "Expandir as instruções"} onClick={() => setExpanded(true)} /></span>}
             </span>}
             {key === "memoryType" ? (
               <MemoryFields config={c} onChange={change} />
@@ -408,6 +411,20 @@ export function NodeDialog({
           </div>
         ))}
         {(k === "agent" || k === "llm") && !media && <KnowledgeAgentFields config={c} onChange={change} />}
+        {expanded && (k === "agent" || k === "llm") && (
+          <Modal title={media ? "PROMPT" : "Instruções"} className="instructions-modal" onClose={() => setExpanded(false)}>
+            <ReferenceField
+              multiline
+              autoFocus
+              rows={20}
+              ariaLabel={media ? "PROMPT" : "Instruções"}
+              spellCheck
+              value={c.system || ""}
+              references={references}
+              onChange={(v) => change("system", v)}
+            />
+          </Modal>
+        )}
         {(k === "agent" || k === "llm") && <section className="node-fields node-completion">
           <span className="node-completion-title">Ao concluir esta etapa</span>
           {updates.map((u, i) => <div className="node-field node-variable-card" role="group" aria-label={`Atualização de variável ${i + 1}`} key={i}>

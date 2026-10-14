@@ -20,6 +20,7 @@ export function ReferenceField({
   spellCheck,
   ariaLabel,
   showOnFocus = false,
+  autoFocus = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -31,9 +32,12 @@ export function ReferenceField({
   spellCheck?: boolean;
   ariaLabel?: string;
   showOnFocus?: boolean;
+  /** Marca o campo com data-autofocus para o Modal focá-lo ao abrir; o cursor vai para o fim do texto. */
+  autoFocus?: boolean;
 }) {
   const ref = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
   const highlight = useRef<HTMLDivElement | null>(null);
+  const firstFocus = useRef(autoFocus);
   // O campo edita a forma exibida (nomes dos blocos); o que sobe por onChange é a forma gravada (ids).
   const aliases: ReferenceAlias[] = references.flatMap((r) => r.alias ? [{ value: r.value, display: r.alias }] : []);
   const shown = (r: Reference) => r.alias || r.value;
@@ -171,7 +175,15 @@ export function ReferenceField({
       layer.scrollTop = e.currentTarget.scrollTop;
       layer.scrollLeft = e.currentTarget.scrollLeft;
     },
-    onFocus: (e: React.FocusEvent<HTMLTextAreaElement | HTMLInputElement>) => { if (showOnFocus) showReferences(e.currentTarget); },
+    onFocus: (e: React.FocusEvent<HTMLTextAreaElement | HTMLInputElement>) => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        const end = e.currentTarget.value.length;
+        e.currentTarget.setSelectionRange(end, end);
+      }
+      if (showOnFocus) showReferences(e.currentTarget);
+    },
+    "data-autofocus": autoFocus ? "" : undefined,
     onClick: (e: React.MouseEvent<HTMLTextAreaElement | HTMLInputElement>) => showReferences(e.currentTarget),
   };
   return (
