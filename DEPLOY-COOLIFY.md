@@ -40,6 +40,32 @@ ambiente é a credencial compartilhada abaixo, limitada no tempo. Mantenha
 `TRUSTED_CLIENT_IP_HEADER` sem valor até validar que o proxy sobrescreve esse
 cabeçalho e impede sua falsificação.
 
+### E-mails de confirmação que não chegam
+
+O cadastro grava o e-mail em `mail_outbox` na mesma transação da conta; o
+worker envia pelo Resend em lotes de cinco a cada segundo, com até oito
+tentativas. Para localizar a falha:
+
+1. `GET /api/health` → `mail`: `configured` (RESEND_API_KEY e RESEND_FROM
+   presentes), `pending`, `failedLast24h`, `sentLast24h` e
+   `oldestPendingSeconds`. Pendentes crescendo sem envio indicam worker parado
+   ou sem as variáveis (`workerAlive` precisa ser `true`).
+2. Logs do worker: cada tentativa gera `{"evento":"email_envio","id":…,
+   "tentativa":…,"status":…,"resultado":"enviado|repetir|falhou"}`, sem
+   destinatário nem conteúdo. `status` 403 ou 422 costuma ser domínio do
+   remetente não verificado ou `RESEND_FROM` fora do formato `Nome <conta@dominio>`;
+   `"rede"` é falha de conexão ou tempo limite de 10 s.
+3. Painel do Resend › Emails mostra o que chegou à API e o estado da entrega
+   (bounce, spam). Com o domínio de teste do Resend só o e-mail do dono da
+   conta recebe mensagens.
+4. Cadastro com e-mail já existente não envia nada e responde igual, para não
+   revelar contas; a pessoa deve entrar com a senha e pedir o reenvio em
+   Seu acesso. O reenvio tem limite de três por e-mail por hora.
+
+A mensagem vai em texto e HTML (logo servida por `APP_URL/brand/agentflows-logo.png`,
+botão e o mesmo link em texto); o link fica no fragmento da URL e não aparece
+nos logs.
+
 ### Credencial compartilhada (free tier)
 
 Opcional. Com `OPENAI_CHAVE_COMPARTILHADA` definida, toda conta que entrou por

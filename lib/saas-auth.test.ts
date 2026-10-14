@@ -8,7 +8,7 @@ import { registerUser, loginUser, findSession, requestActionMail, consumeActionT
 import { appOrigin, hashToken, randomToken, seal, unseal, verifyPassword } from "./saas-security";
 import { credentialsFor } from "./saas-credentials";
 import { consumeRateLimit } from "./saas-rate-limit";
-import { deliverAuthMail } from "./saas-mail";
+import { deliverAuthMail, mailStats } from "./saas-mail";
 import { beginGoogleLogin, finishGoogleLogin, verifyGoogleIdToken } from "./saas-google";
 import { authAction } from "./saas-http";
 
@@ -213,19 +213,34 @@ test("Resend usa idempotência, retenta falhas e apaga conteúdo após envio", a
   const keys: string[] = [];
   const sender: typeof fetch = async (url, init) => {
     assert.equal(url, "https://api.resend.com/emails");
-    assert.match(String(init?.body), /Confirme seu e-mail/);
+    const payload = JSON.parse(String(init?.body)) as { text: string; html: string; to: string[] };
+    assert.match(payload.text, /Confirme seu e-mail/);
+    // Versão HTML com a logo servida pela própria aplicação e o mesmo link do texto.
+    assert.match(payload.html, /<img src="https:\/\/app\.example\.com\/brand\/agentflows-logo\.png"/);
+    assert.ok(payload.html.includes(payload.text.match(/https:\/\/\S+/)![0]));
     keys.push(new Headers(init?.headers).get("Idempotency-Key")!);
     return Response.json(keys.length === 1 ? { error: "unavailable" } : { id: "resend-id" }, { status: keys.length === 1 ? 503 : 200 });
   };
-  await deliverAuthMail(db, sender);
-  assert.equal((await db.query("SELECT sent_at FROM mail_outbox")).rows[0].sent_at, null);
-  await db.query("UPDATE mail_outbox SET available_at=now()");
-  await deliverAuthMail(db, sender);
+  const logged: string[] = [];
+  const originalLog = console.log;
+  console.log = (line: string) => { logged.push(String(line)); };
+  try {
+    assert.deepEqual(await mailStats(db), { pending: 1, failedLast24h: 0, sentLast24h: 0, oldestPendingSeconds: 0, configured: true });
+    await deliverAuthMail(db, sender);
+    assert.equal((await db.query("SELECT sent_at FROM mail_outbox")).rows[0].sent_at, null);
+    await db.query("UPDATE mail_outbox SET available_at=now()");
+    await deliverAuthMail(db, sender);
+  } finally { console.log = originalLog; }
   assert.equal(keys[0], keys[1]);
   const row = (await db.query("SELECT * FROM mail_outbox")).rows[0];
   assert.ok(row.sent_at);
   assert.equal(row.payload_ciphertext, "");
   assert.equal(await deliverAuthMail(db, sender), 0);
+  // Cada tentativa deixa um registro com status e resultado, sem destinatário nem conteúdo.
+  const events = logged.map((line) => JSON.parse(line) as { evento: string; status: number; resultado: string; tentativa: number });
+  assert.deepEqual(events.map((e) => [e.evento, e.tentativa, e.status, e.resultado]), [["email_envio", 1, 503, "repetir"], ["email_envio", 2, 200, "enviado"]]);
+  assert.ok(!logged.join("").includes("mail@example.com"));
+  assert.deepEqual(await mailStats(db), { pending: 0, failedLast24h: 0, sentLast24h: 1, oldestPendingSeconds: 0, configured: true });
 });
 
 test("Google exige assinatura, audiência, nonce e e-mail verificado; não associa conta por coincidência de e-mail", async () => {
