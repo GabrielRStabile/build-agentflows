@@ -190,6 +190,39 @@ test("referência ausente falha com diagnóstico e mantém etapas", async () => 
   assert.equal(r.status, "failed");
   assert.match(r.error!, /não tem valor/);
   assert.equal(r.trace.length, 2);
+  g.nodes[2].data.config.text = "{{nodes.apagado}}";
+  const gone = await runtime.startRun((await flow(g)).id, "x", false, true);
+  assert.equal(gone.status, "failed");
+  assert.match(gone.error!, /não existe mais neste fluxo/);
+});
+test("referência a bloco que não executou vale vazio e a etapa registra a observação", async () => {
+  const start = block("start", "start", 0, 0),
+    condition = block("condition", "check", 0, 0),
+    agent = block("agent", "analista", 0, 0),
+    yes = block("end", "yes", 0, 0),
+    no = block("end", "no", 0, 0);
+  agent.data.label = "Analista";
+  yes.data.config.text = "Análise: {{nodes.analista}}";
+  no.data.config.text = "Sem análise: [{{nodes.analista}}] [{{nodes.analista}}] {{input}}";
+  const f = (await flow({
+    nodes: [start, condition, agent, yes, no],
+    edges: [
+      { id: "1", source: "start", target: "check" },
+      { id: "2", source: "check", target: "analista", sourceHandle: "yes" },
+      { id: "3", source: "analista", target: "yes" },
+      { id: "4", source: "check", target: "no", sourceHandle: "no" },
+    ],
+  }));
+  const r = await runtime.startRun(f.id, "olá", false, true);
+  assert.equal(r.status, "completed");
+  assert.equal(r.output, "Sem análise: [] [] olá");
+  const step = r.trace.find((t) => t.nodeId === "no")!;
+  assert.equal(step.notes, "O bloco “Analista” não executou nesta execução, então a referência a ele ficou vazia.");
+  assert.ok(r.trace.filter((t) => t.notes).length === 1, "só a etapa que citou o bloco recebe a observação");
+  const ran = await runtime.startRun(f.id, "urgente", false, true);
+  assert.equal(ran.status, "completed");
+  assert.ok(ran.output.startsWith("Análise: "));
+  assert.ok(!ran.trace.some((t) => t.notes));
 });
 test("OpenRouter só vale para blocos que escolhem um modelo dele; sem fallback", async () => {
   const account = bridge.account,

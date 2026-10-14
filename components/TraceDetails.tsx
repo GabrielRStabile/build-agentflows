@@ -51,7 +51,7 @@ export function TraceDetails({ trace, kind, onClose }: { trace: Trace; kind?: Ki
     {trace.instructions && <details className="trace-instructions"><summary>{kind === "agent" ? "Instruções do agente" : "Instruções"}</summary><pre>{trace.instructions}</pre></details>}
     {trace.memory && <details className="trace-instructions trace-memory"><summary>Memória</summary><pre>{pretty(trace.memory)}</pre></details>}
     <div className="trace-payloads">
-      <section><h3>Entrada</h3>{trace.turns?.length ? <Turns turns={trace.turns} notes={trace.notes} /> : <Payload text={trace.input} empty="Entrada não registrada nesta execução." />}</section>
+      <section><h3>Entrada</h3>{trace.turns?.length ? <Turns turns={trace.turns} notes={trace.notes} /> : <><Payload text={trace.input} empty="Entrada não registrada nesta execução." />{trace.notes && <p className="trace-note">{trace.notes}</p>}</>}</section>
       <section><h3>Saída</h3><Payload text={trace.output} empty="Aguardando resultado…" /></section>
     </div>
   </Modal>;

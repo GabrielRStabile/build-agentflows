@@ -13,7 +13,7 @@ import { mediaMarkdown, runMedia } from "./media-runtime";
 import { toolRunScope } from "./replicate-tool";
 import { tenantConversationHistory } from "./conversation";
 import { memoryContext, previousExchange, transcript, type ConversationTurn } from "./flow-memory";
-import { interpolate, cites } from "./flow-references";
+import { interpolate, cites, unexecutedNote } from "./flow-references";
 import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { chatGPT } from "./chatgpt";
@@ -177,7 +177,7 @@ async function agent(n: Block, r: Run, signal: AbortSignal, details: Partial<Tra
   ].filter(Boolean).join("\n\n");
   details.input = transcript(exchange, shown) + (notes ? "\n\n" + notes : "");
   details.turns = [...exchange, { role: "user", content: shown }];
-  if (notes) details.notes = notes;
+  if (notes) details.notes = [details.notes, notes].filter(Boolean).join("\n\n");
   const result = await turn({
     prompt: opened ? originalMessage : originalMessage + context.text + knowledge.context + pageContext,
     history: sent,
@@ -264,6 +264,9 @@ export async function execute(r: Run, externalSignal?: AbortSignal): Promise<Run
       const start = Date.now();
       r.visits[n.id] = (r.visits[n.id] || 0) + 1;
       const details: Partial<Trace> = { input: r.output };
+      // Referências a blocos que não executaram valem vazio; a etapa registra quais foram.
+      const skipped = unexecutedNote(r, ...Object.values(c));
+      if (skipped) details.notes = skipped;
       let output = r.output,
         handle: string | undefined;
       if (k === "start") {
