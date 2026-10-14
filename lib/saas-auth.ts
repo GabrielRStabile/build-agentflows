@@ -38,15 +38,15 @@ async function newSession(sql: Sql, id: string) {
 export async function revokeSession(sql: Sql, token: string | undefined) {
   if (token) await sql.query("DELETE FROM sessions WHERE token_hash=$1", [hashToken(token)]);
 }
-async function issueAction(sql: Sql, user: Pick<SaasUser, "id" | "email">, purpose: "verify_email" | "reset_password") {
+async function issueAction(sql: Sql, user: Pick<SaasUser, "id" | "email">, purpose: "verify_email" | "reset_password", invite?: string) {
   const token = randomToken();
   await sql.query("DELETE FROM action_tokens WHERE user_id=$1 AND purpose=$2", [user.id, purpose]);
   await sql.query(`INSERT INTO action_tokens(token_hash,user_id,purpose,expires_at)
     VALUES ($1,$2,$3,now()+$4*interval '1 second')`, [hashToken(token), user.id, purpose, purpose === "verify_email" ? 86400 : 1800]);
-  await enqueueAuthMail(sql, user.email, purpose, token);
+  await enqueueAuthMail(sql, user.email, purpose, token, invite);
 }
 
-export async function registerUser(db: Database, data: { name: unknown; email: unknown; password: unknown }, client: string) {
+export async function registerUser(db: Database, data: { name: unknown; email: unknown; password: unknown }, client: string, invite?: string) {
   await consumeRateLimit(db, `register:ip:${client}`, 5, 3600);
   const email = normalizedEmail(data.email);
   if (typeof data.name !== "string" || !data.name.trim() || data.name.trim().length > 120) throw new AuthError("Informe um nome com até 120 caracteres.");
@@ -57,7 +57,7 @@ export async function registerUser(db: Database, data: { name: unknown; email: u
   const created = await db.transaction(async (sql) => {
     const { rows } = await sql.query<SaasUser>(`INSERT INTO users(id,name,email,password_hash) VALUES ($1,$2,$3,$4)
       ON CONFLICT(email) DO NOTHING RETURNING ${USER_FIELDS}`, [randomUUID(), name, email, encoded]);
-    if (rows[0]) await issueAction(sql, rows[0], "verify_email");
+    if (rows[0]) await issueAction(sql, rows[0], "verify_email", invite);
     return !!rows[0];
   });
   if (created) return;
@@ -69,7 +69,7 @@ export async function registerUser(db: Database, data: { name: unknown; email: u
     const existing = rows[0];
     if (!existing || existing.beta_status === "blocked") return;
     if (existing.email_verified_at) await enqueueExistingAccountMail(sql, email);
-    else await issueAction(sql, existing, "verify_email");
+    else await issueAction(sql, existing, "verify_email", invite);
   });
 }
 
@@ -93,7 +93,7 @@ export async function loginUser(db: Database, data: { email: unknown; password: 
   });
 }
 
-export async function requestActionMail(db: Database, emailInput: unknown, purpose: "verify_email" | "reset_password", client: string) {
+export async function requestActionMail(db: Database, emailInput: unknown, purpose: "verify_email" | "reset_password", client: string, invite?: string) {
   await consumeRateLimit(db, `mail:ip:${client}`, 10, 3600);
   const email = normalizedEmail(emailInput);
   await consumeRateLimit(db, `mail:email:${email}`, 3, 3600);
@@ -101,7 +101,7 @@ export async function requestActionMail(db: Database, emailInput: unknown, purpo
     const { rows } = await sql.query<SaasUser>(`SELECT ${USER_FIELDS} FROM users WHERE email=$1 FOR UPDATE`, [email]);
     const user = rows[0];
     if (!user || user.beta_status === "blocked" || (purpose === "verify_email" && user.email_verified_at)) return;
-    await issueAction(sql, user, purpose);
+    await issueAction(sql, user, purpose, purpose === "verify_email" ? invite : undefined);
   });
 }
 

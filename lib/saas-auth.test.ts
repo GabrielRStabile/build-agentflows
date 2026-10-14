@@ -56,6 +56,14 @@ async function actionToken(email: string) {
   }
   throw new Error("Email não encontrado.");
 }
+async function latestLink(email: string) {
+  const result = await db.query<{ id: string; payload_ciphertext: string }>("SELECT id,payload_ciphertext FROM mail_outbox ORDER BY created_at DESC");
+  for (const row of result.rows) {
+    const mail = JSON.parse(unseal(row.payload_ciphertext, `mail:${row.id}`));
+    if (mail.to === email) return new URL(mail.text.match(/https:\/\/\S+/)[0]);
+  }
+  throw new Error("Email não encontrado.");
+}
 async function verified(email: string) {
   const account = await register(email);
   await consumeActionToken(db, await actionToken(email), "verify_email");
@@ -332,4 +340,36 @@ test("Google usa PKCE, vínculo ao navegador e state descartável antes da troca
   assert.equal(calls, 1);
   await assert.rejects(finishGoogleLogin(db, { state, binding: start.binding, code: "code" }, send));
   assert.equal(calls, 1);
+});
+
+test("link de confirmação carrega o convite do cadastro e do reenvio; redefinição de senha não", async () => {
+  const email = "convite-link@example.com";
+  await registerUser(db, { name: "Pessoa", email, password }, "ip-1", "codigo-convite-xyz");
+  let link = await latestLink(email);
+  assert.equal(link.pathname, "/verificar-email");
+  assert.equal(link.searchParams.get("invite"), "codigo-convite-xyz");
+  assert.match(link.hash, /^#token=/);
+  await requestActionMail(db, email, "verify_email", "ip-2", "outro-codigo-1234");
+  link = await latestLink(email);
+  assert.equal(link.searchParams.get("invite"), "outro-codigo-1234");
+  await requestActionMail(db, email, "verify_email", "ip-3");
+  assert.equal((await latestLink(email)).searchParams.has("invite"), false);
+  await consumeActionToken(db, await actionToken(email), "verify_email");
+  await requestActionMail(db, email, "reset_password", "ip-4", "codigo-convite-xyz");
+  link = await latestLink(email);
+  assert.equal(link.pathname, "/redefinir-senha");
+  assert.equal(link.searchParams.has("invite"), false);
+  // Pela API: convite do corpo ou do cookie, e o login informa o convite pendente do navegador.
+  const origin = appOrigin();
+  const post = (action: string, body: unknown, cookie = "") => authAction(db, new Request(`${origin}/api/auth/${action}`, { method: "POST", headers: { "Content-Type": "application/json", origin, cookie }, body: JSON.stringify(body) }), action);
+  assert.equal((await post("register", { name: "Via API", email: "api-convite@example.com", password, confirmPassword: password, invite: "api-codigo-12345" })).status, 202);
+  assert.equal((await latestLink("api-convite@example.com")).searchParams.get("invite"), "api-codigo-12345");
+  assert.equal((await post("resend-verification", { email: "api-convite@example.com" }, "agentflows_invite=cookie-codigo-9999")).status, 202);
+  assert.equal((await latestLink("api-convite@example.com")).searchParams.get("invite"), "cookie-codigo-9999");
+  await consumeActionToken(db, await actionToken("api-convite@example.com"), "verify_email");
+  const login = await post("login", { email: "api-convite@example.com", password }, "agentflows_invite=cookie-codigo-9999");
+  assert.equal(login.status, 200);
+  assert.equal((await login.json()).invitePending, true);
+  const plain = await post("login", { email: "api-convite@example.com", password });
+  assert.equal((await plain.json()).invitePending, false);
 });

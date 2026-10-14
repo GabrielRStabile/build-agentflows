@@ -27,6 +27,17 @@ async function request(action: string, data?: Record<string, unknown>) {
   if (!response.ok || result === undefined) throw new Error(result?.error || (response.status >= 500 ? unavailableMessage(response.status) : "Não foi possível concluir. Tente novamente."));
   return result as { user: User; message?: string; invitePending?: boolean };
 }
+/** Conta liberada entra direto; conta confirmada na lista de espera com convite (link ou cookie) usa o convite sem clique e entra. */
+async function enter(router: ReturnType<typeof useRouter>, user: User | null | undefined, code: string, pending: boolean): Promise<boolean> {
+  if (!user) return false;
+  if (!released(user)) {
+    if (!user.email_verified_at || user.beta_status !== "pending" || !(code || pending)) return false;
+    try { await request("invite", code ? { code } : {}); }
+    catch { return false; }
+  }
+  router.replace(nextDestination()); router.refresh();
+  return true;
+}
 function GoogleIcon() {
   return <svg aria-hidden="true" width="18" height="18" viewBox="0 0 48 48" className="shrink-0">
     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
@@ -36,7 +47,7 @@ function GoogleIcon() {
   </svg>;
 }
 /** Reenvio do link de confirmação liberado só depois de uma espera, e com nova espera a cada envio. */
-function ResendButton({ email, initialWait, busy, onResult }: { email: string; initialWait: number; busy: boolean; onResult: (message: string, error?: string) => void }) {
+function ResendButton({ email, invite, initialWait, busy, onResult }: { email: string; invite?: string; initialWait: number; busy: boolean; onResult: (message: string, error?: string) => void }) {
   const [remaining, setRemaining] = useState(initialWait);
   const [sending, setSending] = useState(false);
   useEffect(() => {
@@ -46,7 +57,7 @@ function ResendButton({ email, initialWait, busy, onResult }: { email: string; i
   }, [remaining]);
   async function resend() {
     setSending(true);
-    try { const result = await request("resend-verification", { email }); onResult(result.message || "Enviamos um novo link para seu e-mail."); setRemaining(60); }
+    try { const result = await request("resend-verification", { email, invite }); onResult(result.message || "Enviamos um novo link para seu e-mail."); setRemaining(60); }
     catch (e) { onResult("", (e as Error).message); }
     finally { setSending(false); }
   }
@@ -105,8 +116,9 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
         };
         // Quem já está na conta segue para a tela do convite; quem não está, para o login com o aviso.
         const forward = async () => {
-          const session = await request("session").catch(() => ({ user: null }));
+          const session = await request("session").catch(() => ({ user: null, invitePending: false }));
           if (!live) return false;
+          if (await enter(router, session.user, linked, !!session.invitePending)) return true;
           router.replace(session.user ? destination("/acesso") : destination("/entrar", { confirmado: "1" }));
           router.refresh();
           return true;
@@ -127,7 +139,7 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
           const data = await request("session");
           if (!live) return;
           // Conta já liberada (o proxy normalmente redireciona antes; aqui cobre a navegação no cliente).
-          if (released(data.user)) { router.replace("/"); router.refresh(); return; }
+          if (released(data.user)) { router.replace(nextDestination()); router.refresh(); return; }
           setUser(data.user); setCode(linked); setInvitePending(!!(linked || data.invitePending)); setLoaded(true);
           // A confirmed account waiting for release uses the invite link without another click.
           if (data.user?.email_verified_at && data.user.beta_status === "pending" && (linked || data.invitePending)) {
@@ -154,9 +166,10 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
     void act(async () => {
       if ((mode === "register" || mode === "reset-password") && password !== confirmPassword) throw new Error("As senhas não são iguais.");
       const action = mode === "access" ? "invite" : mode;
-      const result = await request(action, { name, email, password, confirmPassword, token, code });
+      const result = await request(action, { name, email, password, confirmPassword, token, code, invite: invite || undefined });
       if (mode === "login") {
-        router.replace(released(result.user) ? nextDestination() : withInvite("/acesso"));
+        if (await enter(router, result.user, invite, !!result.invitePending)) return;
+        router.replace(withInvite("/acesso"));
         router.refresh();
       } else if (mode === "access") { router.replace("/"); router.refresh(); }
       else {
@@ -187,7 +200,7 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
           <span aria-hidden="true" className="mx-auto mb-4 w-14 h-14 rounded-full bg-accent-soft text-accent-ink grid place-items-center"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v12H4z" /><path d="m4 7 8 6 8-6" /></svg></span>
           <p className="text-sm mb-2">Enviamos um link de confirmação para <strong className="break-all">{email}</strong>.</p>
           <p className="text-sm text-muted mb-5">Abra o link para ativar sua conta. Ele vale por 24 horas. Não chegou? Confira a pasta de spam ou promoções. Se você já tinha conta com este e-mail, entre com sua senha.</p>
-          <ResendButton email={email} initialWait={30} busy={busy} onResult={onResend} />
+          <ResendButton email={email} invite={invite || undefined} initialWait={30} busy={busy} onResult={onResend} />
         </div> : mode === "access" ? <>
           {!loaded ? <p role="status">Consultando seu acesso…</p> : !user ? <p><Link href={withInvite("/entrar")}>Entre na sua conta</Link> para acompanhar sua liberação.</p> : <>
             <div className="flex items-center gap-3 rounded-field border border-line bg-surface-2 px-4 py-3 mb-5">
@@ -196,7 +209,7 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
               <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${user.beta_status === "blocked" ? "bg-danger/10 text-danger" : !user.email_verified_at ? "bg-warn/10 text-warn" : user.beta_status === "approved" ? "bg-ok/10 text-ok" : "bg-accent-soft text-accent-ink"}`}>{user.beta_status === "blocked" ? "Suspenso" : !user.email_verified_at ? "E-mail pendente" : user.beta_status === "approved" ? "Liberado" : "Lista de espera"}</span>
             </div>
             {user.beta_status === "blocked" ? <p role="status" className="text-sm">Seu acesso está suspenso. Entre em contato com a equipe do beta.</p>
-              : !user.email_verified_at ? <><p className="text-sm mb-4">Confirme o link enviado para <strong>{user.email}</strong> antes de utilizar seu convite.{invitePending && " Seu convite fica guardado e será aplicado quando você voltar a esta página com o e-mail confirmado."}</p><p className="text-sm text-muted mb-4">Não chegou? Confira a pasta de spam ou promoções.</p><ResendButton email={user.email} initialWait={15} busy={busy} onResult={onResend} /></>
+              : !user.email_verified_at ? <><p className="text-sm mb-4">Confirme o link enviado para <strong>{user.email}</strong> antes de utilizar seu convite.{invitePending && " Seu convite fica guardado e será aplicado quando você voltar a esta página com o e-mail confirmado."}</p><p className="text-sm text-muted mb-4">Não chegou? Confira a pasta de spam ou promoções.</p><ResendButton email={user.email} invite={invite || undefined} initialWait={15} busy={busy} onResult={onResend} /></>
               : user.beta_status === "approved" ? <Link className="btn-primary" href="/">Abrir meu espaço</Link>
               : redeeming ? <p role="status" className="text-sm">Validando seu convite…</p>
               : <><form onSubmit={submit}>

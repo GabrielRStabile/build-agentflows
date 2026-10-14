@@ -29,10 +29,12 @@ export function authMailHtml(verify: boolean, link: string) {
 }
 
 /** Written in the same transaction as the account/token. A provider outage cannot lose the email. */
-export async function enqueueAuthMail(sql: Sql, email: string, purpose: "verify_email" | "reset_password", token: string) {
+export async function enqueueAuthMail(sql: Sql, email: string, purpose: "verify_email" | "reset_password", token: string, invite?: string) {
   const id = randomUUID();
   const verify = purpose === "verify_email";
   const link = new URL(verify ? "/verificar-email" : "/redefinir-senha", appOrigin());
+  // O convite segue no link para ser aplicado ao confirmar, mesmo em outro navegador (o proxy o guarda em cookie).
+  if (verify && invite) link.searchParams.set("invite", invite);
   // Fragment is not sent to access logs, referrers or email link preview GETs.
   link.hash = new URLSearchParams({ token }).toString();
   const mail: Mail = {

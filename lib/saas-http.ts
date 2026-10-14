@@ -88,15 +88,15 @@ export async function authAction(db: Database, req: Request, action: string) {
     const data = await limitedJson(req);
     if (action === "register") {
       if (data.password !== data.confirmPassword) throw new AuthError("As senhas não são iguais.");
-      await registerUser(db, { name: data.name, email: data.email, password: data.password }, client);
+      await registerUser(db, { name: data.name, email: data.email, password: data.password }, client, inviteCode(data.invite) ?? inviteFromRequest(req));
       return privateJson({ message: "Se o cadastro puder ser criado, enviaremos um link para confirmar seu e-mail." }, { status: 202 });
     }
     if (action === "login") {
       const { token, user } = await loginUser(db, { email: data.email, password: data.password }, client);
-      return privateJson({ user }, { headers: { "Set-Cookie": sessionCookie(token) } });
+      return privateJson({ user, invitePending: !!inviteFromRequest(req) }, { headers: { "Set-Cookie": sessionCookie(token) } });
     }
     if (action === "forgot-password" || action === "resend-verification") {
-      await requestActionMail(db, data.email, action === "forgot-password" ? "reset_password" : "verify_email", client);
+      await requestActionMail(db, data.email, action === "forgot-password" ? "reset_password" : "verify_email", client, inviteCode(data.invite) ?? inviteFromRequest(req));
       return privateJson({ message: "Se houver uma conta elegível, enviaremos um link para seu e-mail." }, { status: 202 });
     }
     if (action === "verify-email" || action === "reset-password") {
