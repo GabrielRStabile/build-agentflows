@@ -24,7 +24,11 @@ Defina no ambiente de execução do Coolify:
 - `CHAVE_MESTRA`: 32 bytes aleatórios em base64, iguais para app e worker.
 - `POSTGRES_PASSWORD` e `REDIS_PASSWORD`: senhas diferentes em base64url, sem
   caracteres que exigem escape nas URLs de conexão.
-- `RESEND_API_KEY` e `RESEND_FROM`: credencial e remetente verificado no Resend.
+- `RESEND_API_KEY` e `RESEND_FROM`: credencial e remetente no formato
+  `Nome <conta@dominio>`. O domínio precisa estar **verificado** na conta do
+  Resend (resend.com/domains, registros DNS confirmados); sem isso o Resend
+  recusa todo envio com 403 e nenhum e-mail de confirmação sai. O worker
+  registra `email_remetente` na partida e `/api/health` mostra `mail.sender`.
 - `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`: opcionais; quando configurados,
   autorize o callback exato `APP_URL/api/auth/google/callback` no Google.
 
@@ -47,20 +51,27 @@ worker envia pelo Resend em lotes de cinco a cada segundo, com até oito
 tentativas. Para localizar a falha:
 
 1. `GET /api/health` → `mail`: `configured` (RESEND_API_KEY e RESEND_FROM
-   presentes), `pending`, `failedLast24h`, `sentLast24h` e
-   `oldestPendingSeconds`. Pendentes crescendo sem envio indicam worker parado
-   ou sem as variáveis (`workerAlive` precisa ser `true`).
-2. Logs do worker: cada tentativa gera `{"evento":"email_envio","id":…,
-   "tentativa":…,"status":…,"resultado":"enviado|repetir|falhou"}`, sem
-   destinatário nem conteúdo. `status` 403 ou 422 costuma ser domínio do
-   remetente não verificado ou `RESEND_FROM` fora do formato `Nome <conta@dominio>`;
-   `"rede"` é falha de conexão ou tempo limite de 10 s.
+   presentes), `sender` (`domain`, `verified` true/false/null e `detail` com o
+   motivo), `pending`, `failedLast24h`, `sentLast24h` e `oldestPendingSeconds`.
+   `sender.verified: false` é a causa mais comum: o domínio de `RESEND_FROM`
+   não está verificado na conta do Resend. Pendentes crescendo sem envio
+   indicam worker parado ou sem as variáveis (`workerAlive` precisa ser `true`).
+2. Logs do worker: `email_remetente` na partida (domínio e verificação) e, a
+   cada tentativa, `{"evento":"email_envio","id":…,"tentativa":…,"status":…,
+   "resultado":"enviado|repetir|falhou"}`, sem destinatário nem conteúdo.
+   `status` 403 é domínio não verificado: a mensagem fica na fila com as oito
+   tentativas normais (cerca de duas horas), então verificar o domínio nesse
+   prazo entrega o que está pendente. 422 é remetente ou destinatário
+   inválido (falha definitiva); `"rede"` é falha de conexão ou tempo limite
+   de 10 s.
 3. Painel do Resend › Emails mostra o que chegou à API e o estado da entrega
-   (bounce, spam). Com o domínio de teste do Resend só o e-mail do dono da
-   conta recebe mensagens.
-4. Cadastro com e-mail já existente não envia nada e responde igual, para não
-   revelar contas; a pessoa deve entrar com a senha e pedir o reenvio em
-   Seu acesso. O reenvio tem limite de três por e-mail por hora.
+   (bounce, spam). Com o domínio de teste do Resend (`onboarding@resend.dev`)
+   só o e-mail do dono da conta recebe mensagens.
+4. Cadastro com e-mail já existente responde igual ao novo, para não revelar
+   contas, mas a dona do e-mail recebe: a confirmação de novo (conta ainda não
+   confirmada; o link anterior deixa de valer) ou um aviso "Você já tem conta"
+   com os caminhos para entrar ou redefinir a senha. Esse envio e o botão
+   Reenviar e-mail têm limite de três por e-mail por hora.
 
 A mensagem vai em texto e HTML (logo servida por `APP_URL/brand/agentflows-logo.png`,
 botão e o mesmo link em texto); o link fica no fragmento da URL e não aparece

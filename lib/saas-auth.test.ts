@@ -8,7 +8,7 @@ import { registerUser, loginUser, findSession, requestActionMail, consumeActionT
 import { appOrigin, hashToken, randomToken, seal, unseal, verifyPassword } from "./saas-security";
 import { credentialsFor } from "./saas-credentials";
 import { consumeRateLimit } from "./saas-rate-limit";
-import { deliverAuthMail, mailStats } from "./saas-mail";
+import { deliverAuthMail, mailStats, senderStatus, senderDomain, resetSenderCache } from "./saas-mail";
 import { beginGoogleLogin, finishGoogleLogin, verifyGoogleIdToken } from "./saas-google";
 import { authAction } from "./saas-http";
 
@@ -102,13 +102,65 @@ test("cadastro não libera beta; tokens não ficam em texto puro, verificação 
   assert.throws(() => requireBetaAccess(awaitUser), /suspenso/);
 });
 
-test("cadastro duplicado não substitui senha nem emite nova sessão ou novo e-mail", async () => {
+test("cadastro duplicado não substitui senha nem emite nova sessão; reenvia a confirmação pendente ou avisa que a conta já existe", async () => {
   const a = await register("same@example.com");
+  const firstToken = await actionToken("same@example.com");
   await registerUser(db, { name: "Outro", email: "SAME@example.com", password: "Outra-Senha-2026!" }, "another-ip");
   assert.equal((await db.query("SELECT * FROM users")).rows.length, 1);
-  assert.equal((await db.query("SELECT * FROM mail_outbox")).rows.length, 1);
+  // Conta ainda não confirmada: o cadastro repetido reenvia a confirmação (novo link, o anterior deixa de valer).
+  assert.equal((await db.query("SELECT * FROM mail_outbox")).rows.length, 2);
+  const secondToken = await actionToken("same@example.com");
+  assert.notEqual(secondToken, firstToken);
+  await assert.rejects(consumeActionToken(db, firstToken, "verify_email"), /inválido/);
   assert.equal((await findSession(db, a.token))?.id, a.user.id);
   await assert.rejects(loginUser(db, { email: a.user.email, password: "Outra-Senha-2026!" }, "ip"));
+  // Conta confirmada: aviso sem token, com os caminhos para entrar ou redefinir a senha.
+  await consumeActionToken(db, secondToken, "verify_email");
+  await registerUser(db, { name: "Outro", email: "same@example.com", password: "Outra-Senha-2026!" }, "another-ip");
+  const rows = (await db.query<{ id: string; payload_ciphertext: string }>("SELECT id,payload_ciphertext FROM mail_outbox ORDER BY created_at DESC")).rows;
+  assert.equal(rows.length, 3);
+  const notice = JSON.parse(unseal(rows[0].payload_ciphertext, `mail:${rows[0].id}`)) as { subject: string; text: string };
+  assert.match(notice.subject, /já tem conta/);
+  assert.match(notice.text, /https:\/\/app\.example\.com\/recuperar-senha/);
+  assert.ok(!/token=/.test(notice.text));
+  // O limite por e-mail vale também para o cadastro repetido: três avisos por hora.
+  await registerUser(db, { name: "Outro", email: "same@example.com", password: "Outra-Senha-2026!" }, "another-ip");
+  await assert.rejects(registerUser(db, { name: "Outro", email: "same@example.com", password: "Outra-Senha-2026!" }, "another-ip"), (error: unknown) => (error as { status: number }).status === 429);
+  assert.equal((await db.query("SELECT * FROM mail_outbox")).rows.length, 4);
+});
+
+test("remetente do Resend: domínio verificado, não cadastrado, formato inválido e 403 repetido na fila", async () => {
+  assert.equal(senderDomain("Build Agentflows <conta@startse.com>"), "startse.com");
+  assert.equal(senderDomain("conta@Startse.com"), "startse.com");
+  assert.equal(senderDomain("sem-arroba"), "");
+  const domains: typeof fetch = async (url) => { assert.equal(url, "https://api.resend.com/domains"); return Response.json({ data: [{ name: "example.com", status: "not_started" }, { name: "startse.com", status: "verified" }] }); };
+  let now = 0;
+  resetSenderCache();
+  process.env.RESEND_FROM = "Agentflows <conta@startse.com>";
+  assert.deepEqual(await senderStatus(domains, now += 1), { from: process.env.RESEND_FROM, domain: "startse.com", verified: true });
+  // Em cache por dez minutos: a troca da variável só aparece depois.
+  process.env.RESEND_FROM = "Agentflows <test@example.com>";
+  assert.equal((await senderStatus(domains, now += 1))?.verified, true);
+  const pending = await senderStatus(domains, now += 600_001);
+  assert.equal(pending?.verified, false); assert.match(pending?.detail || "", /status "not_started"/);
+  process.env.RESEND_FROM = "Agentflows <test@outro.com>";
+  const missing = await senderStatus(domains, now += 600_001);
+  assert.equal(missing?.verified, false); assert.match(missing?.detail || "", /não cadastrado/);
+  process.env.RESEND_FROM = "sem-arroba";
+  assert.match((await senderStatus(domains, now += 600_001))?.detail || "", /formato/);
+  process.env.RESEND_FROM = "Agentflows <test@example.com>";
+  resetSenderCache();
+  const stats = await mailStats(db, domains);
+  assert.equal(stats.sender?.verified, false); assert.match(stats.sender?.detail || "", /not_started/);
+  // Envio recusado por domínio não verificado fica na fila para nova tentativa, em vez de falhar de vez.
+  await register("dominio@example.com");
+  const rejected: typeof fetch = async () => Response.json({ message: "The example.com domain is not verified.", name: "validation_error", statusCode: 403 }, { status: 403 });
+  const originalLog = console.log; console.log = () => {};
+  try { await deliverAuthMail(db, rejected); } finally { console.log = originalLog; }
+  const row = (await db.query<{ failed_at: string | null; sent_at: string | null; attempts: number; payload_ciphertext: string }>("SELECT * FROM mail_outbox")).rows[0];
+  assert.equal(row.failed_at, null); assert.equal(row.sent_at, null); assert.equal(row.attempts, 1); assert.ok(row.payload_ciphertext);
+  process.env.RESEND_FROM = "Agentflows <test@example.com>";
+  resetSenderCache();
 });
 
 test("convite limitado conta um uso por pessoa e registra auditoria; rejeita esgotado e expirado", async () => {
@@ -225,7 +277,9 @@ test("Resend usa idempotência, retenta falhas e apaga conteúdo após envio", a
   const originalLog = console.log;
   console.log = (line: string) => { logged.push(String(line)); };
   try {
-    assert.deepEqual(await mailStats(db), { pending: 1, failedLast24h: 0, sentLast24h: 0, oldestPendingSeconds: 0, configured: true });
+    const domains: typeof fetch = async () => Response.json({ data: [] });
+    resetSenderCache();
+    assert.deepEqual(await mailStats(db, domains), { pending: 1, failedLast24h: 0, sentLast24h: 0, oldestPendingSeconds: 0, configured: true, sender: { domain: "example.com", verified: false, detail: "Domínio example.com não cadastrado na conta do Resend: o envio é recusado com 403." } });
     await deliverAuthMail(db, sender);
     assert.equal((await db.query("SELECT sent_at FROM mail_outbox")).rows[0].sent_at, null);
     await db.query("UPDATE mail_outbox SET available_at=now()");
@@ -240,7 +294,7 @@ test("Resend usa idempotência, retenta falhas e apaga conteúdo após envio", a
   const events = logged.map((line) => JSON.parse(line) as { evento: string; status: number; resultado: string; tentativa: number });
   assert.deepEqual(events.map((e) => [e.evento, e.tentativa, e.status, e.resultado]), [["email_envio", 1, 503, "repetir"], ["email_envio", 2, 200, "enviado"]]);
   assert.ok(!logged.join("").includes("mail@example.com"));
-  assert.deepEqual(await mailStats(db), { pending: 0, failedLast24h: 0, sentLast24h: 1, oldestPendingSeconds: 0, configured: true });
+  assert.equal((await mailStats(db, async () => Response.json({ data: [] }))).sentLast24h, 1);
 });
 
 test("Google exige assinatura, audiência, nonce e e-mail verificado; não associa conta por coincidência de e-mail", async () => {

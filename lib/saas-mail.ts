@@ -44,6 +44,48 @@ export async function enqueueAuthMail(sql: Sql, email: string, purpose: "verify_
   await sql.query("INSERT INTO mail_outbox(id,payload_ciphertext) VALUES ($1,$2)", [id, seal(JSON.stringify(mail), `mail:${id}`)]);
 }
 
+/** Aviso sem token para quem tenta cadastrar um e-mail que já tem conta confirmada: a resposta HTTP continua igual, mas a dona da conta fica sabendo. */
+export async function enqueueExistingAccountMail(sql: Sql, email: string) {
+  const id = randomUUID();
+  const entrar = new URL("/entrar", appOrigin()).toString();
+  const recuperar = new URL("/recuperar-senha", appOrigin()).toString();
+  const mail: Mail = {
+    to: email,
+    subject: "Você já tem conta · Build Agentflows",
+    text: `Alguém tentou criar uma conta com este e-mail, mas ele já está cadastrado no Build Agentflows.\n\nPara entrar: ${entrar}\nSe entrou com Google, use o mesmo botão. Se esqueceu a senha: ${recuperar}\n\nSe não foi você, ignore esta mensagem; nada foi alterado na sua conta.`,
+  };
+  await sql.query("INSERT INTO mail_outbox(id,payload_ciphertext) VALUES ($1,$2)", [id, seal(JSON.stringify(mail), `mail:${id}`)]);
+}
+
+/** Domínio do remetente (RESEND_FROM) e se está verificado na conta do Resend; consulta em cache por 10 minutos. */
+export type SenderStatus = { from: string; domain: string; verified: boolean | null; detail?: string };
+let senderCache: { at: number; value: SenderStatus } | undefined;
+/** Testes e troca de variáveis em tempo de execução. */
+export function resetSenderCache() { senderCache = undefined; }
+export const senderDomain = (from: string) => (from.match(/<([^>]+)>/)?.[1] || from).trim().split("@")[1]?.toLowerCase() || "";
+export async function senderStatus(send: typeof fetch = fetch, now = Date.now()): Promise<SenderStatus | null> {
+  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM) return null;
+  if (senderCache && now - senderCache.at < 600_000) return senderCache.value;
+  const from = process.env.RESEND_FROM;
+  const domain = senderDomain(from);
+  let value: SenderStatus = { from, domain, verified: null };
+  if (!domain) value = { from, domain, verified: false, detail: "RESEND_FROM precisa ter o formato Nome <conta@dominio>." };
+  else if (domain === "resend.dev") value = { from, domain, verified: true, detail: "Domínio de teste do Resend: entrega só para o e-mail do dono da conta." };
+  else {
+    try {
+      const response = await send("https://api.resend.com/domains", { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` }, signal: AbortSignal.timeout(10000) });
+      if (response.ok) {
+        const list = (await response.json()) as { data?: { name: string; status: string }[] };
+        const entry = list.data?.find((d) => d.name.toLowerCase() === domain);
+        value = entry?.status === "verified" ? { from, domain, verified: true }
+          : { from, domain, verified: false, detail: entry ? `Domínio ${domain} cadastrado no Resend com status "${entry.status}".` : `Domínio ${domain} não cadastrado na conta do Resend: o envio é recusado com 403.` };
+      } else { await response.body?.cancel(); value = { from, domain, verified: null, detail: `Resend respondeu ${response.status} ao consultar domínios.` }; }
+    } catch { value = { from, domain, verified: null, detail: "Não foi possível consultar os domínios do Resend." }; }
+  }
+  senderCache = { at: now, value };
+  return value;
+}
+
 /** One bounded batch; safe to run concurrently in workers, with a lease for crash recovery. */
 export async function deliverAuthMail(db: Database, send: typeof fetch = fetch) {
   if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM) throw new Error("Configure RESEND_API_KEY e RESEND_FROM.");
@@ -70,7 +112,8 @@ export async function deliverAuthMail(db: Database, send: typeof fetch = fetch) 
       });
       ok = response.ok;
       status = response.status;
-      permanent = response.status >= 400 && response.status < 500 && ![408, 409, 429].includes(response.status);
+      // 403 (domínio não verificado) fica na fila com as repetições normais: verificar o domínio dentro do prazo entrega as mensagens pendentes.
+      permanent = response.status >= 400 && response.status < 500 && ![403, 408, 409, 429].includes(response.status);
       await response.body?.cancel();
     } catch { /* Retry without logging tokens, email contents or provider responses. */ }
     // Só o id da fila, a tentativa e o status HTTP: sem destinatário, assunto ou resposta do fornecedor.
@@ -90,11 +133,13 @@ export async function deliverAuthMail(db: Database, send: typeof fetch = fetch) 
 
 
 /** Visão da fila de e-mails para o operador (/api/health): nada sobre destinatários ou conteúdo. */
-export async function mailStats(sql: Pick<Database, "query">) {
+export async function mailStats(sql: Pick<Database, "query">, send: typeof fetch = fetch) {
   const { rows } = await sql.query<{ pending: number; failed: number; sent: number; oldest: number | null }>(`SELECT
     (SELECT count(*)::int FROM mail_outbox WHERE sent_at IS NULL AND failed_at IS NULL) AS pending,
     (SELECT count(*)::int FROM mail_outbox WHERE failed_at IS NOT NULL AND failed_at>now()-interval '24 hours') AS failed,
     (SELECT count(*)::int FROM mail_outbox WHERE sent_at>now()-interval '24 hours') AS sent,
     (SELECT floor(extract(epoch FROM now()-min(created_at)))::int FROM mail_outbox WHERE sent_at IS NULL AND failed_at IS NULL) AS oldest`);
-  return { pending: rows[0].pending, failedLast24h: rows[0].failed, sentLast24h: rows[0].sent, oldestPendingSeconds: rows[0].oldest ?? 0, configured: !!(process.env.RESEND_API_KEY && process.env.RESEND_FROM) };
+  const sender = await senderStatus(send);
+  return { pending: rows[0].pending, failedLast24h: rows[0].failed, sentLast24h: rows[0].sent, oldestPendingSeconds: rows[0].oldest ?? 0, configured: !!sender,
+    ...(sender ? { sender: { domain: sender.domain, verified: sender.verified, ...(sender.detail ? { detail: sender.detail } : {}) } } : {}) };
 }

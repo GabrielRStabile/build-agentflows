@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Database, Sql } from "./saas-db";
 import { AuthError, hashToken, normalizedEmail, passwordHash, randomToken, validatePassword, verifyPassword } from "./saas-security";
-import { enqueueAuthMail } from "./saas-mail";
+import { enqueueAuthMail, enqueueExistingAccountMail } from "./saas-mail";
 import { consumeRateLimit } from "./saas-rate-limit";
 
 export type SaasUser = {
@@ -54,10 +54,22 @@ export async function registerUser(db: Database, data: { name: unknown; email: u
   const encoded = await passwordHash(data.password);
   const name = data.name.trim();
   // A duplicate gets the same HTTP outcome; never sign in or replace an existing account.
-  await db.transaction(async (sql) => {
+  const created = await db.transaction(async (sql) => {
     const { rows } = await sql.query<SaasUser>(`INSERT INTO users(id,name,email,password_hash) VALUES ($1,$2,$3,$4)
       ON CONFLICT(email) DO NOTHING RETURNING ${USER_FIELDS}`, [randomUUID(), name, email, encoded]);
     if (rows[0]) await issueAction(sql, rows[0], "verify_email");
+    return !!rows[0];
+  });
+  if (created) return;
+  // E-mail já cadastrado: a dona da conta recebe a confirmação pendente de novo ou um aviso de que já tem conta.
+  // A resposta ao navegador é a mesma; o limite por e-mail impede usar o cadastro para encher a caixa de alguém.
+  await consumeRateLimit(db, `mail:email:${email}`, 3, 3600);
+  await db.transaction(async (sql) => {
+    const { rows } = await sql.query<SaasUser>(`SELECT ${USER_FIELDS} FROM users WHERE email=$1 FOR UPDATE`, [email]);
+    const existing = rows[0];
+    if (!existing || existing.beta_status === "blocked") return;
+    if (existing.email_verified_at) await enqueueExistingAccountMail(sql, email);
+    else await issueAction(sql, existing, "verify_email");
   });
 }
 

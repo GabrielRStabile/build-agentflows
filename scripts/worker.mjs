@@ -7,7 +7,7 @@ import { migrateDatabase } from "../lib/db/migrate.ts";
 import { claimJob, queueLimits, recoverExpiredJobs } from "../lib/saas-jobs.ts";
 import { runClaimedJob } from "../lib/saas-worker.ts";
 import { nextJobNotification, waitJobNotification, closeQueue } from "../lib/saas-queue.ts";
-import { deliverAuthMail } from "../lib/saas-mail.ts";
+import { deliverAuthMail, senderStatus } from "../lib/saas-mail.ts";
 import { cleanupAuth } from "../lib/saas-auth.ts";
 import { runBudgetMs } from "../lib/run-limits.ts";
 
@@ -25,6 +25,8 @@ for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => {
 });
 await migrateDatabase(db);
 log("worker_pronto", { id, vagas: queueLimits().running, limiteExecucaoMs: runBudgetMs(), drenagemMs: DRAIN_MS });
+// Remetente do Resend conferido na partida: domínio não verificado é a causa mais comum de e-mail que não chega.
+void senderStatus().then((sender) => { if (sender) log("email_remetente", { dominio: sender.domain, verificado: sender.verified, ...(sender.detail ? { detalhe: sender.detail } : {}) }); });
 writeFileSync(path.join(tmpdir(), "agentflows-worker-id"), id, { mode: 0o600 });
 try {
   while (!stop.signal.aborted) {
