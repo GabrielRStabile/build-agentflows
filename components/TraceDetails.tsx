@@ -38,10 +38,10 @@ export function TraceDetails({ trace, kind, onClose }: { trace: Trace; kind?: Ki
       <ul>{trace.knowledge.available.map(base => <li key={base.baseId}><strong>{base.baseName}</strong><small>{base.description}</small></li>)}</ul>
       <p>{trace.knowledge.count} trecho(s) recuperado(s) em {trace.knowledge.bases?.length || 0} base(s).</p>
     </section>}
+    {trace.instructions && <details className="trace-instructions" open><summary>{kind === "agent" ? "Instruções do agente" : "Instruções"}</summary><pre>{trace.instructions}</pre></details>}
     <div className="trace-payloads">
       <section><h3>Entrada</h3><Payload text={trace.input} empty="Entrada não registrada nesta execução." /></section>
       <section><h3>Saída</h3><Payload text={trace.output} empty="Aguardando resultado…" /></section>
     </div>
-    {trace.instructions && <details className="trace-instructions"><summary>{kind === "agent" ? "Instruções do agente" : "Instruções"}</summary><pre>{trace.instructions}</pre></details>}
   </Modal>;
 }

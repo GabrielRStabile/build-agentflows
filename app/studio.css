@@ -3928,8 +3928,10 @@
 .trace-payloads > section { min-width: 0; border: 1px solid var(--studio-line); border-radius: 12px; padding: 16px; max-height: 48vh; overflow: auto; background: var(--studio-bg); }
 .trace-payloads h3 { margin: 0 0 14px; font-size: 13px; }
 .trace-json, .trace-instructions pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.65 ui-monospace, monospace; }
-.trace-instructions { margin-top: 18px; font-size: 12px; }
-.trace-instructions summary { cursor: pointer; color: var(--studio-muted); margin-bottom: 12px; }
+.trace-instructions { margin: 18px 0; font-size: 12px; border: 1px solid var(--studio-line); border-radius: 12px; padding: 14px 18px; background: var(--studio-bg); }
+.trace-instructions summary { cursor: pointer; color: var(--studio-ink); font-size: 13px; font-weight: 600; }
+.trace-instructions[open] summary { margin-bottom: 12px; }
+.trace-instructions pre { max-height: 320px; overflow: auto; }
 .chat-text:has(.markdown-content), .run-response:has(.markdown-content) { white-space: normal; }
 .markdown-content { white-space: normal; overflow-wrap: anywhere; line-height: 1.65; min-width: 0; }
 .markdown-content > :first-child { margin-top: 0; }
