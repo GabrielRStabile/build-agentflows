@@ -15,8 +15,20 @@ export const modelProviderId = (model = ""): AiProvider | "chatgpt" => aiProvide
 export const aiCredentialProvider = (id: string) => `ai_${id}`;
 export const AI_CREDENTIAL_CATALOG = AI_PROVIDERS.map(p => ({ id: `credential:ai_${p.id}`, provider: aiCredentialProvider(p.id), name: `${p.name} · Modelos`, icon: p.icon }));
 export type AiModel = { id: string; name: string; inputModalities: string[]; parameters: string[]; contextLength?: number; maxOutputTokens?: number };
+/** Níveis aceitos pela OpenAI; cada modelo suporta um subconjunto e o fornecedor recusa os demais. */
+export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+export type ReasoningEffort = typeof REASONING_EFFORTS[number];
+/** OpenAI reasoning models: no temperature; accept reasoning_effort. */
+export const openaiReasoningModel = (model: string) => /^(o[1-9]|gpt-[5-9])/.test(model);
+/** Models whose Chat Completions endpoint only accepts function calling with reasoning_effort "none" (OpenAI model page). */
+export const toolsRequireNoReasoning = (model: string) => /^gpt-6-luna/.test(model);
 export function modelSettings(config: Record<string, string>) {
-  const result: { temperature?: number; maxTokens?: number } = {};
+  const result: { temperature?: number; maxTokens?: number; reasoningEffort?: ReasoningEffort } = {};
+  if (config.modelReasoningEffort?.trim()) {
+    const effort = config.modelReasoningEffort.trim() as ReasoningEffort;
+    if (!REASONING_EFFORTS.includes(effort)) throw new Error("O esforço de raciocínio deve ser um dos níveis da lista.");
+    result.reasoningEffort = effort;
+  }
   if (config.modelTemperature?.trim()) {
     const n = Number(config.modelTemperature);
     if (!Number.isFinite(n) || n < 0 || n > 2) throw new Error("A temperatura deve estar entre 0 e 2.");

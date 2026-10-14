@@ -163,3 +163,25 @@ test("OAuth OpenRouter vincula PKCE à conta e grava uma credencial reutilizáve
   });
   await tenant.connect(() => callback(request())); assert.equal(exchanges, 1, "código OAuth não pode ser reutilizado");
 });
+
+test("OpenAI: esforço de raciocínio é enviado e o gpt-6-luna usa ferramentas só com none", async t => {
+  const tenant = await createTenantTestContext(); t.after(tenant.close);
+  await tenant.asTenant(async () => {
+    const c = saveToolCredential({ name: "OpenAI", provider: "ai_openai", fields: { OPENAI_API_KEY: "secret-reasoning" } });
+    const sent: Record<string, unknown>[] = [];
+    const fetcher: typeof fetch = async (_url, init) => { sent.push(JSON.parse(String(init?.body))); return Response.json({ choices: [{ message: { content: "ok" } }] }); };
+    const tools = [{ name: "soma", description: "Soma", schema: { type: "object" }, call: async () => "5" }];
+    await runProviderModel({ model: "openai:gpt-6-luna", modelCredentialId: c.id }, { system: "s", prompt: "p", tools, fetcher });
+    assert.equal(sent[0].reasoning_effort, "none", "com ferramentas o motor aplica none sozinho");
+    await runProviderModel({ model: "openai:gpt-6-luna", modelCredentialId: c.id }, { system: "s", prompt: "p", fetcher });
+    assert.equal(sent[1].reasoning_effort, undefined, "sem ferramentas o padrão do modelo é mantido");
+    await runProviderModel({ model: "openai:gpt-5.5", modelCredentialId: c.id, modelReasoningEffort: "xhigh" }, { system: "s", prompt: "p", tools, fetcher });
+    assert.equal(sent[2].reasoning_effort, "xhigh");
+    await runProviderModel({ model: "openai:gpt-4.1-mini", modelCredentialId: c.id, modelReasoningEffort: "high" }, { system: "s", prompt: "p", fetcher });
+    assert.equal(sent[3].reasoning_effort, undefined, "modelos sem raciocínio ignoram o nível");
+    await assert.rejects(runProviderModel({ model: "openai:gpt-6-luna", modelCredentialId: c.id, modelReasoningEffort: "high" }, { system: "s", prompt: "p", tools, fetcher }), /só usa ferramentas com esforço de raciocínio "none"/);
+    assert.throws(() => modelSettings({ modelReasoningEffort: "turbo" }), /esforço de raciocínio/);
+    const models = await providerModels("openai", c.id, async () => Response.json({ data: [{ id: "gpt-4.1-mini" }, { id: "gpt-6-luna" }, { id: "o3" }] }));
+    assert.deepEqual(models.map(m => [m.id, m.parameters.includes("reasoning_effort")]), [["openai:gpt-4.1-mini", false], ["openai:gpt-6-luna", true], ["openai:o3", true]]);
+  });
+});

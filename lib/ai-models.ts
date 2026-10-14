@@ -32,7 +32,7 @@ export async function providerModels(provider: AiProvider, credentialId?: string
       // Be conservative for unrecognized models; parameters remain optional.
       const temperature = !reasoning && !(provider === "anthropic" && /(?:opus|sonnet)-[5-9]/.test(m.id));
       const vision = (provider === "anthropic" && m.capabilities?.image_input?.supported !== false) || provider === "google" || (provider === "openai" && /^(gpt-4o|gpt-4\.[1-9]|gpt-[5-9]|o[3-9])/.test(m.id)) || (provider === "groq" && /llama-4/.test(m.id));
-      models.push({ id: `${provider}:${m.id}`, name: m.display_name || m.name || m.id, inputModalities: vision ? ["text", "image"] : ["text"], parameters: ["max_tokens", ...(temperature ? ["temperature"] : [])], contextLength: m.max_input_tokens || m.context_window, maxOutputTokens: m.max_tokens || undefined });
+      models.push({ id: `${provider}:${m.id}`, name: m.display_name || m.name || m.id, inputModalities: vision ? ["text", "image"] : ["text"], parameters: ["max_tokens", ...(temperature ? ["temperature"] : []), ...(reasoning ? ["reasoning_effort"] : [])], contextLength: m.max_input_tokens || m.context_window, maxOutputTokens: m.max_tokens || undefined });
     }
     const next = data.has_more && data.last_id ? data.last_id : "";
     if (next === after) break;

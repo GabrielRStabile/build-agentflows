@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { request, Icon, IconButton } from "./StudioUI";
-import { AI_PROVIDERS, aiProvider, modelProviderId, aiCredentialProvider, type AiModel } from "@/lib/ai-providers";
+import { AI_PROVIDERS, REASONING_EFFORTS, aiProvider, modelProviderId, aiCredentialProvider, type AiModel } from "@/lib/ai-providers";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
 import { ToolSelect } from "./ToolSelect";
 import { ToolCredentialDialog } from "./ToolCredentialDialog";
@@ -72,7 +72,7 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
       onChange={id => {
         const next = id === "chatgpt" ? "chatgpt" : id.replace("credential:ai_", "");
         const firstCredential = credentials.find(c => c.provider === aiCredentialProvider(next));
-        onConfigChange({ model: next === "chatgpt" ? "" : next === "openrouter" ? OPENROUTER_AUTO : `${next}:`, modelCredentialId: firstCredential?.id || "", modelTemperature: "", modelMaxTokens: "" });
+        onConfigChange({ model: next === "chatgpt" ? "" : next === "openrouter" ? OPENROUTER_AUTO : `${next}:`, modelCredentialId: firstCredential?.id || "", modelTemperature: "", modelMaxTokens: "", modelReasoningEffort: "" });
         setModels([]); setExpanded(true);
       }} />
     <section className="provider-parameters">
@@ -99,15 +99,19 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
             {selectedCredential && <IconButton icon="pencil" label="Editar credencial do modelo" onClick={() => setEditor(selectedCredential)} />}
           </div></label>
           {provider === "replicate" ? <label>Modelo da Replicate<input aria-label="Modelo da Replicate" placeholder="empresa/modelo" spellCheck={false} autoCapitalize="none" value={replicateModelName(value) || ""}
-              onChange={e => onConfigChange({ model: REPLICATE_PREFIX + e.target.value.trim().toLowerCase(), modelTemperature: "", modelMaxTokens: "" })} />
+              onChange={e => onConfigChange({ model: REPLICATE_PREFIX + e.target.value.trim().toLowerCase(), modelTemperature: "", modelMaxTokens: "", modelReasoningEffort: "" })} />
             <small>Use o nome exibido na Replicate, como google/nano-banana. O resultado pode ser texto, imagens ou um vídeo, conforme o modelo. <a href="https://replicate.com/explore" target="_blank" rel="noreferrer">Explorar modelos</a></small>
           </label> : loading ? <small role="status">Carregando modelos…</small> : <>
             <ToolSelect label="Modelo de IA" listLabel="Modelos de IA" value={value} catalog={models} icon={<Icon name="spark" size={18} />} emptyMessage="Nenhum modelo disponível. Conecte uma credencial e tente novamente." missingLabel={modelLabel(value)}
-              onChange={model => onConfigChange({ model, modelTemperature: "", modelMaxTokens: "" })} />
+              onChange={model => onConfigChange({ model, modelTemperature: "", modelMaxTokens: "", modelReasoningEffort: "" })} />
             {!!models.length && <small>{models.length} modelos disponíveis{selected?.contextLength ? ` · contexto de ${selected.contextLength.toLocaleString("pt-BR")} tokens` : ""}{selected?.inputModalities.includes("image") ? " · aceita imagens" : ""}</small>}
           </>}
           {error && <div role="alert"><p className="studio-error">{error}</p><button type="button" className="tool-text-button" onClick={() => setRetry(n => n + 1)}>Tentar novamente</button></div>}
           {selected?.parameters.includes("temperature") && <label>Temperatura<input aria-label="Temperatura" type="number" min="0" max={provider === "anthropic" ? "1" : "2"} step="0.1" placeholder="Padrão do modelo" value={config.modelTemperature || ""} onChange={e => onConfigChange({ modelTemperature: e.target.value })} /></label>}
+          {selected?.parameters.includes("reasoning_effort") && <label>Esforço de raciocínio<select aria-label="Esforço de raciocínio" value={config.modelReasoningEffort || ""} onChange={e => onConfigChange({ modelReasoningEffort: e.target.value })}>
+            <option value="">Padrão do modelo</option>
+            {REASONING_EFFORTS.map(effort => <option key={effort} value={effort}>{effort}</option>)}
+          </select><small>Cada modelo aceita alguns níveis; o fornecedor informa quando recusa. Com ferramentas, o gpt-6-luna exige “none” e o Agente aplica isso sozinho quando o campo fica em branco.</small></label>}
           {selected?.parameters.includes("max_tokens") && <label>Máximo de tokens de saída<input aria-label="Máximo de tokens de saída" type="number" min="1" max={selected.maxOutputTokens || 1000000} step="1" placeholder="4000" value={config.modelMaxTokens || ""} onChange={e => onConfigChange({ modelMaxTokens: e.target.value })} /></label>}
           {isMediaModel(value) && provider !== "replicate" && <small>Gera imagens com o saldo do fornecedor. {mediaModel(value)?.inputModalities.includes("image") ? "Aceita até 5 referências e 6 MB no total." : "Recebe descrições em texto."}</small>}
         </>}
