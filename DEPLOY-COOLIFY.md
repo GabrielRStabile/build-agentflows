@@ -134,6 +134,17 @@ alteração não repete o salvamento. O proxy precisa aceitar respostas longas s
 buffering (`X-Accel-Buffering: no`, ping a cada 15 s); o Traefik do Coolify
 atende. Mantenha o `app` com 3 CPUs e o PostgreSQL com 1 GB.
 
+**Resposta síncrona do endereço publicado.** `POST /webhook/flows/<id>` segura a
+conexão até a execução terminar, por até `LIMITE_EXECUCAO_SEGUNDOS` + 15 s
+(195 s no padrão), sem enviar bytes nesse intervalo. O Compose não define
+rótulos do Traefik: o Coolify gera a configuração do proxy, e os padrões do
+Traefik atendem, pois não há limite para a resposta do serviço
+(`responseHeaderTimeout` 0) nem para a escrita (`writeTimeout` 0); o
+`idleTimeout` de 180 s vale só para conexões ociosas entre requisições. Se houver
+outro proxy ou CDN na frente com limite menor (o Cloudflare corta em 100 s),
+reduza o `LIMITE_EXECUCAO_SEGUNDOS` ou peça `?wait=<segundos>` abaixo desse
+limite e consulte o resultado com `GET ?runId=` quando vier 202.
+
 **O que sobrevive a um reinício ou deploy.** Nada do estado fica no stream,
 no Redis ou na memória do web: a fila, as execuções e as aprovações
 pendentes estão no PostgreSQL.
