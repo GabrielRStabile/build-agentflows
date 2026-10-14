@@ -386,7 +386,8 @@ test("LLM sem mensagem recebe a conversa e depois o resultado anterior", async (
 test("Mensagem personaliza a chamada da etapa sem iteração extra; last inclui o resultado anterior", async () => {
   const original = bridge.run;
   const prompts: string[] = [];
-  bridge.run = async ({ prompt }) => { prompts.push(prompt); return prompts.length === 1 ? "Resposta anterior" : "Resposta revisada"; };
+  const turns: { role: string; content: string }[][] = [];
+  bridge.run = async ({ prompt, history }) => { prompts.push(prompt); turns.push(history || []); return prompts.length === 1 ? "Resposta anterior" : "Resposta revisada"; };
   try {
     const graph = template();
     graph.nodes[1].data.config.prompt = "Analise: {{input}}";
@@ -403,7 +404,10 @@ test("Mensagem personaliza a chamada da etapa sem iteração extra; last inclui 
     assert.equal(prompts.length, 2, "Memória completa não faz chamada extra");
     assert.ok(prompts[0].endsWith("Analise: Meu pedido"));
     assert.ok(prompts[1].endsWith("Revise: Resposta anterior"));
-    assert.match(prompts[1], /Meu pedido/);
+    // A conversa vai como mensagem da pessoa, não como dado de contexto; o resultado citado não vira turno.
+    assert.deepEqual(turns[0], []);
+    assert.deepEqual(turns[1], [{ role: "user", content: "Meu pedido" }]);
+    assert.doesNotMatch(prompts[1], /Meu pedido/);
     assert.equal(runtime.message({ prompt: "Mensagem independente" }, result), "Mensagem independente");
   } finally { bridge.run = original; }
 });
@@ -593,7 +597,10 @@ test("detalhes somam resumo e resposta sem duplicar notificações cumulativas e
   };
   try {
     const f = (await flow(graph));
-    const run = await runtime.startRun(f.id, "Olá");
+    // A conversa atual vai como turno da pessoa; o resumo cobre a conversa anterior.
+    const previous = await runtime.startRun(f.id, "Pergunta passada");
+    calls = 0;
+    const run = await runtime.startRun(f.id, "Olá", false, false, undefined, [previous.id]);
     const trace = run.trace.find((entry) => entry.nodeId === "analista")!;
     assert.equal(calls, 2);
     assert.deepEqual((await store.getRun(run.id)).trace.find((entry) => entry.nodeId === "analista")!.usage, { input: 40, output: 10, total: 50 });
@@ -607,7 +614,7 @@ test("detalhes somam resumo e resposta sem duplicar notificações cumulativas e
       onUsage?.({ input: 20, output: 5, total: 25 });
       throw new Error("Falha após consumo");
     };
-    const failed = await runtime.startRun(f.id, "Outra pergunta");
+    const failed = await runtime.startRun(f.id, "Outra pergunta", false, false, undefined, [previous.id]);
     const entry = failed.trace.find((item) => item.nodeId === "analista")!;
     assert.equal(failed.status, "failed");
     assert.equal(entry.status, "failed");

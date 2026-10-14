@@ -401,7 +401,7 @@ export function NodeDialog({
             ) : k === "whatsapp" && key === "text" ? (
               <small>Mensagem enviada. Em branco não envia nada.</small>
             ) : key === "prompt" && (k === "agent" || k === "llm") ? (
-              <small>Enviada ao modelo com o papel user, depois das Instruções (system). Em branco, usa a conversa ou o resultado anterior.</small>
+              <small>Enviada ao modelo com o papel user, depois das Instruções (system). Com memória ligada, a conversa entra antes como mensagem da pessoa e o resultado anterior como resposta. Em branco, usa a conversa ou o resultado anterior.</small>
             ) : (
               labels[key][1] && <small>{labels[key][1]}</small>
             )}

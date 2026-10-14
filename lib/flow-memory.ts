@@ -31,18 +31,16 @@ function estimatedTokens(message: MemoryMessage) {
   return Math.ceil(JSON.stringify(message).length / 4);
 }
 
-// Mensagem preenchida com memória ligada: a conversa vira a primeira pergunta, o resultado
-// anterior a primeira resposta e a Mensagem a pergunta seguinte, como duas interações.
-// Turnos já citados por referência não se repetem; sem resultado anterior não há troca.
+// Mensagem preenchida com memória ligada: a conversa vira a pergunta da pessoa, o resultado
+// anterior (quando existe) a primeira resposta e a Mensagem a pergunta seguinte, como duas
+// interações. Turnos já citados por referência não se repetem.
 export function previousExchange(run: Run, config: Record<string, string>): ConversationTurn[] {
   if (!config.prompt?.trim() || !memorySettings(config).enabled) return [];
-  if (!run.trace.some((entry) => entry.type === "step" || !entry.type) || !run.output.trim() || run.output === run.input) return [];
   const cited = citedValues(run, config.system, config.prompt);
-  if (cited.has(run.output)) return [];
-  return [
-    ...(run.input.trim() && !cited.has(run.input) ? [{ role: "user" as const, content: run.input }] : []),
-    { role: "assistant", content: run.output },
-  ];
+  const turns: ConversationTurn[] = [];
+  if (run.input.trim() && !cited.has(run.input)) turns.push({ role: "user", content: run.input });
+  if (run.output.trim() && run.output !== run.input && !cited.has(run.output)) turns.push({ role: "assistant", content: run.output });
+  return turns;
 }
 export async function memoryPrompt(run: Run, config: Record<string, string>, currentMessage: string, summarize: Summarize, sent: ConversationTurn[] = []) {
   const settings = memorySettings(config);

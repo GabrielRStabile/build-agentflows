@@ -54,7 +54,8 @@ test("Agente e LLM novos e antigos recebem a conversa e todas as respostas anter
 
 test("Mensagem preenchida vira a pergunta seguinte, depois da conversa e do resultado anterior", async () => {
   const f = await flow();
-  const [, , b, c] = f.graph.nodes;
+  const [, a, b, c] = f.graph.nodes;
+  a.data.config.prompt = "Classifique o pedido";
   b.data.config.prompt = "Agora traduza para o inglês";
   c.data.config.prompt = "Confira {{Etapa anterior}}".replace("Etapa anterior", "last");
   await saveFlow(f.id, f);
@@ -64,17 +65,21 @@ test("Mensagem preenchida vira a pergunta seguinte, depois da conversa e do resu
   run.conversation = [{ input: "Pergunta passada", output: "Resposta passada" }];
   const result = await execute(run);
   assert.equal(result.status, "completed");
-  // A: primeiro bloco, sem resultado anterior: nenhuma troca simulada.
-  assert.deepEqual(calls[0].history, []);
+  // A: primeiro bloco, sem resultado anterior: a conversa é a pergunta da pessoa e a Mensagem a seguinte.
+  assert.deepEqual(calls[0].history, [{ role: "user", content: "Pedido original" }]);
+  assert.match(calls[0].prompt, /Classifique o pedido$/);
+  assert.doesNotMatch(calls[0].prompt, /Pedido original/, "a conversa não fica como dado de contexto na memória");
+  assert.match(calls[0].prompt, /Pergunta passada/);
   // B: a conversa é a primeira pergunta, a resposta de A a primeira resposta e a Mensagem a seguinte.
   assert.deepEqual(calls[1].history, [{ role: "user", content: "Pedido original" }, { role: "assistant", content: "Primeira resposta" }]);
   assert.match(calls[1].prompt, /Agora traduza para o inglês$/);
   assert.doesNotMatch(calls[1].prompt, /Primeira resposta|Pedido original/, "turnos enviados não se repetem na memória");
   assert.match(calls[1].prompt, /Pergunta passada/, "conversas anteriores continuam na memória");
-  // C: o resultado anterior citado na Mensagem não vira turno; a conversa continua como primeira pergunta.
-  assert.deepEqual(calls[2].history, []);
+  // C: o resultado anterior citado na Mensagem não vira turno; a conversa continua como pergunta da pessoa.
+  assert.deepEqual(calls[2].history, [{ role: "user", content: "Pedido original" }]);
   assert.equal(calls[2].prompt.split("First answer").length - 1, 1);
   const trace = (await getRun(result.id)).trace.filter((entry) => entry.type === "step");
+  assert.match(trace[1].input ?? "", /^Pessoa: Pedido original\n\nPessoa: Memória da conversa/);
   assert.match(trace[2].input ?? "", /^Pessoa: Pedido original\n\nAssistente: Primeira resposta\n\nPessoa: /);
   assert.equal(transcript([], "Só a mensagem"), "Só a mensagem");
 });
