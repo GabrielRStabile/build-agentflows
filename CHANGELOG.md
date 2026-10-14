@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.34.0 — 14/10/2026
+
+- Endereço publicado (`/webhook/flows/<id>`): a resposta passa a ser síncrona. O POST espera a execução terminar e devolve `200` com `id`, `status` e `output` (waiting quando há aprovação pendente); só volta `202` com `queued`/running se a execução passar do limite de tempo, e `?wait=0` responde na hora. O Conector MCP segue assíncrono.
+- Implantar › cURL: sem o parágrafo explicativo e sem o botão Copiar ao lado do título; o endereço com "Copiar link" fica visível e os demais detalhes da requisição ficam em "Detalhes da requisição", recolhido por padrão. Exemplos atualizados para a resposta síncrona.
+
 ## 0.33.0 — 14/10/2026
 
 - Implantar › cURL: o endereço publicado aceita `multipart/form-data` com o campo `input` e até cinco arquivos em `file`, que viram anexos da execução (JSON `{"input"}` continua aceito). Novo bloco **Requisição HTTP** com o endereço da API e botão "Copiar link", método, tipo de envio, campos, autenticação e formato da resposta. Os exemplos em cURL, JavaScript e Python usam multipart.
