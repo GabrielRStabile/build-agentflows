@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.30.1 — 13/10/2026
+
+- Chat de teste expandido: o modal cresce até 1600×1000 e as mensagens, a tela vazia e o campo de envio ocupam toda a largura disponível (antes limitada a 900 px). O campo de mensagem aceita até seis linhas antes de rolar; a bolha da pessoa fica em até 70% da largura.
+
 ## 0.30.0 — 13/10/2026
 
 - Nova referência `{{currentDateTime}}`: data e hora atuais em português, no horário de Brasília, resolvidas na hora da execução. Aparece ao digitar `{{` em qualquer campo (inclusive LLM e Agente) como "Data e hora atual" e é mostrada como `{{Data e hora atual}}`. O gerador de fluxos conhece a referência.
