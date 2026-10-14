@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.31.1 — 14/10/2026
+
+- LLM e Agente: no primeiro bloco com Mensagem (opcional) e memória ligada, a conversa do chat vai ao modelo como mensagem da pessoa, seguida da Mensagem, em vez de ficar só como "dados de contexto" na memória. A Entrada da etapa mostra essa transcrição.
+- Modal da etapa: as Instruções aparecem abertas acima de Entrada e Saída, em vez de um item recolhido no fim.
+
 ## 0.31.0 — 13/10/2026
 
 - LLM e Agente: a Mensagem (opcional) é enviada como a pergunta seguinte de uma conversa. Com memória ligada e um resultado anterior, o modelo recebe a conversa como primeira pergunta, o resultado da etapa anterior como primeira resposta e a Mensagem como a nova pergunta (papéis reais no OpenRouter, OpenAI e Anthropic; transcrição "Pessoa:"/"Assistente:" no ChatGPT). Turnos citados por referência não se repetem. O editor mostra o papel `user` ao lado do campo e explica o envio.
