@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.28.0 — 13/10/2026
+
+- Chat de teste: enquanto a execução roda, a bolha mostra o bloco em andamento (nome, tipo e ferramenta em uso) com o indicador de carregamento, em vez dos resultados parciais de cada etapa. A resposta aparece só ao terminar; execuções com falha mostram apenas o erro. Os detalhes de cada etapa seguem em "Etapas executadas".
+- Validação: 364 testes gerais, lint e build sem erros.
+
 ## 0.27.1 — 13/10/2026
 
 - O menu de referências `{{…}}` não é mais cortado pelo diálogo em blocos com poucos campos (ex.: Resposta): ele é posicionado em coordenadas da janela, acompanha rolagem e redimensionamento e abre para cima quando falta espaço abaixo.
