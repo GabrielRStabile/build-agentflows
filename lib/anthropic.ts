@@ -1,5 +1,5 @@
 import { addTokenUsage, type TokenUsage } from "./token-usage";
-import { providerFailure } from "./ai-provider-error";
+import { providerFailure, fetchWithRateLimitRetry } from "./ai-provider-error";
 import type { runChatCompletion } from "./chat-completion";
 
 type Content = { type: string; text?: string; id?: string; name?: string; input?: unknown; [key: string]: unknown };
@@ -19,14 +19,14 @@ export async function runAnthropic({ key, model, system, prompt, images = [], to
   let consumed: TokenUsage | undefined, missing = false;
   for (let round = 0; round < 12; round++) {
     signal?.throwIfAborted();
-    const response = await fetcher("https://api.anthropic.com/v1/messages", {
+    const { response, detail } = await fetchWithRateLimitRetry(() => fetcher("https://api.anthropic.com/v1/messages", {
       method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" }, signal, redirect: "error",
       body: JSON.stringify({ model, system, messages, max_tokens: settings.maxTokens || 4000,
         ...(settings.temperature !== undefined ? { temperature: settings.temperature } : {}),
         ...(tools.length ? { tools: tools.map(t => ({ name: t.name, description: t.description, input_schema: t.schema })) } : {}),
       }),
-    });
-    if (!response.ok) throw providerFailure(response.status, await response.text().catch(() => ""));
+    }), signal);
+    if (!response.ok) throw providerFailure(response.status, detail);
     const data = await response.json() as { content?: Content[]; stop_reason?: string; usage?: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } };
     if (!data.content?.length) throw new Error("O modelo devolveu uma resposta vazia.");
     if (data.usage) {

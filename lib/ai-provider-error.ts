@@ -21,3 +21,44 @@ export function providerFailure(status: number, body?: string) {
   const detail = providerDetail(body);
   return new FlowError(detail ? `${message} Resposta do fornecedor: ${detail}` : message, status >= 400 && status < 500 ? status : 502);
 }
+
+/** Espera máxima aceita quando o fornecedor pede para tentar de novo (limite por minuto dos planos gratuitos). */
+export const RATE_LIMIT_MAX_WAIT_MS = 60_000;
+export const RATE_LIMIT_ATTEMPTS = 3;
+/** Quanto o fornecedor pede para esperar antes de repetir: cabeçalho Retry-After ou "try again in 11.5s" / "1m2s" no corpo. */
+export function retryAfterMs(headers: Headers, body: string): number | undefined {
+  const header = headers.get("retry-after");
+  if (header) {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+    const at = Date.parse(header);
+    if (!Number.isNaN(at)) return Math.max(0, at - Date.now());
+  }
+  const match = /try again in\s+((?:\d+(?:\.\d+)?(?:ms|h|m|s)\s*)+)/i.exec(providerDetail(body));
+  if (!match) return undefined;
+  let total = 0;
+  for (const [, value, unit] of match[1].matchAll(/(\d+(?:\.\d+)?)(ms|h|m|s)/g))
+    total += Number(value) * (unit === "h" ? 3_600_000 : unit === "m" ? 60_000 : unit === "s" ? 1000 : 1);
+  return total;
+}
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+  const timer = setTimeout(() => { signal?.removeEventListener("abort", abort); resolve(); }, ms);
+  function abort() { clearTimeout(timer); reject(new Error("Execução cancelada.")); }
+  if (signal?.aborted) abort(); else signal?.addEventListener("abort", abort, { once: true });
+});
+/**
+ * Faz a chamada e repete quando o fornecedor responde 429 informando quanto esperar (até RATE_LIMIT_ATTEMPTS
+ * tentativas e RATE_LIMIT_MAX_WAIT_MS por espera). Nunca troca de modelo ou fornecedor. Em falha, devolve o
+ * corpo já lido para a mensagem de erro; em sucesso, o corpo fica por ler.
+ */
+export async function fetchWithRateLimitRetry(request: () => Promise<Response>, signal?: AbortSignal, onWait?: (ms: number) => void): Promise<{ response: Response; detail: string }> {
+  for (let attempt = 1; ; attempt++) {
+    const response = await request();
+    if (response.ok) return { response, detail: "" };
+    const detail = await response.text().catch(() => "");
+    const wait = response.status === 429 ? retryAfterMs(response.headers, detail) : undefined;
+    if (wait === undefined || wait > RATE_LIMIT_MAX_WAIT_MS || attempt >= RATE_LIMIT_ATTEMPTS) return { response, detail };
+    onWait?.(wait);
+    await sleep(wait, signal);
+  }
+}

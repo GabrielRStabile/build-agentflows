@@ -1,5 +1,5 @@
 import { addTokenUsage, tokenUsage, type TokenUsage } from "./token-usage";
-import { providerFailure } from "./ai-provider-error";
+import { providerFailure, fetchWithRateLimitRetry } from "./ai-provider-error";
 import { interpretarFalha } from "./ai";
 import type { AgentTool } from "./chatgpt";
 type Msg =
@@ -51,7 +51,7 @@ export async function runChatCompletion({
   let missingUsage = false;
   for (let round = 0; round < 12; round++) {
     if (signal?.aborted) throw new Error("Execução cancelada.");
-    const res = await fetcher(url, {
+    const { response: res, detail } = await fetchWithRateLimitRetry(() => fetcher(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${key}`,
@@ -78,8 +78,8 @@ export async function runChatCompletion({
       }),
       signal,
       redirect: "error",
-    });
-    if (!res.ok) { const detail = await res.text().catch(() => ""); throw url.startsWith("https://openrouter.ai/") ? interpretarFalha(res, detail) : providerFailure(res.status, detail); }
+    }), signal);
+    if (!res.ok) throw url.startsWith("https://openrouter.ai/") ? interpretarFalha(res, detail) : providerFailure(res.status, detail);
     const data = await res.json();
     const usage = tokenUsage(data?.usage, "openrouter");
     if (usage) { consumed = addTokenUsage(consumed, usage); consumed.partial = missingUsage || undefined; onUsage?.(consumed); }
