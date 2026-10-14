@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { findSession, requireBetaAccess, type SaasUser } from "./saas-auth";
+import { findSession, requireBetaAccess, TENANT_USER_FIELDS, type SaasUser } from "./saas-auth";
 import type { Database } from "./saas-db";
 import { AuthError } from "./saas-security";
 import { loadConfigState, commitConfigState, type ConfigState } from "./tenant-config-state";
@@ -41,7 +41,7 @@ export async function withTenantSession<T>(db: Database, token: string | undefin
 /** Worker entry: userId must be read from the persisted job, never from a request payload. */
 export async function withTenantJob<T>(db: Database, userId: string, action: () => T | Promise<T>) {
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(userId)) throw new AuthError("Usuário inválido.", 401);
-  const { rows } = await db.query<SaasUser>("SELECT id,name,email,email_verified_at,beta_status FROM users WHERE id=$1", [userId]);
+  const { rows } = await db.query<SaasUser>(`SELECT ${TENANT_USER_FIELDS} FROM users u WHERE u.id=$1`, [userId]);
   const user = rows[0] || null;
   requireBetaAccess(user);
   return run(db, user, action);

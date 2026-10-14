@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { request, Icon, IconButton } from "./StudioUI";
 import { AI_PROVIDERS, REASONING_EFFORTS, aiProvider, modelProviderId, aiCredentialProvider, type AiModel } from "@/lib/ai-providers";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
+import { formatCredentialExpiry } from "@/lib/credential-expiry";
 import { ToolSelect } from "./ToolSelect";
 import { ToolCredentialDialog } from "./ToolCredentialDialog";
 import { MEDIA_PROVIDERS, mediaModel, isMediaModel, REPLICATE_PREFIX, replicateModelName } from "@/lib/media-models";
@@ -96,8 +97,8 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
               {credentialId && !selectedCredential && <option value={credentialId}>Credencial indisponível</option>}
               <option value={NEW_CREDENTIAL}>+ Conectar nova credencial…</option>
             </select>
-            {selectedCredential && <IconButton icon="pencil" label="Editar credencial do modelo" onClick={() => setEditor(selectedCredential)} />}
-          </div></label>
+            {selectedCredential && !selectedCredential.readOnly && <IconButton icon="pencil" label="Editar credencial do modelo" onClick={() => setEditor(selectedCredential)} />}
+          </div>{selectedCredential?.expiresAt && <small>Credencial gratuita, válida até {formatCredentialExpiry(selectedCredential.expiresAt)}. Depois disso, cadastre sua própria chave.</small>}</label>
           {provider === "replicate" ? <label>Modelo da Replicate<input aria-label="Modelo da Replicate" placeholder="empresa/modelo" spellCheck={false} autoCapitalize="none" value={replicateModelName(value) || ""}
               onChange={e => onConfigChange({ model: REPLICATE_PREFIX + e.target.value.trim().toLowerCase(), modelTemperature: "", modelMaxTokens: "", modelReasoningEffort: "" })} />
             <small>Use o nome exibido na Replicate, como google/nano-banana. O resultado pode ser texto, imagens ou um vídeo, conforme o modelo. <a href="https://replicate.com/explore" target="_blank" rel="noreferrer">Explorar modelos</a></small>

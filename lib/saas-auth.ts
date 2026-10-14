@@ -7,7 +7,11 @@ import { consumeRateLimit } from "./saas-rate-limit";
 export type SaasUser = {
   id: string; name: string; email: string; email_verified_at: Date | null;
   beta_status: "pending" | "approved" | "blocked";
+  /** Momento em que a conta resgatou um convite; ausente nas contas liberadas pelo administrador. */
+  invited_at?: Date | string | null;
 };
+/** Campos da conta carregados no contexto do tenant (sessão e worker). */
+export const TENANT_USER_FIELDS = "u.id,u.name,u.email,u.email_verified_at,u.beta_status,(SELECT r.redeemed_at FROM invite_redemptions r WHERE r.user_id=u.id) AS invited_at";
 const USER_FIELDS = "id,name,email,email_verified_at,beta_status";
 export const SAAS_SESSION_COOKIE = "agentflows_session";
 export const SESSION_SECONDS = 30 * 86400;
@@ -20,7 +24,7 @@ export function requireBetaAccess(user: SaasUser | null): asserts user is SaasUs
 
 export async function findSession(sql: Sql, token: string | undefined): Promise<SaasUser | null> {
   if (!token || !/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
-  const { rows } = await sql.query<SaasUser>(`SELECT u.id,u.name,u.email,u.email_verified_at,u.beta_status
+  const { rows } = await sql.query<SaasUser>(`SELECT ${TENANT_USER_FIELDS}
     FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now()`, [hashToken(token)]);
   // No process cache: an admin's database change takes effect on the next request.
   return rows[0] || null;

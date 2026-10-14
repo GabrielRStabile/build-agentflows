@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
 import { CREDENTIAL_CATALOG } from "@/lib/tool-presentation";
+import { formatCredentialExpiry } from "@/lib/credential-expiry";
 import { ToolLogo } from "./ToolSelect";
 import { Icon, IconButton, Modal, request } from "./StudioUI";
 import { ToolCredentialDialog } from "./ToolCredentialDialog";
@@ -41,8 +42,8 @@ export function ToolCredentialsManager() {
       {loading && <p role="status">Carregando conexões…</p>}
       {!loading && !items.length && <p>Nenhuma credencial salva. Você também pode criar uma ao adicionar um modelo ou uma ferramenta no bloco.</p>}
       {!!items.length && !shown.length && <p>Nenhuma conexão encontrada para essa busca.</p>}
-      {shown.map((c) => <div className="credential-manager-row" key={c.id}><div className="credential-manager-identity"><ToolLogo id={toolFor(c)?.id || `interno:${c.provider}`} /><div><strong>{c.name}</strong><small>{toolFor(c)?.name || c.providerLabel} · {c.configured ? "Credencial salva" : "Revisar conexão"}</small></div></div><div className="studio-actions">
-        <IconButton icon="pencil" label={`Editar credencial ${c.name}`} onClick={() => setEditor(c)} /><IconButton icon="trash" label={`Excluir credencial ${c.name}`} onClick={() => { setError(""); setRemoving(c); }} />
+      {shown.map((c) => <div className="credential-manager-row" key={c.id}><div className="credential-manager-identity"><ToolLogo id={toolFor(c)?.id || `interno:${c.provider}`} /><div><strong>{c.name}</strong><small>{toolFor(c)?.name || c.providerLabel} · {c.expiresAt ? `Gratuita até ${formatCredentialExpiry(c.expiresAt)}` : c.configured ? "Credencial salva" : "Revisar conexão"}</small></div></div><div className="studio-actions">
+        {!c.readOnly && <><IconButton icon="pencil" label={`Editar credencial ${c.name}`} onClick={() => setEditor(c)} /><IconButton icon="trash" label={`Excluir credencial ${c.name}`} onClick={() => { setError(""); setRemoving(c); }} /></>}
       </div></div>)}
       {error && !removing && <div role="alert"><p className="studio-error">{error}</p><button type="button" className="tool-text-button" onClick={() => void load()}>Tentar novamente</button></div>}
     </div>

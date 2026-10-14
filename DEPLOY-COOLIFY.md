@@ -35,9 +35,35 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
 node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
 ```
 
-Não use chaves de IA globais como credenciais dos clientes. Cada conta conecta
-seus provedores na aplicação. Mantenha `TRUSTED_CLIENT_IP_HEADER` sem valor até
-validar que o proxy sobrescreve esse cabeçalho e impede sua falsificação.
+Cada conta conecta seus provedores na aplicação; a única chave de IA do
+ambiente é a credencial compartilhada abaixo, limitada no tempo. Mantenha
+`TRUSTED_CLIENT_IP_HEADER` sem valor até validar que o proxy sobrescreve esse
+cabeçalho e impede sua falsificação.
+
+### Credencial compartilhada (free tier)
+
+Opcional. Com `OPENAI_CHAVE_COMPARTILHADA` definida, toda conta que entrou por
+convite vê, em Credenciais e no seletor de credencial dos blocos LLM/Agente com
+OpenAI, a credencial **StartSe OpenAI API (free tier)** durante as 72 horas
+seguintes ao resgate do convite. Ela aparece primeiro na lista, é somente
+leitura (sem editar nem excluir) e a chave fica apenas no ambiente: nada é
+copiado para o banco das contas nem enviado ao navegador.
+
+- `OPENAI_CHAVE_COMPARTILHADA`: chave da OpenAI (sk-…). Em branco, nada é
+  oferecido.
+- `OPENAI_CHAVE_COMPARTILHADA_NOME`: nome exibido antes de "(free tier)";
+  padrão `StartSe OpenAI API`.
+- `OPENAI_CHAVE_COMPARTILHADA_HORAS`: duração contada a partir do resgate do
+  convite; padrão `72`.
+
+Ao terminar o prazo, a credencial some da lista e os blocos que a escolheram
+param com a mensagem "O período gratuito da credencial … terminou em
+dd/mm/aaaa, hh:mm. Cadastre sua própria chave da OpenAI no bloco." Contas
+liberadas pelo administrador sem convite não a recebem; convites resgatados
+antes de a variável existir contam o prazo desde o resgate. Trocar a chave ou
+removê-la do ambiente vale na próxima requisição, inclusive para execuções já
+enfileiradas. Defina um limite de gasto para essa chave no painel da OpenAI:
+a aplicação não mede o consumo por conta.
 
 ## Inicialização e operação
 
