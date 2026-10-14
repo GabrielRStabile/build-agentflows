@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.32.0 — 14/10/2026
+
+- Implantar › cURL: seletor **Acesso** com "Público" (padrão) e "Com autenticação". No modo público o endereço `/webhook/flows/<id>` executa fluxos publicados sem chave e os exemplos saem sem o cabeçalho Authorization; no modo com autenticação a chave da conta continua obrigatória e só então a seção Chave de acesso (gerar, copiar, revogar) aparece na aba. O Conector MCP segue sempre com chave. A escolha é salva por fluxo (GET/PUT /api/flows/[id]/acesso). Fluxos não publicados não respondem ao público.
+
 ## 0.31.3 — 14/10/2026
 
 - Transcrição da etapa: o rótulo "Pessoa" passa a "Usuário" na Entrada e no texto enviado ao ChatGPT (App Server).
