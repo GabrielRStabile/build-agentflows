@@ -593,7 +593,7 @@ test("detalhes somam resumo e resposta sem duplicar notificações cumulativas e
     calls++;
     onUsage?.({ input: 10, output: 2, total: 12 });
     onUsage?.({ input: 20, output: 5, total: 25 });
-    return calls % 2 ? "Resumo da memória" : "Resposta final";
+    return ["Resumo da memória", "Primeira resposta", "Resposta final"][(calls - 1) % 3];
   };
   try {
     const f = (await flow(graph));
@@ -602,9 +602,11 @@ test("detalhes somam resumo e resposta sem duplicar notificações cumulativas e
     calls = 0;
     const run = await runtime.startRun(f.id, "Olá", false, false, undefined, [previous.id]);
     const trace = run.trace.find((entry) => entry.nodeId === "analista")!;
-    assert.equal(calls, 2);
-    assert.deepEqual((await store.getRun(run.id)).trace.find((entry) => entry.nodeId === "analista")!.usage, { input: 40, output: 10, total: 50 });
+    // Resumo da memória, resposta à conversa e resposta à Mensagem: três chamadas somadas.
+    assert.equal(calls, 3);
+    assert.deepEqual((await store.getRun(run.id)).trace.find((entry) => entry.nodeId === "analista")!.usage, { input: 60, output: 15, total: 75 });
     assert.match(trace.input!, /Resumo da memória/);
+    assert.match(trace.input!, /Assistente: Primeira resposta/);
     assert.match(trace.input!, /Analise com cuidado/);
     assert.equal(trace.instructions, "Instrução registrada");
     assert.equal(trace.output, "Resposta final");

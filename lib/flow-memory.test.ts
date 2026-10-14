@@ -57,34 +57,38 @@ test("Mensagem preenchida vira a pergunta seguinte, depois da conversa e do resu
   const [, a, b, c] = f.graph.nodes;
   a.data.config.prompt = "Classifique o pedido";
   b.data.config.prompt = "Agora traduza para o inglês";
-  c.data.config.prompt = "Confira {{Etapa anterior}}".replace("Etapa anterior", "last");
+  c.data.config.prompt = "Confira {{last}}";
   await saveFlow(f.id, f);
   const calls: { prompt: string; history?: { role: string; content: string }[] }[] = [];
-  bridge.run = async ({ prompt, history }) => { calls.push({ prompt, history }); return ["Primeira resposta", "First answer", "Ok"][calls.length - 1]; };
+  bridge.run = async ({ prompt, history }) => { calls.push({ prompt, history }); return ["Entendido", "Primeira resposta", "First answer", "Ok"][calls.length - 1]; };
   const run = await prepareRun(f.id, "Pedido original", false, false);
   run.conversation = [{ input: "Pergunta passada", output: "Resposta passada" }];
   const result = await execute(run);
   assert.equal(result.status, "completed");
-  // A: primeiro bloco, sem resultado anterior: a conversa é a pergunta da pessoa e a Mensagem a seguinte.
-  assert.deepEqual(calls[0].history, [{ role: "user", content: "Pedido original" }]);
-  assert.match(calls[0].prompt, /Classifique o pedido$/);
-  assert.doesNotMatch(calls[0].prompt, /Pedido original/, "a conversa não fica como dado de contexto na memória");
+  assert.equal(calls.length, 4, "o primeiro bloco faz duas interações; os demais, uma");
+  // A, primeira interação: a conversa (com a memória anterior) recebe uma resposta real.
+  assert.deepEqual(calls[0].history, []);
   assert.match(calls[0].prompt, /Pergunta passada/);
-  // B: a conversa é a primeira pergunta, a resposta de A a primeira resposta e a Mensagem a seguinte.
-  assert.deepEqual(calls[1].history, [{ role: "user", content: "Pedido original" }, { role: "assistant", content: "Primeira resposta" }]);
-  assert.match(calls[1].prompt, /Agora traduza para o inglês$/);
-  assert.doesNotMatch(calls[1].prompt, /Primeira resposta|Pedido original/, "turnos enviados não se repetem na memória");
-  assert.match(calls[1].prompt, /Pergunta passada/, "conversas anteriores continuam na memória");
-  // C: o resultado anterior citado na Mensagem não vira turno; a conversa continua como pergunta da pessoa.
-  assert.deepEqual(calls[2].history, [{ role: "user", content: "Pedido original" }]);
-  assert.equal(calls[2].prompt.split("First answer").length - 1, 1);
+  assert.match(calls[0].prompt, /Pedido original$/);
+  // A, segunda interação: a Mensagem chega depois dessa resposta, como pergunta seguinte.
+  assert.deepEqual(calls[1].history, [{ role: "user", content: calls[0].prompt }, { role: "assistant", content: "Entendido" }]);
+  assert.equal(calls[1].prompt, "Classifique o pedido");
+  // B: a conversa é a pergunta da pessoa, a resposta de A a primeira resposta e a Mensagem a seguinte.
+  assert.deepEqual(calls[2].history, [{ role: "user", content: "Pedido original" }, { role: "assistant", content: "Primeira resposta" }]);
+  assert.match(calls[2].prompt, /Agora traduza para o inglês$/);
+  assert.doesNotMatch(calls[2].prompt, /Primeira resposta|Pedido original/, "turnos enviados não se repetem na memória");
+  assert.match(calls[2].prompt, /Pergunta passada/, "conversas anteriores continuam na memória");
+  // C: o resultado anterior citado na Mensagem não vira turno nem abre nova interação.
+  assert.deepEqual(calls[3].history, [{ role: "user", content: "Pedido original" }]);
+  assert.equal(calls[3].prompt.split("First answer").length - 1, 1);
   const trace = (await getRun(result.id)).trace.filter((entry) => entry.type === "step");
-  assert.match(trace[1].input ?? "", /^Pessoa: Pedido original\n\nPessoa: Memória da conversa/);
+  assert.match(trace[1].input ?? "", /^Pessoa: Memória da conversa[\s\S]*Pedido original\n\nAssistente: Entendido\n\nPessoa: Classifique o pedido/);
+  assert.equal(trace[1].output, "Primeira resposta");
   assert.match(trace[2].input ?? "", /^Pessoa: Pedido original\n\nAssistente: Primeira resposta\n\nPessoa: /);
   assert.equal(transcript([], "Só a mensagem"), "Só a mensagem");
 });
 
-test("primeiro bloco com Mensagem: a Entrada do modal mostra a conversa e a Mensagem como duas interações", async () => {
+test("primeiro bloco com Mensagem: responde à conversa e recebe a Mensagem em seguida; a Entrada mostra as duas interações", async () => {
   const f = await flow();
   const supervisor = f.graph.nodes[1];
   supervisor.data.label = "Supervisor";
@@ -92,13 +96,14 @@ test("primeiro bloco com Mensagem: a Entrada do modal mostra a conversa e a Mens
   supervisor.data.config.prompt = "Padronize a resposta apenas como o nome do próximo agente a agir.";
   await saveFlow(f.id, f);
   const calls: { prompt: string; history?: { role: string; content: string }[] }[] = [];
-  bridge.run = async ({ prompt, history }) => { calls.push({ prompt, history }); return "ESCRITOR"; };
+  bridge.run = async ({ prompt, history }) => { calls.push({ prompt, history }); return ["Entendido o pedido.", "ESCRITOR"][calls.length - 1]; };
   const result = await startRun(f.id, "HIC", false, false);
   assert.equal(result.status, "completed");
-  assert.deepEqual(calls[0].history, [{ role: "user", content: "HIC" }]);
-  assert.equal(calls[0].prompt, "Padronize a resposta apenas como o nome do próximo agente a agir.");
+  assert.deepEqual(calls[0], { prompt: "HIC", history: [] });
+  assert.deepEqual(calls[1], { prompt: "Padronize a resposta apenas como o nome do próximo agente a agir.", history: [{ role: "user", content: "HIC" }, { role: "assistant", content: "Entendido o pedido." }] });
   const step = (await getRun(result.id)).trace.find((entry) => entry.nodeId === supervisor.id)!;
-  assert.equal(step.input, "Pessoa: HIC\n\nPessoa: Padronize a resposta apenas como o nome do próximo agente a agir.");
+  assert.equal(step.input, "Pessoa: HIC\n\nAssistente: Entendido o pedido.\n\nPessoa: Padronize a resposta apenas como o nome do próximo agente a agir.");
+  assert.equal(step.output, "ESCRITOR");
   assert.equal(step.instructions, "Você é o supervisor.");
 });
 
