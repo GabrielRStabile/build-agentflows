@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.40.0 — 14/10/2026
+
+- Base de conhecimento com fluxo básico pronto: a credencial OpenAI compartilhada (free tier) vale também para o provedor de embeddings OpenAI, aparece primeiro na lista e é selecionada por padrão quando a base ainda não tem credencial. Bases novas nascem com embeddings OpenAI (text-embedding-3-small) nessa credencial, Faiss e registro interno, prontas para indexar; cada etapa continua editável. A credencial é somente leitura, mostra até quando vale e, ao terminar o prazo, a base pede outra credencial na indexação. Contas sem a credencial compartilhada seguem como antes.
+
 ## 0.39.0 — 14/10/2026
 
 - Cadastro: depois de criar a conta a tela vira "Confira seu e-mail", com o endereço informado, orientação sobre spam e o botão **Reenviar e-mail**, liberado após 30 segundos e com nova espera de 60 segundos a cada envio. Em Seu acesso, com e-mail pendente, o mesmo botão substitui o reenvio imediato (espera inicial de 15 segundos). Quem já tinha conta com o e-mail é orientado a entrar com a senha.
