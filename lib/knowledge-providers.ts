@@ -141,7 +141,8 @@ export const RECORD_PROVIDERS = [
   {
     id: "internal",
     name: "Registro interno",
-    icon: logo("records", "postgres"),
+    // Ícone próprio (o do SQLite, herdado do Record Manager original) para não se confundir com o Postgres.
+    icon: logo("records", "sqlite", "png"),
     description: "Controle dos registros privado para sua conta.",
   },
   {
