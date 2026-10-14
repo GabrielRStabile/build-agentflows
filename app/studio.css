@@ -1854,6 +1854,13 @@
   background: var(--studio-primary-soft);
   color: var(--studio-primary);
 }
+/* Ícones de traço do app (desfazer, refazer, grade) nos controles: o React Flow preenche todo
+   SVG com fill: currentColor, o que transformava o traço em mancha. */
+.studio-canvas .react-flow__controls-button svg[fill="none"] {
+  fill: none;
+  max-width: 16px;
+  max-height: 16px;
+}
 .studio-canvas .react-flow__minimap {
   width: 155px;
   height: 104px;
