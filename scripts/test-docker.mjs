@@ -218,8 +218,11 @@ try {
     assert.deepEqual(JSON.parse(listed.body.result.content[0].text).map(f => f.id), [fixture.flowId]);
     assert.deepEqual(JSON.parse((await call(codeB, 'listar_fluxos')).body.result.content[0].text), []);
     assert.equal((await request(codeB, '/webhook/flows/' + fixture.flowId, { input: 'Forbidden' }, 'POST', true)).status, 404);
-    const accepted = await request(codeA, '/webhook/flows/' + fixture.flowId, { input: 'Webhook' }, 'POST', true);
+    // The published endpoint answers synchronously since 0.34.0; ?wait=0 keeps the queued contract under test.
+    const accepted = await request(codeA, '/webhook/flows/' + fixture.flowId + '?wait=0', { input: 'Webhook' }, 'POST', true);
     assert.equal(accepted.status, 202); assert.equal(accepted.body.queued, true);
+    const synchronous = await request(codeA, '/webhook/flows/' + fixture.flowId, { input: 'Webhook sync' }, 'POST', true);
+    assert.equal(synchronous.status, 200); assert.equal(synchronous.body.status, 'completed'); assert.equal(synchronous.body.output, 'Worker completed');
     let completed = false;
     for (let i=0; i<25; i++) {
       const result = await request(codeA, '/webhook/flows/' + fixture.flowId + '?runId=' + accepted.body.id, undefined, 'GET', true);
