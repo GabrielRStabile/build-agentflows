@@ -136,6 +136,8 @@ export type Run = {
   attachments?: Attachment[];
   mediaRequests?: (import("./media-provider").MediaRequest & { nodeId: string; at: string })[];
   conversation?: { input: string; output: string }[];
+  // Sessão de conversa informada ou gerada pelo endereço publicado; liga execuções da mesma conversa.
+  session?: string;
   output: string;
   error?: string;
   graph: Graph;

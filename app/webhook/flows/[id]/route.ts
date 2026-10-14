@@ -13,8 +13,8 @@ async function handle(req: Request, c: Context, action: () => Promise<unknown>) 
 }
 export async function POST(req: Request, c: Context) {
   return handle(req, c, async () => {
-    const { input, files } = await integrationPayload(req);
-    const accepted = await enqueueIntegrationRun((await c.params).id, input, files);
+    const { input, files, session } = await integrationPayload(req);
+    const accepted = await enqueueIntegrationRun((await c.params).id, input, files, session);
     // Resposta síncrona: espera a execução terminar (até o limite de execução); ?wait=0 devolve 202 na hora.
     const run = await awaitRun(accepted.id, integrationWaitMs(new URL(req.url).searchParams.get("wait")));
     return privateJson(executionSummary(run), { status: settled(run) ? 200 : 202 });

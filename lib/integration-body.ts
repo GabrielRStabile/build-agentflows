@@ -3,11 +3,11 @@ import { FlowError } from "./flow-store";
 import { limitedJson } from "./saas-http";
 import { MAX_ATTACHMENTS, MAX_FILE_BYTES, MAX_TOTAL_BYTES } from "./attachment-types";
 
-// Corpo da execução publicada: multipart/form-data (campo "input" e até cinco "file") ou JSON {"input"}.
+// Corpo da execução publicada: multipart/form-data (campos "input", "session" e até cinco "file") ou JSON {"input","session"}.
 // O multipart é o formato dos exemplos de Implantar; o JSON continua aceito pelas integrações antigas.
-export async function integrationPayload(req: Request): Promise<{ input: unknown; files: File[] }> {
+export async function integrationPayload(req: Request): Promise<{ input: unknown; files: File[]; session: unknown }> {
   const type = (req.headers.get("content-type") || "").toLowerCase();
-  if (!type.startsWith("multipart/form-data")) return { input: (await limitedJson(req, 300000)).input, files: [] };
+  if (!type.startsWith("multipart/form-data")) { const json = await limitedJson(req, 300000); return { input: json.input, files: [], session: json.session }; }
   const reader = req.body?.getReader();
   if (!reader) throw new AuthError("Envie o campo input no formulário.");
   const chunks: Uint8Array[] = []; let size = 0;
@@ -25,6 +25,6 @@ export async function integrationPayload(req: Request): Promise<{ input: unknown
   if (files.length > MAX_ATTACHMENTS) throw new FlowError(`Envie até ${MAX_ATTACHMENTS} arquivos no campo file.`);
   if (files.some((file) => file.size > MAX_FILE_BYTES)) throw new FlowError("Cada arquivo pode ter até 10 MB.", 413);
   if (files.reduce((total, file) => total + file.size, 0) > MAX_TOTAL_BYTES) throw new FlowError("Os arquivos somam mais de 20 MB.", 413);
-  const input = form.get("input");
-  return { input: typeof input === "string" ? input : undefined, files };
+  const input = form.get("input"), session = form.get("session");
+  return { input: typeof input === "string" ? input : undefined, files, session: typeof session === "string" ? session : undefined };
 }

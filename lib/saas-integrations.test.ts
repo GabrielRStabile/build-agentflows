@@ -148,6 +148,38 @@ test("execução publicada aceita multipart/form-data com input e arquivos no ca
   assert.equal((await x.post()).status, 200);
 });
 
+test("sessão de conversa: gerada quando ausente, reenviada liga as interações e inválida é recusada", async t => {
+  const x = await setup(t);
+  const send = (data: Record<string, unknown>) => x.complete(x.connect(() => webhook.POST(external(x.codeA, data, `/webhook/flows/${x.flow.id}`), { params: Promise.resolve({ id: x.flow.id }) })));
+  // Sem sessão: o servidor gera uma e devolve; a execução começa sem histórico.
+  const first = await (await send({ input: "Primeira" })).json();
+  assert.equal(first.status, "completed"); assert.match(first.session, /^[0-9a-f-]{36}$/);
+  assert.equal((await x.asTenant(() => getTenantRun(first.id))).conversation, undefined);
+  // Reenviada: a nova chamada recebe a interação anterior como histórico e mantém a mesma sessão.
+  const second = await (await send({ input: "Segunda", session: first.session })).json();
+  assert.equal(second.session, first.session);
+  assert.deepEqual((await x.asTenant(() => getTenantRun(second.id))).conversation, [{ input: "Primeira", output: "Concluído" }]);
+  const third = await (await send({ input: "Terceira", session: first.session })).json();
+  assert.deepEqual((await x.asTenant(() => getTenantRun(third.id))).conversation, [{ input: "Primeira", output: "Concluído" }, { input: "Segunda", output: "Concluído" }]);
+  // Sessão escolhida pelo cliente e ainda desconhecida: começa limpa; outra sessão não vê a primeira.
+  const mine = await (await send({ input: "Minha", session: "cliente-42" })).json();
+  assert.equal(mine.session, "cliente-42");
+  assert.equal((await x.asTenant(() => getTenantRun(mine.id))).conversation, undefined);
+  // A consulta devolve a sessão; o multipart também a aceita.
+  const read = await (await x.connect(() => webhook.GET(external(x.codeA, undefined, `/webhook/flows/${x.flow.id}?runId=${second.id}`), { params: Promise.resolve({ id: x.flow.id }) }))).json();
+  assert.equal(read.session, first.session);
+  const form = new FormData(); form.set("input", "Quarta"); form.set("session", "cliente-42");
+  const fourth = await (await x.complete(x.connect(() => webhook.POST(new Request(`https://app.example.com/webhook/flows/${x.flow.id}`, { method: "POST", body: form }), { params: Promise.resolve({ id: x.flow.id }) })))).json();
+  assert.equal(fourth.session, "cliente-42");
+  assert.deepEqual((await x.asTenant(() => getTenantRun(fourth.id))).conversation, [{ input: "Minha", output: "Concluído" }]);
+  // Id inválido é recusado antes de executar; a sessão de outra conta nunca é vista.
+  const invalid = await send({ input: "Olá", session: "com espaço" }); assert.equal(invalid.status, 400);
+  assert.match((await invalid.json()).error, /id de sessão/);
+  const other = await x.complete(x.connect(() => webhook.POST(external(x.codeB, { input: "B", session: first.session }, `/webhook/flows/${x.flowB.id}`), { params: Promise.resolve({ id: x.flowB.id }) })));
+  const otherId = (await other.json()).id as string;
+  assert.equal((await x.asB(() => getTenantRun(otherId))).conversation, undefined);
+});
+
 test("MCP enfileira aprovação uma vez e consulta progresso pelo mesmo worker", async t => {
   const x = await setup(t, true);
   const accepted = toolData(await (await x.rpc(x.codeA, "executar_fluxo", { id: x.flow.id, input: "Aprovar" })).json());

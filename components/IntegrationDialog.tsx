@@ -95,28 +95,30 @@ export function IntegrationDialog({
   const snippets: Record<CodeTab, string> = {
     curl: `curl -X POST '${url}' \\
 ${authenticated ? `  -H 'Authorization: Bearer ${bearer}' \\\n` : ""}  -F 'input=Sua mensagem' \\
+  -F 'session=minha-conversa' \\
   -F 'file=@/caminho/documento.pdf'`,
     javascript: `const form = new FormData();
 form.append("input", "Sua mensagem");
+form.append("session", "minha-conversa"); // opcional: reenvie para continuar a mesma conversa
 form.append("file", arquivo); // opcional: File ou Blob, até 5 arquivos
 
 const resposta = await fetch("${url}", {
   method: "POST",
 ${authenticated ? `  headers: { Authorization: "Bearer ${bearer}" },\n` : ""}  body: form, // multipart/form-data; o navegador define o boundary
 });
-const { id, status, output } = await resposta.json(); // responde quando a execução termina
+const { id, status, output, session } = await resposta.json(); // responde quando a execução termina
 // Se vier 202 (limite de tempo), consulte: GET ${url}?runId=ID_RECEBIDO
 ${authenticated ? "// Envie o mesmo cabeçalho Authorization." : "// Acesso público: nenhuma chave é necessária."}`,
     python: `import requests
 
 resposta = requests.post(
     "${url}",
-${authenticated ? `    headers={"Authorization": "Bearer ${bearer}"},\n` : ""}    data={"input": "Sua mensagem"},
+${authenticated ? `    headers={"Authorization": "Bearer ${bearer}"},\n` : ""}    data={"input": "Sua mensagem", "session": "minha-conversa"},  # session é opcional
     files=[("file", open("documento.pdf", "rb"))],  # opcional, até 5 arquivos
     timeout=180,
 )
 dados = resposta.json()  # responde quando a execução termina
-print(dados["status"], dados["output"])
+print(dados["status"], dados["output"], dados["session"])
 # Se vier 202 (limite de tempo), consulte: GET ${url}?runId=ID_RECEBIDO
 ${authenticated ? "# Envie o mesmo cabeçalho Authorization." : "# Acesso público: nenhuma chave é necessária."}`,
     mcp: JSON.stringify(
@@ -437,9 +439,10 @@ ${authenticated ? "# Envie o mesmo cabeçalho Authorization." : "# Acesso públi
               <div><dt>Método</dt><dd><code>POST</code> executa e responde com o resultado; <code>GET ?runId=</code> consulta uma execução</dd></div>
               <div><dt>Content-Type</dt><dd><code>multipart/form-data</code> (JSON <code>{'{"input"}'}</code> também é aceito)</dd></div>
               <div><dt>Campo input</dt><dd>texto da mensagem, obrigatório, até 20 mil caracteres</dd></div>
+              <div><dt>Campo session</dt><dd>opcional, até 100 caracteres (letras, números, ponto, traço, sublinhado, dois-pontos). Sem ele, o servidor gera um e devolve na resposta; reenviado, a chamada continua a mesma conversa e os blocos com memória recebem as interações anteriores</dd></div>
               <div><dt>Campo file</dt><dd>opcional, até 5 arquivos de 10 MB (20 MB no total): PNG, JPG, WebP, PDF, TXT, MD, CSV e JSON; exige um bloco de IA no fluxo</dd></div>
               <div><dt>Autenticação</dt><dd>{authenticated ? <>cabeçalho <code>Authorization: Bearer CHAVE</code></> : "nenhuma (acesso público)"}</dd></div>
-              <div><dt>Resposta</dt><dd>síncrona: <code>200</code> com <code>{'{"id","status","output"}'}</code> ao terminar (<code>status</code> completed, failed ou waiting para aprovação pendente). Se a execução passar do limite de tempo, <code>202</code> com <code>queued</code> ou running: consulte com <code>GET ?runId=</code>. <code>?wait=0</code> responde 202 na hora, sem esperar</dd></div>
+              <div><dt>Resposta</dt><dd>síncrona: <code>200</code> com <code>{'{"id","status","output","session"}'}</code> ao terminar (<code>status</code> completed, failed ou waiting para aprovação pendente). Se a execução passar do limite de tempo, <code>202</code> com <code>queued</code> ou running: consulte com <code>GET ?runId=</code>. <code>?wait=0</code> responde 202 na hora, sem esperar</dd></div>
             </dl>
             </details>
           </div>}
