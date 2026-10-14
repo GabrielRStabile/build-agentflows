@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.43.0 — 14/10/2026
+
+- Convite mais fluido: o `?invite=` do link de cadastro segue por todas as telas, vai no link de confirmação de e-mail (vale em outro navegador) e é aplicado sem clique assim que a conta está confirmada, ao entrar com senha, ao abrir o link de confirmação já na conta ou ao voltar do Google. Convite válido leva direto ao espaço; inválido ou esgotado abre Seu acesso com a explicação. O reenvio da confirmação também leva o convite.
+- `npm run test:jornada`: jornada de conta pelo HTTP real (next start + banco descartável em `SAAS_TEST_DATABASE_URL`) cobrindo cadastro com convite, confirmação, login, convite sem clique e o redirecionamento de `/acesso`.
+
 ## 0.42.2 — 14/10/2026
 
 - Seu acesso (/acesso): conta com e-mail confirmado e acesso liberado é redirecionada direto para o espaço, em vez de ver o botão "Abrir meu espaço". Vale ao abrir o endereço (redirecionamento no servidor, descartando convite pendente) e ao clicar em "Verificar liberação".
