@@ -1,8 +1,13 @@
 # Histórico de versões
 
+## 0.31.3 — 14/10/2026
+
+- Transcrição da etapa: o rótulo "Pessoa" passa a "Usuário" na Entrada e no texto enviado ao ChatGPT (App Server).
+- Modal da etapa: a memória enviada ao modelo (resumo e mensagens anteriores) aparece em um bloco recolhível "Memória", no mesmo formato das Instruções e logo abaixo delas, com o JSON formatado. A Entrada mostra só a troca da etapa (Usuário, Assistente, Usuário). O que o modelo recebe não mudou.
+
 ## 0.31.2 — 14/10/2026
 
-- LLM e Agente: no primeiro bloco com Mensagem (opcional) e memória ligada, o modelo responde primeiro à conversa do chat e só então recebe a Mensagem como pergunta seguinte, com o histórico dessa troca. A Entrada da etapa mostra Pessoa, Assistente e Pessoa; os tokens somam as duas chamadas. Blocos seguintes continuam em uma chamada, com o resultado anterior no papel da resposta.
+- LLM e Agente: no primeiro bloco com Mensagem (opcional) e memória ligada, o modelo responde primeiro à conversa do chat e só então recebe a Mensagem como pergunta seguinte, com o histórico dessa troca. A Entrada da etapa mostra Usuário, Assistente e Usuário; os tokens somam as duas chamadas. Blocos seguintes continuam em uma chamada, com o resultado anterior no papel da resposta.
 
 ## 0.31.1 — 14/10/2026
 
@@ -11,7 +16,7 @@
 
 ## 0.31.0 — 13/10/2026
 
-- LLM e Agente: a Mensagem (opcional) é enviada como a pergunta seguinte de uma conversa. Com memória ligada e um resultado anterior, o modelo recebe a conversa como primeira pergunta, o resultado da etapa anterior como primeira resposta e a Mensagem como a nova pergunta (papéis reais no OpenRouter, OpenAI e Anthropic; transcrição "Pessoa:"/"Assistente:" no ChatGPT). Turnos citados por referência não se repetem. O editor mostra o papel `user` ao lado do campo e explica o envio.
+- LLM e Agente: a Mensagem (opcional) é enviada como a pergunta seguinte de uma conversa. Com memória ligada e um resultado anterior, o modelo recebe a conversa como primeira pergunta, o resultado da etapa anterior como primeira resposta e a Mensagem como a nova pergunta (papéis reais no OpenRouter, OpenAI e Anthropic; transcrição "Usuário:"/"Assistente:" no ChatGPT). Turnos citados por referência não se repetem. O editor mostra o papel `user` ao lado do campo e explica o envio.
 - Chat de teste: o botão Limpar conversa fica vermelho no canvas e no modal expandido.
 - Editor: os ícones de desfazer e refazer foram redesenhados e deixam de aparecer preenchidos nos controles do canvas.
 
