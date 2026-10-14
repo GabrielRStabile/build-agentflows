@@ -11,6 +11,7 @@
     "test:saas": "node --import ./scripts/gancho-ts.mjs --test lib/saas-*.test.ts",
     "test:redis": "node --import ./scripts/gancho-ts.mjs scripts/test-redis-queue.mjs",
     "test:postgres": "node scripts/test-postgres.mjs",
+    "test:jornada": "node --import ./scripts/gancho-ts.mjs scripts/test-jornada-conta.mjs",
     "test:docker": "node scripts/test-docker.mjs",
     "db:migrate": "node --import ./scripts/gancho-ts.mjs scripts/migrate-saas.mjs",
     "db:generate": "drizzle-kit generate",

@@ -77,6 +77,11 @@ npm run lint
 npm run build
 ```
 
+`npm run test:jornada` percorre a jornada de conta pelo HTTP real (cadastro com
+convite, link de confirmação, login, convite sem clique e redirecionamento de
+`/acesso`): sobe `next start` (depois de `npm run build`) contra um banco
+descartável criado em `SAAS_TEST_DATABASE_URL`, sem e-mails reais.
+
 ## Rodar com Docker
 
 Configure `.env` com `APP_URL=http://localhost:3019`, chave mestra, senhas do
