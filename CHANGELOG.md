@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.30.0 — 13/10/2026
+
+- Nova referência `{{currentDateTime}}`: data e hora atuais em português, no horário de Brasília, resolvidas na hora da execução. Aparece ao digitar `{{` em qualquer campo (inclusive LLM e Agente) como "Data e hora atual" e é mostrada como `{{Data e hora atual}}`. O gerador de fluxos conhece a referência.
+- Validação: 365 testes gerais, lint e build sem erros.
+
 ## 0.29.0 — 13/10/2026
 
 - Referências nativas em português nos campos do editor: `{{input}}` aparece como `{{Conversa}}`, `{{last}}` como `{{Etapa anterior}}` e `{{state.approval}}` como `{{Decisão da aprovação}}`, no autocompletar, no destaque colorido e no texto. O fluxo continua gravando as chaves do motor, que seguem aceitas quando digitadas à mão e em arquivos importados. Blocos com um desses nomes seguem pelo id. Placeholders e textos de ajuda atualizados.
