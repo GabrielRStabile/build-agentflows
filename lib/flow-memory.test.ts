@@ -82,9 +82,11 @@ test("Mensagem preenchida vira a pergunta seguinte, depois da conversa e do resu
   assert.deepEqual(calls[3].history, [{ role: "user", content: "Pedido original" }]);
   assert.equal(calls[3].prompt.split("First answer").length - 1, 1);
   const trace = (await getRun(result.id)).trace.filter((entry) => entry.type === "step");
-  assert.match(trace[1].input ?? "", /^Pessoa: Memória da conversa[\s\S]*Pedido original\n\nAssistente: Entendido\n\nPessoa: Classifique o pedido/);
+  assert.equal(trace[1].input, "Usuário: Pedido original\n\nAssistente: Entendido\n\nUsuário: Classifique o pedido");
+  assert.match(trace[1].memory ?? "", /Pergunta passada/, "a memória fica separada da entrada no registro");
+  assert.doesNotMatch(trace[1].input ?? "", /Memória da conversa|Pergunta passada/);
   assert.equal(trace[1].output, "Primeira resposta");
-  assert.match(trace[2].input ?? "", /^Pessoa: Pedido original\n\nAssistente: Primeira resposta\n\nPessoa: /);
+  assert.match(trace[2].input ?? "", /^Usuário: Pedido original\n\nAssistente: Primeira resposta\n\nUsuário: /);
   assert.equal(transcript([], "Só a mensagem"), "Só a mensagem");
 });
 
@@ -102,7 +104,8 @@ test("primeiro bloco com Mensagem: responde à conversa e recebe a Mensagem em s
   assert.deepEqual(calls[0], { prompt: "HIC", history: [] });
   assert.deepEqual(calls[1], { prompt: "Padronize a resposta apenas como o nome do próximo agente a agir.", history: [{ role: "user", content: "HIC" }, { role: "assistant", content: "Entendido o pedido." }] });
   const step = (await getRun(result.id)).trace.find((entry) => entry.nodeId === supervisor.id)!;
-  assert.equal(step.input, "Pessoa: HIC\n\nAssistente: Entendido o pedido.\n\nPessoa: Padronize a resposta apenas como o nome do próximo agente a agir.");
+  assert.equal(step.input, "Usuário: HIC\n\nAssistente: Entendido o pedido.\n\nUsuário: Padronize a resposta apenas como o nome do próximo agente a agir.");
+  assert.equal(step.memory, undefined, "sem conversas anteriores não há memória a mostrar");
   assert.equal(step.output, "ESCRITOR");
   assert.equal(step.instructions, "Você é o supervisor.");
 });

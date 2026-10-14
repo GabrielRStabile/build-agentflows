@@ -102,6 +102,8 @@ export type Trace = {
   status?: "running" | "completed" | "failed";
   input?: string;
   instructions?: string;
+  // Memória enviada ao modelo nesta etapa (JSON com resumo e mensagens anteriores), separada da entrada.
+  memory?: string;
   usage?: TokenUsage;
   nodeId: string;
   label: string;

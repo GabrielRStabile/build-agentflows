@@ -12,6 +12,9 @@ export function TraceRow({ trace, onOpen }: { trace: Trace; onOpen: () => void }
     <strong>{trace.label}</strong><small>{trace.status === "running" ? "Em execução" : `${trace.status === "failed" ? "Falhou · " : ""}${traceDuration(trace.ms)}`}</small><Icon name="expand" size={14} />
   </button>;
 }
+function pretty(text: string) {
+  try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; }
+}
 function Payload({ text, empty }: { text?: string; empty: string }) {
   if (text === undefined) return <p className="trace-empty">{empty}</p>;
   let json: string | undefined;
@@ -39,6 +42,7 @@ export function TraceDetails({ trace, kind, onClose }: { trace: Trace; kind?: Ki
       <p>{trace.knowledge.count} trecho(s) recuperado(s) em {trace.knowledge.bases?.length || 0} base(s).</p>
     </section>}
     {trace.instructions && <details className="trace-instructions" open><summary>{kind === "agent" ? "Instruções do agente" : "Instruções"}</summary><pre>{trace.instructions}</pre></details>}
+    {trace.memory && <details className="trace-instructions trace-memory" open><summary>Memória</summary><pre>{pretty(trace.memory)}</pre></details>}
     <div className="trace-payloads">
       <section><h3>Entrada</h3><Payload text={trace.input} empty="Entrada não registrada nesta execução." /></section>
       <section><h3>Saída</h3><Payload text={trace.output} empty="Aguardando resultado…" /></section>

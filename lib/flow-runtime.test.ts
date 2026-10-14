@@ -605,7 +605,8 @@ test("detalhes somam resumo e resposta sem duplicar notificações cumulativas e
     // Resumo da memória, resposta à conversa e resposta à Mensagem: três chamadas somadas.
     assert.equal(calls, 3);
     assert.deepEqual((await store.getRun(run.id)).trace.find((entry) => entry.nodeId === "analista")!.usage, { input: 60, output: 15, total: 75 });
-    assert.match(trace.input!, /Resumo da memória/);
+    assert.match(trace.memory!, /Resumo da memória/);
+    assert.doesNotMatch(trace.input!, /Resumo da memória/);
     assert.match(trace.input!, /Assistente: Primeira resposta/);
     assert.match(trace.input!, /Analise com cuidado/);
     assert.equal(trace.instructions, "Instrução registrada");

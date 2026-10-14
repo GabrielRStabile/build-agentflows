@@ -12,7 +12,7 @@ import { runBudgetMs } from "./run-limits";
 import { mediaMarkdown, runMedia } from "./media-runtime";
 import { toolRunScope } from "./replicate-tool";
 import { tenantConversationHistory } from "./conversation";
-import { memoryPrompt, previousExchange, transcript, type ConversationTurn } from "./flow-memory";
+import { memoryContext, previousExchange, transcript, type ConversationTurn } from "./flow-memory";
 import { interpolate, cites } from "./flow-references";
 import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -155,17 +155,22 @@ async function agent(n: Block, r: Run, signal: AbortSignal, details: Partial<Tra
   let sent = exchange;
   let originalMessage: string;
   let opened = false;
+  let shown: string;
   if (r.output === r.input && exchange.length && !exchange.some((item) => item.role === "assistant")) {
-    const openingPrompt = await memoryPrompt(r, { ...c, prompt: "" }, r.input, summarize);
-    const opening = await turn({ prompt: openingPrompt + context.text + knowledge.context + pageContext, history: [], images: context.images, stream: false });
-    exchange = [{ role: "user", content: openingPrompt }, { role: "assistant", content: opening }];
-    sent = [{ role: "user", content: openingPrompt + context.text + knowledge.context + pageContext }, { role: "assistant", content: opening }];
-    originalMessage = interpolate(c.prompt, r);
+    const openingContext = await memoryContext(r, { ...c, prompt: "" }, r.input, summarize);
+    const opening = await turn({ prompt: openingContext.prompt + context.text + knowledge.context + pageContext, history: [], images: context.images, stream: false });
+    exchange = [{ role: "user", content: openingContext.message }, { role: "assistant", content: opening }];
+    sent = [{ role: "user", content: openingContext.prompt + context.text + knowledge.context + pageContext }, { role: "assistant", content: opening }];
+    originalMessage = shown = interpolate(c.prompt, r);
+    details.memory = openingContext.memory;
     opened = true;
   } else {
-    originalMessage = await memoryPrompt(r, c, message(c, r) || CITED_MESSAGE, summarize, exchange);
+    const current = await memoryContext(r, c, message(c, r) || CITED_MESSAGE, summarize, exchange);
+    originalMessage = current.prompt;
+    shown = current.message;
+    details.memory = current.memory;
   }
-  details.input = transcript(exchange, originalMessage) + (r.attachments?.length ? "\n\nAnexos enviados ao modelo (conteúdo omitido neste registro): " + r.attachments.map((item) => item.name).join(", ") : "") + (r.embedSessionId ? "\n\nO contexto da página também foi enviado ao modelo e não está incluído neste registro." : "");
+  details.input = transcript(exchange, shown) + (r.attachments?.length ? "\n\nAnexos enviados ao modelo (conteúdo omitido neste registro): " + r.attachments.map((item) => item.name).join(", ") : "") + (r.embedSessionId ? "\n\nO contexto da página também foi enviado ao modelo e não está incluído neste registro." : "");
   const result = await turn({
     prompt: opened ? originalMessage : originalMessage + context.text + knowledge.context + pageContext,
     history: sent,
