@@ -84,6 +84,24 @@ test("Mensagem preenchida vira a pergunta seguinte, depois da conversa e do resu
   assert.equal(transcript([], "Só a mensagem"), "Só a mensagem");
 });
 
+test("primeiro bloco com Mensagem: a Entrada do modal mostra a conversa e a Mensagem como duas interações", async () => {
+  const f = await flow();
+  const supervisor = f.graph.nodes[1];
+  supervisor.data.label = "Supervisor";
+  supervisor.data.config.system = "Você é o supervisor.";
+  supervisor.data.config.prompt = "Padronize a resposta apenas como o nome do próximo agente a agir.";
+  await saveFlow(f.id, f);
+  const calls: { prompt: string; history?: { role: string; content: string }[] }[] = [];
+  bridge.run = async ({ prompt, history }) => { calls.push({ prompt, history }); return "ESCRITOR"; };
+  const result = await startRun(f.id, "HIC", false, false);
+  assert.equal(result.status, "completed");
+  assert.deepEqual(calls[0].history, [{ role: "user", content: "HIC" }]);
+  assert.equal(calls[0].prompt, "Padronize a resposta apenas como o nome do próximo agente a agir.");
+  const step = (await getRun(result.id)).trace.find((entry) => entry.nodeId === supervisor.id)!;
+  assert.equal(step.input, "Pessoa: HIC\n\nPessoa: Padronize a resposta apenas como o nome do próximo agente a agir.");
+  assert.equal(step.instructions, "Você é o supervisor.");
+});
+
 test("memória desligada isola o contexto do bloco, mas sua resposta continua disponível aos próximos", async () => {
   const f = (await flow());
   f.graph.nodes[2].data.config.memoryEnabled = "false";
