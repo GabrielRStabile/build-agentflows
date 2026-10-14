@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.37.0 — 14/10/2026
+
+- Referência a um bloco do fluxo que não executou nesta execução (outro caminho da Condição, etapa posterior) passa a valer vazio em vez de interromper a execução. A etapa registra quais blocos citados não executaram, visível no modal da etapa. Referência a bloco apagado continua falhando, com a mensagem "aponta para um bloco que não existe mais neste fluxo".
+- Limite de uso dos fornecedores de API (429): quando a resposta informa quanto esperar (cabeçalho Retry-After ou "try again in 11.5s", como no plano gratuito do Groq), o motor espera e repete a mesma chamada, até três tentativas e 60 segundos por espera, dentro do tempo da execução. Sem essa indicação, ou com espera maior, o erro aparece como antes com a resposta do fornecedor. Não há troca de modelo nem de fornecedor.
+
 ## 0.36.0 — 14/10/2026
 
 - LLM e Agente com OpenAI: novo parâmetro **Esforço de raciocínio** (none, minimal, low, medium, high, xhigh, max; em branco mantém o padrão) nos modelos de raciocínio (o-série e gpt-5 em diante), enviado como `reasoning_effort`. O gpt-6-luna só aceita ferramentas em Chat Completions com `none`: no Agente, com o campo em branco, o motor aplica `none` sozinho; com outro nível escolhido, o bloco é recusado antes de chamar a OpenAI. Fluxos salvos sem o campo seguem como antes.
