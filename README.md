@@ -140,6 +140,7 @@ consumidores neste produto. A tela Execuções continua disponível por usuário
 - `{{last}}`: saída da última etapa. Nos campos do editor aparece como `{{Etapa anterior}}`; `{{state.approval}}` aparece como `{{Decisão da aprovação}}`. As chaves em inglês continuam valendo no motor, em arquivos importados e no gerador, e podem ser digitadas à mão.
 - `{{nodes.identificador}}`: saída mais recente daquele bloco. Nos campos do editor essa referência aparece pelo nome do bloco (`{{Analista}}`); o id continua gravado no fluxo, então renomear o bloco não quebra nada e nomes repetidos mantêm cada id por posição.
 - `{{state.nome}}`: variável compartilhada; Inicialização aceita um objeto JSON com valores de texto.
+- `{{currentDateTime}}`: data e hora atuais no horário de Brasília (ex.: "terça-feira, 13 de outubro de 2026 às 15:36 (horário de Brasília)"), resolvidas na hora da execução. Nos campos do editor aparece como `{{Data e hora atual}}`.
 
 Referências ausentes interrompem a execução com diagnóstico. Após aprovação, `state.approval` contém `yes` ou `no`; para reutilizar o texto anterior, referencie o bloco que o produziu. Argumentos de ferramentas precisam resultar em JSON válido após interpolação.
 

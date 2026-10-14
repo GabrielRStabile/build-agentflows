@@ -447,6 +447,8 @@ test("Agente e LLM terminais entregam a resposta e atualizam variáveis comparti
     assert.equal(r.state.Resumo, r.output);
     assert.equal(r.state.Anterior, ""); // assignments read the same pre-update state
     assert.equal(runtime.interpolate("{{state.Resumo}}", r), r.output);
+    // Data e hora atuais, em português e no horário de Brasília, resolvidas na hora da interpolação.
+    assert.match(runtime.interpolate("Hoje: {{currentDateTime}}", r), /^Hoje: [^,]+, \d{1,2} de [a-zç]+ de \d{4} às \d{2}:\d{2} \(horário de Brasília\)$/);
   }
 });
 test("recusa variáveis desconhecidas, atualizações duplicadas e agentes desconectados", () => {

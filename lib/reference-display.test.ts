@@ -25,6 +25,8 @@ test("referências nativas aparecem em português e voltam às chaves do motor",
   assert.equal(displayReferences("{{input}} → {{ last }} ({{state.approval}}) {{fluxo.cliente}} {{nodes.r2}}", all), "{{Conversa}} → {{Etapa anterior}} ({{Decisão da aprovação}}) {{fluxo.cliente}} {{Revisor}}");
   assert.equal(storedReferences("{{Conversa}} → {{Etapa anterior}} ({{Decisão da aprovação}}) {{fluxo.cliente}} {{Revisor}}", all), "{{input}} → {{last}} ({{state.approval}}) {{fluxo.cliente}} {{nodes.r2}}");
   assert.equal(storedReferences("{{last}} digitado à mão", all), "{{last}} digitado à mão", "a chave do motor continua aceita");
+  assert.equal(displayReferences("Hoje é {{currentDateTime}}.", all), "Hoje é {{Data e hora atual}}.");
+  assert.equal(storedReferences("Hoje é {{Data e hora atual}}.", all), "Hoje é {{currentDateTime}}.");
   assert.equal(nodeAlias("x", "Etapa anterior"), null, "bloco com o nome de uma referência nativa segue pelo id");
   assert.equal(nodeAlias("x", "conversa"), null);
 });

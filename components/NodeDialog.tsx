@@ -196,6 +196,7 @@ export function NodeDialog({
       label: "Variável " + k,
     })),
     { value: "{{state.approval}}", label: "Decisão da aprovação", hint: "yes ou no", alias: alias("{{state.approval}}") },
+    { value: "{{currentDateTime}}", label: "Data e hora atual", hint: "no momento da execução, horário de Brasília", alias: alias("{{currentDateTime}}") },
     ...nodes
       .filter(
         (o) => o.id !== node.id && !["start", "end"].includes(o.data.kind),

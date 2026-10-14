@@ -40,6 +40,7 @@ Regras:
 - Use de 2 a 10 blocos. Prefira agent para tarefas com raciocínio. Não use http nem tool sem o pedido mencionar um serviço ou ferramenta.
 - Textos em português do Brasil, claros e sem jargão técnico. Instruções (system) completas e específicas para o caso.
 - Agente e LLM aceitam memoryEnabled ("true" por padrão; "false" desliga o histórico automático) e memoryType: allMessages (padrão, histórico da conversa e respostas dos agentes anteriores), windowSize (memoryWindowSize: número de mensagens anteriores, padrão "20"), conversationSummary (resumo por IA) ou conversationSummaryBuffer (resumo das antigas e mensagens recentes, memoryMaxTokens: limite aproximado, padrão "2000"). Esses campos são strings. A mensagem da etapa continua sendo enviada em todos os modos. Preserve a memória padrão, salvo pedido explícito para mudar.
+- Referências aceitas nos textos: {{input}}, {{last}}, {{nodes.id}}, {{fluxo.variável}} e {{currentDateTime}} (data e hora atuais no horário de Brasília; use quando o pedido depender de prazos ou datas).
 - ids curtos em minúsculas sem espaços (ex.: "inicio", "analista", "resposta").
 
 Formato:

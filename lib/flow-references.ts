@@ -2,9 +2,14 @@ import { FlowError } from "./flow-store";
 import type { Run } from "./flow-types";
 import { REFERENCE_PATTERN as REFERENCE } from "./reference-highlight";
 
+/** Data e hora atuais em português, no horário de Brasília, para o modelo situar o pedido no tempo. */
+export function currentDateTime(now = new Date()) {
+  return now.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "full", timeStyle: "short" }) + " (horário de Brasília)";
+}
 function referenceValue(key: string, r: Run): string | undefined {
   if (key === "input") return r.input;
   if (key === "last") return r.output;
+  if (key === "currentDateTime") return currentDateTime();
   const [prefix, ...rest] = key.split(".");
   const k = rest.join(".");
   if ((prefix === "state" || prefix === "fluxo") && Object.hasOwn(r.state, k)) return r.state[k];

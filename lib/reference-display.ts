@@ -5,7 +5,7 @@ import { REFERENCE_PATTERN } from "./reference-highlight";
 /** Um apelido liga a forma gravada de uma referência ao nome mostrado no campo. */
 export type ReferenceAlias = { value: string; display: string };
 
-const BUILT_IN = /^(input|last|state\..+|fluxo\..+|nodes\..+)$/;
+const BUILT_IN = /^(input|last|currentDateTime|state\..+|fluxo\..+|nodes\..+)$/;
 const strip = (token: string) => token.replace(/^\{\{\s*|\s*\}\}$/g, "");
 
 /** Referências nativas mostradas em português nos campos; o motor continua lendo input, last e state.approval. */
@@ -13,6 +13,7 @@ export const BUILT_IN_ALIASES: ReferenceAlias[] = [
   { value: "{{input}}", display: "{{Conversa}}" },
   { value: "{{last}}", display: "{{Etapa anterior}}" },
   { value: "{{state.approval}}", display: "{{Decisão da aprovação}}" },
+  { value: "{{currentDateTime}}", display: "{{Data e hora atual}}" },
 ];
 const RESERVED = new Set(BUILT_IN_ALIASES.map((a) => strip(a.display).toLowerCase()));
 
