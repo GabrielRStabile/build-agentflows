@@ -1,5 +1,12 @@
 # Histórico de versões
 
+## 0.39.0 — 14/10/2026
+
+- Cadastro: depois de criar a conta a tela vira "Confira seu e-mail", com o endereço informado, orientação sobre spam e o botão **Reenviar e-mail**, liberado após 30 segundos e com nova espera de 60 segundos a cada envio. Em Seu acesso, com e-mail pendente, o mesmo botão substitui o reenvio imediato (espera inicial de 15 segundos). Quem já tinha conta com o e-mail é orientado a entrar com a senha.
+- E-mails de confirmação e de redefinição de senha passam a ter versão HTML com a logo da aplicação, botão e o mesmo link em texto; a versão em texto continua para quem bloqueia HTML.
+- E-mail que não chega: o remetente de `RESEND_FROM` é conferido na conta do Resend (worker registra `email_remetente` na partida; `GET /api/health` → `mail.sender` com domínio, verificado e motivo). A recusa 403 por domínio não verificado deixa de ser falha definitiva e silenciosa: a mensagem segue na fila com as tentativas normais (cerca de duas horas) e cada tentativa registra `email_envio` com id, tentativa, status e resultado, sem destinatário nem conteúdo. `mail` em `/api/health` traz também pendentes, falhas e envios nas últimas 24 h. Roteiro em DEPLOY-COOLIFY.md, "E-mails de confirmação que não chegam".
+- Cadastro com e-mail já existente continua respondendo igual ao novo, mas a dona do e-mail passa a receber a confirmação de novo (conta ainda não confirmada) ou o aviso "Você já tem conta" com os caminhos para entrar ou redefinir a senha, com limite de três por e-mail por hora.
+
 ## 0.38.0 — 14/10/2026
 
 - Credencial OpenAI compartilhada: com `OPENAI_CHAVE_COMPARTILHADA` no ambiente (Coolify), toda conta que entrou por convite vê **StartSe OpenAI API (free tier)** em Credenciais e no seletor de credencial dos blocos LLM/Agente com OpenAI, durante as 72 horas seguintes ao resgate do convite (`OPENAI_CHAVE_COMPARTILHADA_HORAS`; nome em `OPENAI_CHAVE_COMPARTILHADA_NOME`). Ela aparece primeiro na lista, é somente leitura e mostra até quando vale; a chave fica só no ambiente, sem cópia no banco das contas nem envio ao navegador. Ao terminar o prazo ela some da lista e os blocos que a escolheram param com "O período gratuito da credencial … terminou em dd/mm/aaaa, hh:mm. Cadastre sua própria chave da OpenAI no bloco." Contas liberadas sem convite não a recebem. Detalhes em DEPLOY-COOLIFY.md.
