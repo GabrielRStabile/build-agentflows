@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.41.0 — 14/10/2026
+
+- Nível da senha: ao criar conta, redefinir senha e alterar a senha em Minha conta, quatro barras abaixo do campo mostram **Senha fraca**, **razoável**, **boa** ou **forte** enquanto a pessoa digita, com a regra ao lado. Senha que ainda não cumpre a regra do servidor nunca passa de razoável; o rótulo é anunciado por leitores de tela. Cores adaptadas ao tema escuro.
+
 ## 0.40.0 — 14/10/2026
 
 - Base de conhecimento com fluxo básico pronto: a credencial OpenAI compartilhada (free tier) vale também para o provedor de embeddings OpenAI, aparece primeiro na lista e é selecionada por padrão quando a base ainda não tem credencial. Bases novas nascem com embeddings OpenAI (text-embedding-3-small) nessa credencial, Faiss e registro interno, prontas para indexar; cada etapa continua editável. A credencial é somente leitura, mostra até quando vale e, ao terminar o prazo, a base pede outra credencial na indexação. Contas sem a credencial compartilhada seguem como antes.
