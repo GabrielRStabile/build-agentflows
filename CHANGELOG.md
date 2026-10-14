@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.36.0 — 14/10/2026
+
+- LLM e Agente com OpenAI: novo parâmetro **Esforço de raciocínio** (none, minimal, low, medium, high, xhigh, max; em branco mantém o padrão) nos modelos de raciocínio (o-série e gpt-5 em diante), enviado como `reasoning_effort`. O gpt-6-luna só aceita ferramentas em Chat Completions com `none`: no Agente, com o campo em branco, o motor aplica `none` sozinho; com outro nível escolhido, o bloco é recusado antes de chamar a OpenAI. Fluxos salvos sem o campo seguem como antes.
+- Erros de OpenAI, Anthropic, Google e Groq mostram a explicação devolvida pelo fornecedor ("Resposta do fornecedor: …") em vez de só a mensagem genérica por status, inclusive ao listar modelos.
+
 ## 0.35.0 — 14/10/2026
 
 - Endereço publicado e MCP: campo opcional `session` para continuar a mesma conversa. Sem ele, o servidor gera um id e o devolve na resposta; reenviado, a nova chamada recebe as interações concluídas anteriores dessa sessão como histórico, que os blocos com memória ligada usam. Ids inválidos são recusados; sessões são isoladas por conta e por fluxo. Chamadas sem o campo continuam funcionando como antes. Detalhes da requisição e exemplos atualizados em Implantar › cURL.
