@@ -33,6 +33,25 @@ function GoogleIcon() {
     <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
   </svg>;
 }
+/** Reenvio do link de confirmação liberado só depois de uma espera, e com nova espera a cada envio. */
+function ResendButton({ email, initialWait, busy, onResult }: { email: string; initialWait: number; busy: boolean; onResult: (message: string, error?: string) => void }) {
+  const [remaining, setRemaining] = useState(initialWait);
+  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    if (remaining <= 0) return;
+    const timer = setTimeout(() => setRemaining((value) => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [remaining]);
+  async function resend() {
+    setSending(true);
+    try { const result = await request("resend-verification", { email }); onResult(result.message || "Enviamos um novo link para seu e-mail."); setRemaining(60); }
+    catch (e) { onResult("", (e as Error).message); }
+    finally { setSending(false); }
+  }
+  return <button type="button" className="btn-secundario" disabled={busy || sending || remaining > 0} aria-live="polite" onClick={() => void resend()}>
+    {sending ? "Reenviando…" : remaining > 0 ? `Reenviar e-mail em ${remaining} s` : "Reenviar e-mail"}
+  </button>;
+}
 export function AccountScreen({ mode, google = false }: { mode: Mode; google?: boolean }) {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -101,7 +120,8 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
         router.refresh();
       } else if (mode === "access") { router.replace("/"); router.refresh(); }
       else {
-        setMessage(result.message || (mode === "verify-email" ? "E-mail confirmado. Entre para acompanhar seu acesso ao beta." : "Senha redefinida. Entre com sua nova senha."));
+        // O cadastro mostra seu próprio painel de confirmação; a mensagem genérica do servidor não é repetida.
+        if (mode !== "register") setMessage(result.message || (mode === "verify-email" ? "E-mail confirmado. Entre para acompanhar seu acesso ao beta." : "Senha redefinida. Entre com sua nova senha."));
         setDone(true); setPassword(""); setConfirmPassword(""); setToken("");
       }
     });
@@ -109,6 +129,8 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
   const emailField = ["login", "register", "forgot-password"].includes(mode);
   const passwordField = ["login", "register", "reset-password"].includes(mode);
   const social = google && (mode === "login" || mode === "register");
+  const registered = mode === "register" && done;
+  const onResend = (text: string, failure?: string) => { setError(failure || ""); setMessage(failure ? "" : text); };
   return <main className="relative isolate min-h-screen bg-bg flex items-center justify-center px-4 py-10">
     {(mode === "login" || mode === "register") && <ConnectionsBackground />}
     <div className="relative w-full max-w-[440px]">
@@ -117,11 +139,16 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
         <img src="/brand/agentflows-logo.png" alt="Agentflows" width={184} height={40} className="h-10 w-auto" />
       </div>
       <section className="card p-7 max-md:p-6">
-        <h1 className="text-[22px] font-extrabold mb-2 text-center">{titles[mode]}</h1>
-        <p className="text-muted text-sm mb-5 text-center">{mode === "register" ? "Crie sua conta e confirme seu e-mail. O beta exige um convite ou a liberação da equipe." : mode === "access" ? "Seus fluxos, conexões e bases de conhecimento ficam no seu espaço." : "Acesse seu espaço de agentes."}</p>
-        {error && <p role="alert" className="mb-4 text-sm text-danger">{error}</p>}
-        {message && <p role="status" className="mb-4 text-sm">{message}</p>}
-        {mode === "access" ? <>
+        <h1 className="text-[22px] font-extrabold mb-2 text-center">{registered ? "Confira seu e-mail" : titles[mode]}</h1>
+        {!registered && <p className="text-muted text-sm mb-5 text-center">{mode === "register" ? "Crie sua conta e confirme seu e-mail. O beta exige um convite ou a liberação da equipe." : mode === "access" ? "Seus fluxos, conexões e bases de conhecimento ficam no seu espaço." : "Acesse seu espaço de agentes."}</p>}
+        {error && <p role="alert" className="mb-4 text-sm text-danger text-center">{error}</p>}
+        {message && <p role="status" className="mb-4 text-sm text-center">{message}</p>}
+        {registered ? <div className="text-center">
+          <span aria-hidden="true" className="mx-auto mb-4 w-14 h-14 rounded-full bg-accent-soft text-accent-ink grid place-items-center"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16v12H4z" /><path d="m4 7 8 6 8-6" /></svg></span>
+          <p className="text-sm mb-2">Enviamos um link de confirmação para <strong className="break-all">{email}</strong>.</p>
+          <p className="text-sm text-muted mb-5">Abra o link para ativar sua conta. Ele vale por 24 horas. Não chegou? Confira a pasta de spam ou promoções. Se você já tinha conta com este e-mail, entre com sua senha.</p>
+          <ResendButton email={email} initialWait={30} busy={busy} onResult={onResend} />
+        </div> : mode === "access" ? <>
           {!loaded ? <p role="status">Consultando seu acesso…</p> : !user ? <p><Link href={withInvite("/entrar")}>Entre na sua conta</Link> para acompanhar sua liberação.</p> : <>
             <div className="flex items-center gap-3 rounded-field border border-line bg-surface-2 px-4 py-3 mb-5">
               <span aria-hidden="true" className="w-9 h-9 shrink-0 rounded-full bg-accent-soft text-accent-ink grid place-items-center font-bold">{user.name.trim().charAt(0).toUpperCase() || "?"}</span>
@@ -129,7 +156,7 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
               <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${user.beta_status === "blocked" ? "bg-danger/10 text-danger" : !user.email_verified_at ? "bg-warn/10 text-warn" : user.beta_status === "approved" ? "bg-ok/10 text-ok" : "bg-accent-soft text-accent-ink"}`}>{user.beta_status === "blocked" ? "Suspenso" : !user.email_verified_at ? "E-mail pendente" : user.beta_status === "approved" ? "Liberado" : "Lista de espera"}</span>
             </div>
             {user.beta_status === "blocked" ? <p role="status" className="text-sm">Seu acesso está suspenso. Entre em contato com a equipe do beta.</p>
-              : !user.email_verified_at ? <><p className="text-sm mb-4">Confirme o link enviado para <strong>{user.email}</strong> antes de utilizar seu convite.{invitePending && " Seu convite fica guardado e será aplicado quando você voltar a esta página com o e-mail confirmado."}</p><button className="btn-primary" disabled={busy} onClick={() => void act(async () => { const result = await request("resend-verification", { email: user.email }); setMessage(result.message || ""); })}>Reenviar confirmação</button></>
+              : !user.email_verified_at ? <><p className="text-sm mb-4">Confirme o link enviado para <strong>{user.email}</strong> antes de utilizar seu convite.{invitePending && " Seu convite fica guardado e será aplicado quando você voltar a esta página com o e-mail confirmado."}</p><p className="text-sm text-muted mb-4">Não chegou? Confira a pasta de spam ou promoções.</p><ResendButton email={user.email} initialWait={15} busy={busy} onResult={onResend} /></>
               : user.beta_status === "approved" ? <Link className="btn-primary" href="/">Abrir meu espaço</Link>
               : redeeming ? <p role="status" className="text-sm">Validando seu convite…</p>
               : <><form onSubmit={submit}>
@@ -159,7 +186,7 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
         </>}
         {(mode !== "access" || user) && <nav aria-label="Opções de acesso" className="flex gap-x-4 gap-y-2 flex-wrap justify-center mt-6 pt-5 border-t border-line text-sm text-muted">
           {mode === "login" && <span>Não tem conta? <Link href={withInvite("/conta")} className="btn-link">Criar conta</Link></span>}
-          {mode === "register" && <span>Já tem conta? <Link href={withInvite("/entrar")} className="btn-link">Entrar</Link></span>}
+          {mode === "register" && <span>{registered ? "Já confirmou? " : "Já tem conta? "}<Link href={withInvite("/entrar")} className="btn-link">Entrar</Link></span>}
           {mode !== "login" && mode !== "register" && mode !== "access" && <Link href={withInvite("/entrar")} className="btn-link">Entrar</Link>}
           {mode === "verify-email" && <Link href={withInvite("/acesso")} className="btn-link">Reenviar confirmação</Link>}
           {mode === "reset-password" && <Link href={withInvite("/recuperar-senha")} className="btn-link">Pedir novo link</Link>}
