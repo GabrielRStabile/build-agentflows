@@ -35,8 +35,15 @@ async function setup(t: TestContext, approval = false) {
   const codeA = (await (await x.connect(() => tokenApi.POST(x.request("/api/mcp/token", { method: "POST" })))).json()).codigo as string;
   const codeB = await asB(gerarCodigo);
   const rpc = (code: string, name: string, args: Record<string, unknown> = {}) => x.connect(() => mcp.POST(external(code, { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } })));
-  const post = (code = codeA, id = flow.id) => x.connect(() => webhook.POST(external(code, { input: "Olá" }, `/webhook/flows/${id}`), { params: Promise.resolve({ id }) }));
-  return { ...x, other, tokenB, asB, flow, flowB, codeA, codeB, rpc, post,
+  // A resposta é síncrona: enquanto o POST espera, este "worker" executa os jobs que aparecerem.
+  const complete = async <T>(pending: Promise<T>) => {
+    let done = false; const result = pending.finally(() => { done = true; });
+    while (!done) { const job = await claimJob(x.db); if (job) await runClaimedJob(x.db, job); else await new Promise((r) => setTimeout(r, 25)); }
+    return result;
+  };
+  const post = (code = codeA, id = flow.id, query = "") => complete(x.connect(() => webhook.POST(external(code, { input: "Olá" }, `/webhook/flows/${id}${query}`), { params: Promise.resolve({ id }) })));
+  const postAsync = (code = codeA, id = flow.id) => x.connect(() => webhook.POST(external(code, { input: "Olá" }, `/webhook/flows/${id}?wait=0`), { params: Promise.resolve({ id }) }));
+  return { ...x, other, tokenB, asB, flow, flowB, codeA, codeB, rpc, post, postAsync, complete,
     drain: async () => { const job = await claimJob(x.db); assert.ok(job); assert.equal((await runClaimedJob(x.db, job)).ok, true); },
   };
 }
@@ -68,16 +75,19 @@ test("MCP lista somente publicados do dono e recusa IDs cruzados e prefixos forj
   assert.equal((await x.rpc("legacy-global-token", "listar_fluxos")).status, 401);
   await x.asTenant(() => publishTenantFlow(x.flow.id, false));
   assert.deepEqual(toolData(await (await x.rpc(x.codeA, "listar_fluxos")).json()), []);
-  assert.notEqual((await x.post()).status, 202);
+  assert.equal((await x.post()).status, 409);
   assert.equal((await x.db.query("SELECT id FROM jobs")).rows.length, 0);
 });
 
-test("webhook retorna 202, worker executa e consulta valida conta e fluxo", async t => {
+test("webhook responde de forma síncrona com o resultado; ?wait=0 devolve 202 e a consulta valida conta e fluxo", async t => {
   const x = await setup(t), response = await x.post();
-  assert.equal(response.status, 202); assert.match(response.headers.get("cache-control")!, /no-store/);
-  const accepted = await response.json(); assert.equal(accepted.queued, true); assert.equal(accepted.status, "running");
-  assert.equal((await x.asTenant(() => getTenantRun(accepted.id))).trace.length, 0);
+  assert.equal(response.status, 200); assert.match(response.headers.get("cache-control")!, /no-store/);
+  const accepted = await response.json(); assert.equal(accepted.queued, false); assert.equal(accepted.status, "completed"); assert.equal(accepted.output, "Concluído");
+  assert.ok((await x.asTenant(() => getTenantRun(accepted.id))).trace.length > 0);
+  const later = await x.postAsync(); assert.equal(later.status, 202);
+  const pending = await later.json(); assert.equal(pending.queued, true); assert.equal(pending.status, "running");
   await x.drain();
+  assert.equal((await x.asTenant(() => getTenantRun(pending.id))).status, "completed");
   const read = (code: string, id = x.flow.id) => x.connect(() => webhook.GET(external(code, undefined, `/webhook/flows/${id}?runId=${accepted.id}`), { params: Promise.resolve({ id }) }));
   const result = await (await read(x.codeA)).json(); assert.equal(result.status, "completed"); assert.equal(result.queued, false);
   assert.equal((await read(x.codeB)).status, 404);
@@ -89,12 +99,11 @@ test("webhook retorna 202, worker executa e consulta valida conta e fluxo", asyn
 test("acesso HTTP público por padrão dispensa a chave; com autenticação, exige a chave da conta", async t => {
   const x = await setup(t);
   const anonymous = (data?: unknown, path = `/webhook/flows/${x.flow.id}`) => new Request("https://app.example.com" + path, { method: data === undefined ? "GET" : "POST", headers: { "content-type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
-  const post = (id = x.flow.id) => x.connect(() => webhook.POST(anonymous({ input: "Olá" }, `/webhook/flows/${id}`), { params: Promise.resolve({ id }) }));
-  // Padrão: público. O POST sem Authorization enfileira e o GET sem chave consulta a execução.
+  const post = (id = x.flow.id) => x.complete(x.connect(() => webhook.POST(anonymous({ input: "Olá" }, `/webhook/flows/${id}`), { params: Promise.resolve({ id }) })));
+  // Padrão: público. O POST sem Authorization executa e o GET sem chave consulta a execução.
   assert.equal((await x.asTenant(() => httpAccess(x.flow.id))), "publico");
-  const response = await post(); assert.equal(response.status, 202);
-  const accepted = await response.json(); assert.equal(accepted.queued, true);
-  await x.drain();
+  const response = await post(); assert.equal(response.status, 200);
+  const accepted = await response.json(); assert.equal(accepted.status, "completed");
   const read = (id = x.flow.id, runId = accepted.id) => x.connect(() => webhook.GET(anonymous(undefined, `/webhook/flows/${id}?runId=${runId}`), { params: Promise.resolve({ id }) }));
   assert.equal((await (await read()).json()).status, "completed");
   // A execução de outro fluxo e o fluxo de outra conta não respondem pelo endereço público errado.
@@ -110,19 +119,19 @@ test("acesso HTTP público por padrão dispensa a chave; com autenticação, exi
   const denied = await post(); assert.equal(denied.status, 401);
   assert.match((await denied.json()).error, /chave de acesso/);
   assert.equal((await read()).status, 401);
-  assert.equal((await x.post()).status, 202);
+  assert.equal((await x.post()).status, 200);
   // O outro dono não lê nem altera o acesso deste fluxo.
   await x.asB(() => assert.rejects(httpAccess(x.flow.id)));
   await x.asB(() => assert.rejects(saveHttpAccess(x.flow.id, "publico")));
   assert.equal(await x.asTenant(() => saveHttpAccess(x.flow.id, "publico")), "publico");
-  assert.equal((await post()).status, 202);
+  assert.equal((await post()).status, 200);
 });
 
 test("execução publicada aceita multipart/form-data com input e arquivos no campo file", async t => {
   const x = await setup(t);
-  const multipart = (form: FormData, id = x.flow.id) => x.connect(() => webhook.POST(new Request(`https://app.example.com/webhook/flows/${id}`, { method: "POST", body: form }), { params: Promise.resolve({ id }) }));
+  const multipart = (form: FormData, id = x.flow.id) => x.complete(x.connect(() => webhook.POST(new Request(`https://app.example.com/webhook/flows/${id}`, { method: "POST", body: form }), { params: Promise.resolve({ id }) })));
   const simple = new FormData(); simple.set("input", "Olá por formulário");
-  const accepted = await multipart(simple); assert.equal(accepted.status, 202);
+  const accepted = await multipart(simple); assert.equal(accepted.status, 200);
   const acceptedId = (await accepted.json()).id as string;
   const run = await x.asTenant(() => getTenantRun(acceptedId));
   assert.equal(run.input, "Olá por formulário"); assert.equal(run.attachments?.length || 0, 0);
@@ -136,7 +145,7 @@ test("execução publicada aceita multipart/form-data com input e arquivos no ca
   const many = new FormData(); many.set("input", "Olá"); for (let i = 0; i < 6; i++) many.append("file", new File(["x"], `a${i}.txt`));
   assert.match((await (await multipart(many)).json()).error, /até 5 arquivos/);
   // JSON continua aceito pelas integrações existentes.
-  assert.equal((await x.post()).status, 202);
+  assert.equal((await x.post()).status, 200);
 });
 
 test("MCP enfileira aprovação uma vez e consulta progresso pelo mesmo worker", async t => {
@@ -155,10 +164,10 @@ test("MCP enfileira aprovação uma vez e consulta progresso pelo mesmo worker",
 test("integrações compartilham backlog e concorrência com execuções privadas", async t => {
   const x = await setup(t);
   await x.asTenant(() => enqueueRun(x.flow.id, "Privado", true));
-  for (let i = 0; i < 9; i++) assert.equal((await x.post()).status, 202);
-  assert.equal((await x.post()).status, 429);
+  for (let i = 0; i < 9; i++) assert.equal((await x.postAsync()).status, 202);
+  assert.equal((await x.postAsync()).status, 429);
   assert.equal((await x.db.query("SELECT id FROM runs WHERE user_id=$1", [x.owner])).rows.length, 10);
-  assert.equal((await x.post(x.codeB, x.flowB.id)).status, 202);
+  assert.equal((await x.postAsync(x.codeB, x.flowB.id)).status, 202);
   const jobs = await Promise.all([claimJob(x.db), claimJob(x.db), claimJob(x.db)]);
   assert.deepEqual(new Set(jobs.filter(Boolean).map(j => j!.user_id)), new Set([x.owner, x.other]));
   assert.equal(jobs.filter(Boolean).length, 2);

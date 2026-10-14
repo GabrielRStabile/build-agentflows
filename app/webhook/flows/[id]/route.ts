@@ -2,6 +2,7 @@ import { extrairCodigo, integrationApi } from "@/lib/mcp";
 import { publicIntegrationApi } from "@/lib/http-access";
 import { enqueueIntegrationRun, executionSummary, integrationId } from "@/lib/ferramentas";
 import { integrationPayload } from "@/lib/integration-body";
+import { awaitRun, integrationWaitMs, settled } from "@/lib/integration-wait";
 import { privateJson } from "@/lib/saas-http";
 import { getTenantFlow, getTenantRun } from "@/lib/tenant-flows";
 import { FlowError } from "@/lib/flow-store";
@@ -13,7 +14,10 @@ async function handle(req: Request, c: Context, action: () => Promise<unknown>) 
 export async function POST(req: Request, c: Context) {
   return handle(req, c, async () => {
     const { input, files } = await integrationPayload(req);
-    return privateJson(await enqueueIntegrationRun((await c.params).id, input, files), { status: 202 });
+    const accepted = await enqueueIntegrationRun((await c.params).id, input, files);
+    // Resposta síncrona: espera a execução terminar (até o limite de execução); ?wait=0 devolve 202 na hora.
+    const run = await awaitRun(accepted.id, integrationWaitMs(new URL(req.url).searchParams.get("wait")));
+    return privateJson(executionSummary(run), { status: settled(run) ? 200 : 202 });
   });
 }
 export async function GET(req: Request, c: Context) {
