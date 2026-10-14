@@ -1928,8 +1928,8 @@
   position: fixed;
   inset: 0;
   margin: auto;
-  width: min(1120px, calc(100vw - 48px));
-  height: min(920px, calc(100dvh - 48px));
+  width: min(1600px, calc(100vw - 48px));
+  height: min(1000px, calc(100dvh - 48px));
   z-index: 41;
   border-radius: 18px;
   box-shadow: 0 24px 100px #1a193745;
@@ -1938,12 +1938,22 @@
 .chat-popup.expanded .chat-scroll {
   padding: 24px 32px;
 }
+/* Em tela cheia, as mensagens e o campo de envio ocupam toda a largura do modal. */
 .chat-popup.expanded .chat-exchange,
 .chat-popup.expanded .chat-empty,
 .chat-popup.expanded .chat-composer > * {
   width: 100%;
-  max-width: 900px;
+  max-width: none;
   margin-inline: auto;
+}
+.chat-popup.expanded .chat-msg.user .chat-bubble {
+  max-width: 70%;
+}
+.chat-popup.expanded .chat-composer {
+  max-height: 50%;
+}
+.chat-popup.expanded .chat-composer .chat-input-box textarea {
+  max-height: calc(6lh + 12px);
 }
 .chat-popup.expanded .chat-composer {
   padding: 16px 32px 20px;
