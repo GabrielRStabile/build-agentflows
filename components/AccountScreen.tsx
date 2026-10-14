@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { REGRA_SENHA } from "@/lib/conta-comum";
@@ -70,6 +70,10 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
   const [invite, setInvite] = useState("");
   const [redeeming, setRedeeming] = useState(false);
   const [invitePending, setInvitePending] = useState(false);
+  // O link de confirmação confirma sozinho ao abrir; a tela mostra "Confirmando…" até redirecionar ou falhar.
+  const [confirming, setConfirming] = useState(mode === "verify-email");
+  // O token só é enviado uma vez por abertura da página, mesmo com o efeito repetido pelo StrictMode.
+  const verification = useRef<Promise<unknown> | null>(null);
   const withInvite = (path: string) => invite ? `${path}?invite=${encodeURIComponent(invite)}` : path;
   useEffect(() => {
     let live = true;
@@ -79,12 +83,44 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
       if (!live) return;
       const linked = inviteFromUrl();
       setInvite(linked);
-      if (mode === "verify-email" || mode === "reset-password") {
+      if (mode === "reset-password") {
         const value = new URLSearchParams(window.location.hash.slice(1)).get("token") || "";
         setToken(value);
         window.history.replaceState(null, "", window.location.pathname + (linked ? `?invite=${encodeURIComponent(linked)}` : ""));
       }
-      if (mode === "login" && new URLSearchParams(window.location.search).get("erro") === "google") setError("Não foi possível entrar com Google. Tente novamente ou entre com sua senha.");
+      if (mode === "login") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("erro") === "google") setError("Não foi possível entrar com Google. Tente novamente ou entre com sua senha.");
+        if (params.get("confirmado") === "1") setMessage("E-mail confirmado. Entre para acompanhar seu acesso ao beta.");
+      }
+      if (mode === "verify-email") {
+        const token = new URLSearchParams(window.location.hash.slice(1)).get("token") || "";
+        window.history.replaceState(null, "", window.location.pathname + (linked ? `?invite=${encodeURIComponent(linked)}` : ""));
+        const destination = (path: string, extra?: Record<string, string>) => {
+          const params = new URLSearchParams(extra);
+          if (linked) params.set("invite", linked);
+          const query = params.toString();
+          return query ? `${path}?${query}` : path;
+        };
+        // Quem já está na conta segue para a tela do convite; quem não está, para o login com o aviso.
+        const forward = async () => {
+          const session = await request("session").catch(() => ({ user: null }));
+          if (!live) return false;
+          router.replace(session.user ? destination("/acesso") : destination("/entrar", { confirmado: "1" }));
+          router.refresh();
+          return true;
+        };
+        if (!token) { setMessage("Abra o link recebido por e-mail para continuar."); setConfirming(false); return; }
+        verification.current ??= request("verify-email", { token });
+        try { await verification.current; if (live) await forward(); }
+        catch (e) {
+          // Link já usado (por um segundo clique ou por um verificador de e-mail) com a conta confirmada: segue em frente.
+          const session = await request("session").catch(() => ({ user: null }));
+          if (!live) return;
+          if (session.user?.email_verified_at) { await forward(); return; }
+          setError((e as Error).message); setConfirming(false);
+        }
+      }
       if (mode === "access") {
         try {
           const data = await request("session");
@@ -122,7 +158,7 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
       } else if (mode === "access") { router.replace("/"); router.refresh(); }
       else {
         // O cadastro mostra seu próprio painel de confirmação; a mensagem genérica do servidor não é repetida.
-        if (mode !== "register") setMessage(result.message || (mode === "verify-email" ? "E-mail confirmado. Entre para acompanhar seu acesso ao beta." : "Senha redefinida. Entre com sua nova senha."));
+        if (mode !== "register") setMessage(result.message || "Senha redefinida. Entre com sua nova senha.");
         setDone(true); setPassword(""); setConfirmPassword(""); setToken("");
       }
     });
@@ -141,7 +177,7 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
       </div>
       <section className="card p-7 max-md:p-6">
         <h1 className="text-[22px] font-extrabold mb-2 text-center">{registered ? "Confira seu e-mail" : titles[mode]}</h1>
-        {!registered && <p className="text-muted text-sm mb-5 text-center">{mode === "register" ? "Crie sua conta e confirme seu e-mail. O beta exige um convite ou a liberação da equipe." : mode === "access" ? "Seus fluxos, conexões e bases de conhecimento ficam no seu espaço." : "Acesse seu espaço de agentes."}</p>}
+        {!registered && <p className="text-muted text-sm mb-5 text-center">{mode === "register" ? "Crie sua conta e confirme seu e-mail. O beta exige um convite ou a liberação da equipe." : mode === "access" ? "Seus fluxos, conexões e bases de conhecimento ficam no seu espaço." : mode === "verify-email" ? "Validando o link recebido por e-mail." : "Acesse seu espaço de agentes."}</p>}
         {error && <p role="alert" className="mb-4 text-sm text-danger text-center">{error}</p>}
         {message && <p role="status" className="mb-4 text-sm text-center">{message}</p>}
         {registered ? <div className="text-center">
@@ -170,6 +206,9 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
                 <p className="text-sm text-muted mb-3">Sem convite? A equipe libera novos acessos aos poucos. Você pode conferir se já foi liberado.</p>
                 <button className="btn-secundario" disabled={busy} onClick={() => void act(async () => { const result = await request("session"); setUser(result.user); if (result.user?.beta_status !== "approved") setMessage("Seu acesso ainda está na lista de espera."); })}>Verificar liberação</button></>}
           </>}
+        </> : mode === "verify-email" ? <>
+          {confirming ? <p role="status" className="text-sm text-center">Confirmando seu e-mail…</p>
+            : error ? <p className="text-sm text-center text-muted">Entre na sua conta para pedir um novo link de confirmação.</p> : null}
         </> : !done && <>
           {social && <>
             <form action="/api/auth/google" method="get"><button className="btn-secundario" disabled={busy}><GoogleIcon />Continuar com Google</button></form>
@@ -184,15 +223,14 @@ export function AccountScreen({ mode, google = false }: { mode: Mode; google?: b
           </div>}
           {mode === "login" && <p className="-mt-2 text-right"><Link href={withInvite("/recuperar-senha")} className="btn-link text-xs">Esqueci minha senha</Link></p>}
           {(mode === "register" || mode === "reset-password") && <label className="block text-sm" htmlFor="confirm-password">Confirmar senha<input id="confirm-password" className="input mt-1" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required maxLength={256} autoComplete="new-password" /></label>}
-          {(mode === "verify-email" || mode === "reset-password") && !token && <p className="text-sm">Abra o link recebido por e-mail para continuar.</p>}
-          <button className="btn-primary" disabled={busy || ((mode === "verify-email" || mode === "reset-password") && !token)}>{busy ? "Aguarde…" : titles[mode]}</button>
+          {mode === "reset-password" && !token && <p className="text-sm">Abra o link recebido por e-mail para continuar.</p>}
+          <button className="btn-primary" disabled={busy || (mode === "reset-password" && !token)}>{busy ? "Aguarde…" : titles[mode]}</button>
           </form>
         </>}
         {(mode !== "access" || user) && <nav aria-label="Opções de acesso" className="flex gap-x-4 gap-y-2 flex-wrap justify-center mt-6 pt-5 border-t border-line text-sm text-muted">
           {mode === "login" && <span>Não tem conta? <Link href={withInvite("/conta")} className="btn-link">Criar conta</Link></span>}
           {mode === "register" && <span>{registered ? "Já confirmou? " : "Já tem conta? "}<Link href={withInvite("/entrar")} className="btn-link">Entrar</Link></span>}
           {mode !== "login" && mode !== "register" && mode !== "access" && <Link href={withInvite("/entrar")} className="btn-link">Entrar</Link>}
-          {mode === "verify-email" && <Link href={withInvite("/acesso")} className="btn-link">Reenviar confirmação</Link>}
           {mode === "reset-password" && <Link href={withInvite("/recuperar-senha")} className="btn-link">Pedir novo link</Link>}
           {mode === "access" && user && <span>Não é você? <button type="button" className="btn-link" disabled={busy} onClick={() => void act(async () => { await request("logout", {}); router.replace(withInvite("/entrar")); router.refresh(); })}>Sair da conta</button></span>}
         </nav>}
