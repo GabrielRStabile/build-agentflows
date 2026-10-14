@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.38.0 — 14/10/2026
+
+- Credencial OpenAI compartilhada: com `OPENAI_CHAVE_COMPARTILHADA` no ambiente (Coolify), toda conta que entrou por convite vê **StartSe OpenAI API (free tier)** em Credenciais e no seletor de credencial dos blocos LLM/Agente com OpenAI, durante as 72 horas seguintes ao resgate do convite (`OPENAI_CHAVE_COMPARTILHADA_HORAS`; nome em `OPENAI_CHAVE_COMPARTILHADA_NOME`). Ela aparece primeiro na lista, é somente leitura e mostra até quando vale; a chave fica só no ambiente, sem cópia no banco das contas nem envio ao navegador. Ao terminar o prazo ela some da lista e os blocos que a escolheram param com "O período gratuito da credencial … terminou em dd/mm/aaaa, hh:mm. Cadastre sua própria chave da OpenAI no bloco." Contas liberadas sem convite não a recebem. Detalhes em DEPLOY-COOLIFY.md.
+
 ## 0.37.0 — 14/10/2026
 
 - Referência a um bloco do fluxo que não executou nesta execução (outro caminho da Condição, etapa posterior) passa a valer vazio em vez de interromper a execução. A etapa registra quais blocos citados não executaram, visível no modal da etapa. Referência a bloco apagado continua falhando, com a mensagem "aponta para um bloco que não existe mais neste fluxo".
