@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Flow, Kind } from "@/lib/flow-types";
 import { BLOCKS } from "@/lib/flow-types";
 import { PRESETS, NODE_STYLE } from "@/lib/flow-presets";
+import { portableGraph } from "@/lib/flow-portable";
 import { Icon, IconButton, Modal, StudioShell, announcePlanLimit, request } from "./StudioUI";
 import type { AccountUsage } from "@/lib/saas-plan";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
@@ -109,7 +110,7 @@ export function FlowLibrary() {
               name: f.name,
               description: f.description,
               voiceId: f.voiceId || "",
-              graph: f.graph,
+              graph: portableGraph(f.graph),
             },
             null,
             2,
@@ -138,7 +139,8 @@ export function FlowLibrary() {
           name: b.name,
           description: b.description || "",
           voiceId: b.voiceId || "",
-          graph: b.graph,
+          // Arquivo genérico: vínculos de outra conta (credenciais, bases, subfluxos) são descartados.
+          graph: portableGraph(b.graph),
         });
         router.push("/flows/" + created.id);
       } catch (e) {

@@ -24,6 +24,7 @@ import {
   type Graph,
   type Run,
 } from "@/lib/flow-types";
+import { portableGraph } from "@/lib/flow-portable";
 import { NODE_STYLE, PALETTE_HIDDEN, preset, PRESETS } from "@/lib/flow-presets";
 import {
   connect as connectGraph,
@@ -461,7 +462,7 @@ export function FlowEditor({ id }: { id: string }) {
               name: flow.name,
               description: flow.description,
               voiceId: flow.voiceId || "",
-              graph,
+              graph: portableGraph(graph),
             },
             null,
             2,

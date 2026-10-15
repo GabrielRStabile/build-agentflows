@@ -151,7 +151,10 @@ Referências ausentes interrompem a execução com diagnóstico. Após aprovaç�
 
 HTTP usa um endereço fixo definido pelo autor do fluxo, sem interpolação a
 partir da entrada. Não insira segredos em instruções, endereços, corpos ou
-arquivos exportados. A revisão dos acessos a serviços internos ainda está
+arquivos exportados. A exportação é genérica (lib/flow-portable.ts): o
+arquivo não leva credenciais, bases de conhecimento, subfluxos nem contas
+conectadas, que são escolhidos de novo por quem importa, inclusive em outra
+conta; a importação descarta esses vínculos também em arquivos antigos. A revisão dos acessos a serviços internos ainda está
 pendente antes da abertura do beta.
 
 ## ChatGPT e persistência

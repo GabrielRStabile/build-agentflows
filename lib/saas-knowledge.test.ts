@@ -13,6 +13,7 @@ import { getKnowledgePrivate } from "./tenant-knowledge";
 import { DEFAULT_INDEX, DEFAULT_SPLITTER } from "./knowledge-types";
 import { saveToolCredential, deleteToolCredential } from "./tool-credential-store";
 import { createTenantFlow, deleteTenantFlow } from "./tenant-flows";
+import { portableGraph } from "./flow-portable";
 import { template } from "./flow-types";
 import { agentKnowledge } from "./knowledge-agent";
 
@@ -205,4 +206,27 @@ test("credenciais e vínculos em fluxos impedem exclusão enquanto usados por co
   const flow = await asA(() => createTenantFlow("Bound", false, { name: "Bound", description: "", graph }));
   await assert.rejects(asA(() => index.deleteKnowledgeBase(created.id)), /vinculada/);
   await asA(async () => { await deleteTenantFlow(flow.id); await index.deleteKnowledgeBase(created.id); deleteToolCredential(credential.id); });
+});
+
+test("fluxo exportado por uma conta entra em outra depois de portableGraph (sem credenciais, bases e subfluxos)", async () => {
+  const credential = await asA(() => saveToolCredential({ name: "Replicate", provider: "ai_replicate", fields: { REPLICATE_API_TOKEN: "secret" } }));
+  const base = await asA(() => store.createKnowledgeBase({ name: "Base da conta A" }));
+  const graph = template();
+  const agent = graph.nodes[1].data.config;
+  agent.tools = "interno:replicate";
+  agent.toolCards = JSON.stringify([{ id: "c1", kind: "tool", target: "interno:replicate", credentialId: credential.id, params: { model: "google/nano-banana" } }]);
+  agent.knowledgeBases = JSON.stringify([{ baseId: base.id, description: "Consultar sobre a conta A", references: false }]);
+  const saved = { name: "Compartilhado", description: "", graph };
+  const original = await asA(() => createTenantFlow("Compartilhado", false, saved));
+  // O arquivo bruto (com os ids da conta A) é recusado na conta B: foi o erro visto na importação.
+  await assert.rejects(asB(() => createTenantFlow("Compartilhado", false, saved)), /não encontrada nesta conta/);
+  // O arquivo genérico entra; a conta B escolhe depois as próprias credenciais e bases.
+  const imported = await asB(() => createTenantFlow("Compartilhado", false, { ...saved, graph: portableGraph(graph) }));
+  const config = imported.graph.nodes[1].data.config;
+  assert.equal(config.tools, "interno:replicate");
+  assert.equal(JSON.parse(config.toolCards)[0].credentialId, undefined);
+  assert.equal(JSON.parse(config.toolCards)[0].params.model, "google/nano-banana");
+  assert.equal(config.knowledgeBases, undefined);
+  await asB(() => deleteTenantFlow(imported.id));
+  await asA(async () => { await deleteTenantFlow(original.id); await index.deleteKnowledgeBase(base.id); await deleteToolCredential(credential.id); });
 });
