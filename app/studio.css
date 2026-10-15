@@ -3936,9 +3936,39 @@
 .credential-select-row > label { flex: 1; min-width: 0; }
 .credential-select-row > button { flex-shrink: 0; margin-bottom: 3px; }
 .tool-add-button { width: 100%; justify-content: center; margin-top: 12px; }
-.tool-allowed-list { display: grid; gap: 8px; max-height: 200px; overflow-y: auto; }
-.node-fields .tool-allowed-list label { display: flex; gap: 10px; align-items: start; font-weight: 400; word-break: break-word; }
-.node-fields .tool-allowed-list input { width: 16px; height: 16px; flex: 0 0 16px; margin-top: 3px; }
+.action-picker { display: grid; gap: 10px; min-width: 0; }
+.action-picker-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.action-picker-heading > span { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-weight: 600; }
+.action-picker-heading small { color: var(--studio-muted); font-size: 12px; font-weight: 400; }
+.action-picker-refresh { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--studio-line); border-radius: 999px; background: var(--studio-panel); color: var(--studio-ink); font: inherit; font-size: 12px; cursor: pointer; transition: border-color .15s, color .15s; }
+.action-picker-refresh:hover:not(:disabled) { border-color: var(--studio-primary); color: var(--studio-primary); }
+.action-picker-refresh:disabled { cursor: default; opacity: .6; }
+.action-picker-refresh.busy { opacity: 1; }
+.action-picker-refresh.busy svg { animation: action-picker-spin 1s linear infinite; }
+@keyframes action-picker-spin { to { transform: rotate(360deg); } }
+.action-tags { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.action-tags > li { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 3px 3px 3px 10px; border-radius: 999px; background: var(--studio-primary-soft); color: var(--studio-primary); font-size: 12px; font-weight: 500; }
+.action-tags > li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.action-tags > li > button { display: grid; place-items: center; width: 20px; height: 20px; flex-shrink: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.action-tags > li > button:hover { background: color-mix(in srgb, currentColor 16%, transparent); }
+.action-tags > li.missing { background: var(--studio-bg); color: var(--studio-muted); border: 1px dashed var(--studio-line); text-decoration: line-through; }
+.action-picker-heading .tool-text-button { padding: 0; white-space: nowrap; }
+.action-picker-search .tool-select-input > button svg { transform: rotate(90deg); transition: transform .15s; }
+.action-picker-search .tool-select-input > button[aria-label="Fechar lista"] svg { transform: rotate(-90deg); }
+.action-picker-search { position: relative; }
+.action-picker-search .tool-select-input > svg:first-child { color: var(--studio-muted); flex-shrink: 0; }
+.action-picker-options { padding: 0; }
+.action-picker-bulk { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; background: var(--studio-panel); border-bottom: 1px solid var(--studio-line); }
+.action-picker-bulk small { color: var(--studio-muted); }
+.action-picker-options [role="listbox"] { padding: 6px; }
+.action-picker-options [role="option"] { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--studio-ink); text-align: left; font: inherit; cursor: pointer; }
+.action-picker-options [role="option"].active { background: var(--studio-bg); }
+.action-picker-options [role="option"] > span { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.action-picker-options [role="option"] strong { font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.action-picker-options [role="option"] small { color: var(--studio-muted); font-size: 11px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.action-picker-options [role="option"] > svg { color: var(--studio-muted); flex-shrink: 0; }
+.action-picker-options [role="option"].active > svg { color: var(--studio-primary); }
+.action-picker-options > p { padding: 12px; color: var(--studio-muted); }
 .credential-help { font-size: 13px; color: var(--studio-primary); }
 @media (max-width: 600px) { .agent-tool-block { padding: 12px; } .tool-parameters-fields { padding: 4px 10px 12px; } }
 
