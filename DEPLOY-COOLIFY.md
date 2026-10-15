@@ -52,6 +52,17 @@ ambiente é a credencial compartilhada abaixo, limitada no tempo. Mantenha
 `TRUSTED_CLIENT_IP_HEADER` sem valor até validar que o proxy sobrescreve esse
 cabeçalho e impede sua falsificação.
 
+### Cadastro de uma turma inteira
+
+Os limites por endereço dos fluxos de conta comportam 1000 pessoas no mesmo IP
+público (três tentativas por pessoa; cinco requisições por minuto no conjunto).
+Sem `TRUSTED_CLIENT_IP_HEADER`, todas as pessoas contam como um único endereço e
+o limite é multiplicado por 10. Os e-mails de confirmação saem no ritmo de
+`RESEND_ENVIOS_POR_SEGUNDO` (padrão 2, o limite padrão da Resend): 1000
+confirmações levam cerca de 8 minutos. Peça à Resend um limite maior e ajuste a
+variável para encurtar a espera, e confira se o plano comporta o volume do dia.
+Um 429 da Resend respeita `Retry-After` sem gastar tentativa.
+
 ### E-mails de confirmação que não chegam
 
 O cadastro grava o e-mail em `mail_outbox` na mesma transação da conta; o

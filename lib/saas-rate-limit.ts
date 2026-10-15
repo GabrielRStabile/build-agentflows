@@ -14,11 +14,12 @@ export const UNATTRIBUTED = "unattributed";
 /** Without TRUSTED_CLIENT_IP_HEADER every request shares one key, so a per-address budget becomes app-wide. */
 const SHARED_ADDRESS_FACTOR = 10;
 /**
- * Per-address budget for account flows. A class on the same Wi-Fi leaves through one public IP (DEPLOY-COOLIFY.md,
- * 150 people), so these limits only stop floods; per-e-mail limits keep protecting accounts and inboxes.
+ * Per-address budget for account flows, sized for ADDRESS_PEOPLE people signing up together: a class on the same
+ * Wi-Fi leaves through one public IP, so these limits only stop floods; per-e-mail limits keep protecting accounts
+ * and inboxes. Each person gets a few attempts (retries, a wrong confirmation, the login after confirming).
  */
-export const ADDRESS_LIMIT = 1000;
-export const addressLimit = (client: string, perAddress = ADDRESS_LIMIT) => client === UNATTRIBUTED ? perAddress * SHARED_ADDRESS_FACTOR : perAddress;
+export const ADDRESS_PEOPLE = 1000;
+export const addressLimit = (client: string, attemptsPerPerson = 3) => ADDRESS_PEOPLE * attemptsPerPerson * (client === UNATTRIBUTED ? SHARED_ADDRESS_FACTOR : 1);
 /** Atomic shared fixed windows. No in-memory fallback when the database is unavailable. */
 export async function consumeRateLimit(sql: Sql, key: string, limit: number, windowSeconds: number) {
   if (!Number.isInteger(limit) || limit < 1 || !Number.isInteger(windowSeconds) || windowSeconds < 1) throw new Error("Limite inválido.");

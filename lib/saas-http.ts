@@ -77,7 +77,7 @@ export async function authAction(db: Database, req: Request, action: string) {
     if (req.method !== "POST") return privateJson({ error: "Método não permitido." }, { status: 405, headers: { Allow: "POST" } });
     assertSameOrigin(req);
     const client = rateLimitClient(req.headers);
-    await consumeRateLimit(db, `auth:ip:${client}`, addressLimit(client), 60);
+    await consumeRateLimit(db, `auth:ip:${client}`, addressLimit(client, 5), 60);
     if (action === "logout") {
       await revokeSession(db, sessionToken(req));
       // Another account signing in on this browser must not inherit the pending invite.

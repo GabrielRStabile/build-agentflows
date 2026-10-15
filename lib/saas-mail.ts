@@ -88,19 +88,38 @@ export async function senderStatus(send: typeof fetch = fetch, now = Date.now())
   return value;
 }
 
-/** One bounded batch; safe to run concurrently in workers, with a lease for crash recovery. */
-export async function deliverAuthMail(db: Database, send: typeof fetch = fetch) {
+/** Sends per second allowed by the Resend account (2 by default); a class signing up at once must not hit 429. */
+export function mailRate() {
+  const value = Number(process.env.RESEND_ENVIOS_POR_SEGUNDO);
+  return Number.isFinite(value) && value > 0 ? Math.min(100, Math.max(0.5, value)) : 2;
+}
+/** Resend asks to wait (Retry-After) on 429: rate limit or quota, never a reason to spend an attempt. */
+const retryAfterSeconds = (response: Response) => Math.max(1, Math.min(3600, Math.ceil(Number(response.headers.get("retry-after")) || 0) || 1));
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** One bounded batch paced at mailRate(); safe to run concurrently in workers, with a lease for crash recovery. */
+export async function deliverAuthMail(db: Database, send: typeof fetch = fetch, wait: (ms: number) => Promise<unknown> = pause) {
   if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM) throw new Error("Configure RESEND_API_KEY e RESEND_FROM.");
   const lease = randomUUID();
+  const rate = mailRate(), gap = 1000 / rate;
   const { rows } = await db.query<{ id: string; payload_ciphertext: string; attempts: number }>(`
     UPDATE mail_outbox SET lease_id=$1, lease_until=now()+interval '2 minutes', attempts=attempts+1
     WHERE id IN (SELECT id FROM mail_outbox
       WHERE sent_at IS NULL AND failed_at IS NULL AND attempts < 8 AND available_at <= now()
       AND (lease_until IS NULL OR lease_until < now())
-      ORDER BY available_at LIMIT 5 FOR UPDATE SKIP LOCKED)
+      ORDER BY available_at LIMIT $2 FOR UPDATE SKIP LOCKED)
     RETURNING id,payload_ciphertext,attempts
-  `, [lease]);
+  `, [lease, Math.max(5, Math.ceil(rate * 5))]);
+  let throttled: number | undefined, last = 0;
   for (const row of rows) {
+    // Throttled: the rest of the batch goes back to the queue untouched, without spending the attempt.
+    if (throttled !== undefined) {
+      await db.query("UPDATE mail_outbox SET attempts=attempts-1, available_at=now()+$3*interval '1 second', lease_id=NULL, lease_until=NULL WHERE id=$1 AND lease_id=$2", [row.id, lease, throttled]);
+      continue;
+    }
+    const elapsed = Date.now() - last;
+    if (last && elapsed < gap) await wait(gap - elapsed);
+    last = Date.now();
     let ok = false;
     let permanent = false;
     let status: number | "rede" = "rede";
@@ -114,11 +133,21 @@ export async function deliverAuthMail(db: Database, send: typeof fetch = fetch) 
       });
       ok = response.ok;
       status = response.status;
+      if (response.status === 429) throttled = retryAfterSeconds(response);
       // 403 (domínio não verificado) fica na fila com as repetições normais: verificar o domínio dentro do prazo entrega as mensagens pendentes.
       permanent = response.status >= 400 && response.status < 500 && ![403, 408, 409, 429].includes(response.status);
       await response.body?.cancel();
     } catch { /* Retry without logging tokens, email contents or provider responses. */ }
     // Só o id da fila, a tentativa e o status HTTP: sem destinatário, assunto ou resposta do fornecedor.
+    if (throttled !== undefined) {
+      log("email_envio", { id: row.id, tentativa: row.attempts, status, resultado: "aguardar", esperaSegundos: throttled });
+      // A day of 429s (for example, an exhausted daily quota) ends the message instead of retrying forever.
+      await db.query(`UPDATE mail_outbox SET attempts=attempts-1, available_at=now()+$3*interval '1 second', lease_id=NULL, lease_until=NULL,
+        failed_at=CASE WHEN created_at < now()-interval '1 day' THEN now() ELSE NULL END,
+        payload_ciphertext=CASE WHEN created_at < now()-interval '1 day' THEN '' ELSE payload_ciphertext END
+        WHERE id=$1 AND lease_id=$2`, [row.id, lease, throttled]);
+      continue;
+    }
     log("email_envio", { id: row.id, tentativa: row.attempts, status, resultado: ok ? "enviado" : permanent || row.attempts >= 8 ? "falhou" : "repetir" });
     await db.query(`UPDATE mail_outbox SET
       sent_at=CASE WHEN $3 THEN now() ELSE NULL END,

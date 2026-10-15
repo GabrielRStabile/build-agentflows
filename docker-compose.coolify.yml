@@ -7,6 +7,7 @@ x-app-environment: &app-environment
   REDIS_URL: redis://:${REDIS_PASSWORD:?Informe senha base64url}@redis:6379
   RESEND_API_KEY: ${RESEND_API_KEY:?Configure o Resend}
   RESEND_FROM: ${RESEND_FROM:?Configure o remetente verificado}
+  RESEND_ENVIOS_POR_SEGUNDO: ${RESEND_ENVIOS_POR_SEGUNDO:-2}
   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
   GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
   FILA_LIMITE_USUARIO: ${FILA_LIMITE_USUARIO:-100}

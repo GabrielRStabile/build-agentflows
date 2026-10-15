@@ -261,10 +261,35 @@ test("turma no mesmo endereço cria contas; dados inválidos não gastam o limit
     await assert.rejects(registerUser(db, { name: "Aluno", email: `fraca-${i}@example.com`, password: "123" }, "sala-a"), (error: unknown) => (error as { status: number }).status !== 429);
   await Promise.all(Array.from({ length: 30 }, (_, i) => registerUser(db, { name: `Aluno ${i}`, email: `aluno-${i}@turma.example.com`, password: "Senha-Forte-2026!" }, "sala-a")));
   assert.equal((await db.query("SELECT id FROM users WHERE email LIKE '%@turma.example.com'")).rows.length, 30);
-  assert.equal(addressLimit("203.0.113.9"), 1000, "mil tentativas por endereço em cada janela");
-  assert.equal(addressLimit("unattributed"), 10000, "sem cabeçalho confiável o limite é de todo o app");
+  assert.equal(addressLimit("203.0.113.9"), 3000, "mil pessoas por endereço, com três tentativas cada");
+  assert.equal(addressLimit("unattributed"), 30000, "sem cabeçalho confiável o limite é de todo o app");
   assert.match(new RateLimitError(1800).message, /Tente novamente em 30 minutos\./);
   assert.match(new RateLimitError(45).message, /em 45 segundos\./);
+});
+
+test("e-mails saem no ritmo da Resend; 429 respeita Retry-After sem gastar tentativa", async () => {
+  await db.query("DELETE FROM mail_outbox");
+  process.env.RESEND_ENVIOS_POR_SEGUNDO = "4";
+  for (const n of [1, 2, 3, 4]) await registerUser(db, { name: "Turma", email: `ritmo-${n}@example.com`, password }, "sala-ritmo");
+  let calls = 0;
+  const sender: typeof fetch = async () => ++calls === 2 ? new Response("{}", { status: 429, headers: { "retry-after": "7" } }) : Response.json({ id: "ok" });
+  const waits: number[] = [];
+  const originalLog = console.log; const logged: string[] = []; console.log = (line: string) => { logged.push(String(line)); };
+  try { assert.equal(await deliverAuthMail(db, sender, async (ms) => { waits.push(ms); }), 4); }
+  finally { console.log = originalLog; delete process.env.RESEND_ENVIOS_POR_SEGUNDO; }
+  assert.equal(calls, 2, "depois do 429 o resto do lote volta para a fila sem envio");
+  assert.equal(waits.length, 1); assert.ok(waits[0] > 200 && waits[0] <= 250, "4 por segundo: 250 ms entre envios");
+  const rows = (await db.query<{ sent: boolean; attempts: number; wait: number }>("SELECT sent_at IS NOT NULL AS sent, attempts, extract(epoch FROM available_at-now())::int AS wait FROM mail_outbox ORDER BY sent_at NULLS LAST, available_at")).rows;
+  assert.equal(rows.filter((r) => r.sent).length, 1);
+  assert.deepEqual(rows.filter((r) => !r.sent).map((r) => r.attempts), [0, 0, 0], "429 não conta como tentativa");
+  assert.ok(rows.filter((r) => !r.sent).every((r) => r.wait >= 5 && r.wait <= 7), "Retry-After de 7 s");
+  assert.match(logged.join("\n"), /"resultado":"aguardar","esperaSegundos":7/);
+  // Um dia inteiro de 429 (cota esgotada) encerra a mensagem em vez de repetir para sempre.
+  await db.query("UPDATE mail_outbox SET available_at=now(), created_at=now()-interval '2 days' WHERE sent_at IS NULL");
+  console.log = () => {};
+  try { await deliverAuthMail(db, async () => new Response("{}", { status: 429 }), async () => {}); } finally { console.log = originalLog; }
+  assert.equal((await db.query("SELECT id FROM mail_outbox WHERE failed_at IS NOT NULL AND payload_ciphertext=''")).rows.length, 1);
+  await db.query("DELETE FROM mail_outbox");
 });
 
 test("rate limit atômico persiste entre chamadas e retorna espera", async () => {
