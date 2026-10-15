@@ -4,6 +4,12 @@ import { runChatCompletion } from "./chat-completion";
 import { runOpenRouter } from "./openrouter";
 import { runAnthropic } from "./anthropic";
 
+/** Models that already refused function calling without "none" in this process; later calls start with it. */
+const toolsNeedNone = new Set<string>();
+/** The provider asks for reasoning_effort "none" (e.g. "Function calling requires reasoning_effort 'none'"). */
+export const requiresNoReasoning = (error: unknown) =>
+  error instanceof Error && (error as { status?: number }).status === 400 && /reasoning_effort[^.]*\bnone\b/i.test(error.message);
+
 export async function runProviderModel(config: Record<string, string>, options: Omit<Parameters<typeof runChatCompletion>[0], "key" | "url" | "parameters">) {
   const provider = modelProviderId(config.model);
   if (provider === "chatgpt") throw new Error("Selecione um fornecedor de API.");
@@ -18,13 +24,22 @@ export async function runProviderModel(config: Record<string, string>, options: 
   if (reasoning && settings.temperature !== undefined) throw new Error("Remova a temperatura personalizada deste modelo de raciocínio.");
   let effort = reasoning ? settings.reasoningEffort : undefined;
   // Chat Completions only accepts tools on these models without reasoning; without an explicit choice the engine adapts.
-  if (reasoning && options.tools?.length && toolsRequireNoReasoning(model)) {
+  const withTools = reasoning && !!options.tools?.length;
+  if (withTools && (toolsRequireNoReasoning(model) || toolsNeedNone.has(model))) {
     if (effort && effort !== "none") throw new Error(`O modelo ${model} só usa ferramentas com esforço de raciocínio "none" na API da OpenAI. Ajuste o parâmetro no bloco ou retire as ferramentas.`);
     effort = "none";
   }
-  return runChatCompletion({ ...options, model, key, url: `${p.url}/chat/completions`, parameters: {
+  const call = (level?: string) => runChatCompletion({ ...options, model, key, url: `${p.url}/chat/completions`, parameters: {
     [provider === "openai" ? "max_completion_tokens" : "max_tokens"]: settings.maxTokens || 4000,
     ...(settings.temperature !== undefined ? { temperature: settings.temperature } : {}),
-    ...(effort ? { reasoning_effort: effort } : {}),
+    ...(level ? { reasoning_effort: level } : {}),
   } });
+  if (!withTools || effort) return call(effort);
+  // Blank field: the model's default, and "none" only when the provider says tools need it (the refusal comes before any tool runs).
+  try { return await call(); }
+  catch (error) {
+    if (!requiresNoReasoning(error)) throw error;
+    toolsNeedNone.add(model);
+    return call("none");
+  }
 }

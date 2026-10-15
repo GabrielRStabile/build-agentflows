@@ -181,6 +181,19 @@ test("OpenAI: esforço de raciocínio é enviado e o gpt-6-luna usa ferramentas 
     assert.equal(sent[3].reasoning_effort, undefined, "modelos sem raciocínio ignoram o nível");
     await assert.rejects(runProviderModel({ model: "openai:gpt-6-luna", modelCredentialId: c.id, modelReasoningEffort: "high" }, { system: "s", prompt: "p", tools, fetcher }), /só usa ferramentas com esforço de raciocínio "none"/);
     assert.throws(() => modelSettings({ modelReasoningEffort: "turbo" }), /esforço de raciocínio/);
+    // Em branco: o padrão do modelo; se o fornecedor exigir none para ferramentas, repete uma vez com none e lembra o modelo.
+    const tries: unknown[] = [];
+    const strict: typeof fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body)); tries.push(body.reasoning_effort);
+      return body.reasoning_effort === "none" ? Response.json({ choices: [{ message: { content: "ok" } }] })
+        : Response.json({ error: { message: "Function calling is not supported with reasoning_effort 'medium'; use reasoning_effort 'none'." } }, { status: 400 });
+    };
+    assert.equal((await runProviderModel({ model: "openai:gpt-7-mini", modelCredentialId: c.id }, { system: "s", prompt: "p", tools, fetcher: strict })), "ok");
+    assert.deepEqual(tries, [undefined, "none"]);
+    await runProviderModel({ model: "openai:gpt-7-mini", modelCredentialId: c.id }, { system: "s", prompt: "p", tools, fetcher: strict });
+    assert.deepEqual(tries, [undefined, "none", "none"], "a próxima chamada já começa com none");
+    await assert.rejects(runProviderModel({ model: "openai:gpt-7-nano", modelCredentialId: c.id, modelReasoningEffort: "low" }, { system: "s", prompt: "p", tools, fetcher: strict }), /Function calling/, "nível escolhido não é trocado");
+    await assert.rejects(runProviderModel({ model: "openai:gpt-7-nano", modelCredentialId: c.id }, { system: "s", prompt: "p", fetcher: strict }), /Function calling/, "sem ferramentas não repete");
     const models = await providerModels("openai", c.id, async () => Response.json({ data: [{ id: "gpt-4.1-mini" }, { id: "gpt-6-luna" }, { id: "o3" }] }));
     assert.deepEqual(models.map(m => [m.id, m.parameters.includes("reasoning_effort")]), [["openai:gpt-4.1-mini", false], ["openai:gpt-6-luna", true], ["openai:o3", true]]);
   });
