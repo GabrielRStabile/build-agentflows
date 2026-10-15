@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.45.0 — 15/10/2026
+
+- Repetir e memória: quando a repetição volta a um LLM ou Agente com memória ligada, o resultado do bloco anterior deixa de chegar como Entrada sem autor (ou como turno do próprio assistente) e permanece na Memória, identificado pelo nome do bloco que o produziu. A etapa recebe então a conversa (Mensagem em branco) ou apenas a Mensagem, com a memória completa ao lado. Um Supervisor que decide pelo histórico passa a ver, por exemplo, o post como resposta do Escritor e o parecer como resposta do Revisor. Memória desligada e resultados que não vêm de LLM/Agente mantêm o comportamento anterior.
+
 ## 0.44.0 — 14/10/2026
 
 - Exportação de fluxos genérica: o arquivo `build-agentflows/v1` deixa de levar identificadores da conta (credencial do modelo, credenciais dos cartões de ferramenta, bases de conhecimento, subfluxos e contas conectadas). Importar em outra conta não falha mais com "Credencial não encontrada nesta conta": a importação também descarta esses vínculos em arquivos antigos, e quem importa seleciona as próprias credenciais, bases e subfluxos nos blocos. Duplicar dentro da mesma conta continua copiando tudo.
