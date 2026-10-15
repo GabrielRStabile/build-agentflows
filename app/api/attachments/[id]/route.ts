@@ -17,6 +17,8 @@ export async function GET(req: Request, c: { params: Promise<{ id: string }> }) 
       "Content-Type": a.mime, "Accept-Ranges": "bytes",
       "Content-Disposition": `${a.kind === "image" || a.kind === "video" ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(a.name)}`,
       "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
+      // HTML and other documents are downloads; even if opened, they never run scripts on this origin.
+      ...(a.kind === "document" ? { "Content-Security-Policy": "sandbox; default-src 'none'" } : {}),
     };
     const range = byteRange(req.headers.get("range"), bytes.length);
     if (range === "invalid") return new Response(null, { status: 416, headers: { ...headers, "Content-Range": `bytes */${bytes.length}` } });

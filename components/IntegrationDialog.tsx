@@ -440,7 +440,7 @@ ${authenticated ? "# Envie o mesmo cabeçalho Authorization." : "# Acesso públi
               <div><dt>Content-Type</dt><dd><code>multipart/form-data</code> (JSON <code>{'{"input"}'}</code> também é aceito)</dd></div>
               <div><dt>Campo input</dt><dd>texto da mensagem, obrigatório, até 20 mil caracteres</dd></div>
               <div><dt>Campo session</dt><dd>opcional, até 100 caracteres (letras, números, ponto, traço, sublinhado, dois-pontos). Sem ele, o servidor gera um e devolve na resposta; reenviado, a chamada continua a mesma conversa e os blocos com memória recebem as interações anteriores</dd></div>
-              <div><dt>Campo file</dt><dd>opcional, até 5 arquivos de 10 MB (20 MB no total): PNG, JPG, WebP, PDF, TXT, MD, CSV e JSON; exige um bloco de IA no fluxo</dd></div>
+              <div><dt>Campo file</dt><dd>opcional, até 5 arquivos de 10 MB (20 MB no total): PNG, JPG, WebP, PDF, TXT, MD, CSV, JSON, XLS, XLSX, DOCX, PPTX, HTML, CSS, XML, YAML e SQL; exige um bloco de IA no fluxo</dd></div>
               <div><dt>Autenticação</dt><dd>{authenticated ? <>cabeçalho <code>Authorization: Bearer CHAVE</code></> : "nenhuma (acesso público)"}</dd></div>
               <div><dt>Resposta</dt><dd>síncrona: <code>200</code> com <code>{'{"id","status","output","session"}'}</code> ao terminar (<code>status</code> completed, failed ou waiting para aprovação pendente). Se a execução passar do limite de tempo, <code>202</code> com <code>queued</code> ou running: consulte com <code>GET ?runId=</code>. <code>?wait=0</code> responde 202 na hora, sem esperar</dd></div>
             </dl>

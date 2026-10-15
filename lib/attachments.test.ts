@@ -42,6 +42,57 @@ test("lê texto/PDF e valida a imagem real; histórico contém só metadados", a
   assert.match(context.text, /Relatorio com receita 42/);
   assert.deepEqual(context.images, [`data:image/png;base64,${png.toString("base64")}`]);
 });
+test("planilhas XLS/XLSX viram CSV por aba, HTML vira texto visível e JPEG é aceito", async () => {
+  const XLSX = await import("xlsx");
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([["mês", "receita"], ["setembro", 42], ["outubro", { f: "B2*2", v: 84 }]]), "Vendas");
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([["meta"], [100]]), "Metas");
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([]), "Vazia");
+  const f = await flow();
+  const files = [
+    new File([new Uint8Array(XLSX.write(book, { type: "buffer", bookType: "xlsx" }))], "vendas.xlsx"),
+    new File([new Uint8Array(XLSX.write(book, { type: "buffer", bookType: "biff8" }))], "vendas.xls"),
+    new File(["<html><head><title>t</title><style>p{}</style></head><body><h1>Relatório</h1><p>Receita <b>42</b></p><script>alert(1)</script><table><tr><td>a</td><td>b</td></tr></table></body></html>"], "pagina.html"),
+    new File([new Uint8Array(await sharp(png).jpeg().toBuffer())], "foto.jpeg"),
+  ];
+  const saved = [];
+  for (const file of files) saved.push(await saveAttachment(f.id, file));
+  assert.deepEqual(saved.map((a) => [a.kind, a.mime]), [
+    ["document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"], ["document", "application/vnd.ms-excel"], ["document", "text/html"], ["image", "image/jpeg"],
+  ]);
+  const context = await attachmentContext(f.id, await resolveAttachments(f.id, saved.map((a) => a.id)));
+  for (const kind of ["xlsx", "xls"]) assert.match(context.text, new RegExp(`vendas\\.${kind}[\\s\\S]*## Planilha: Vendas\\nmês,receita\\nsetembro,42\\noutubro,84\\n*## Planilha: Metas\\nmeta\\n100`));
+  assert.doesNotMatch(context.text, /Planilha: Vazia|alert|p\{\}/);
+  assert.match(context.text, /Relatório\n+Receita 42\n+a\tb/);
+  assert.equal(context.images.length, 1);
+  await assert.rejects(() => saveAttachment(f.id, new File(["mês,receita"], "falsa.xlsx")), /planilha XLSX válida/);
+  await assert.rejects(() => saveAttachment(f.id, new File([new Uint8Array(XLSX.write(book, { type: "buffer", bookType: "xlsx" }))], "trocada.xls")), /planilha XLS válida/);
+  await assert.rejects(() => saveAttachment(f.id, new File(["<script>x</script>"], "vazia.html")), /vazio/);
+});
+test("DOCX, PPTX e formatos de texto (CSS, XML, YAML, SQL) são aceitos; DOC antigo tem orientação", async () => {
+  const { zipSync, strToU8 } = await import("fflate");
+  const types = (...parts: [string, string][]) => strToU8(`<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${parts.map(([part, type]) => `<Override PartName="/${part}" ContentType="${type}"/>`).join("")}</Types>`);
+  const rels = (main: string) => strToU8(`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="${main}"/></Relationships>`);
+  const docx = zipSync({
+    "[Content_Types].xml": types(["word/document.xml", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"]), "_rels/.rels": rels("word/document.xml"),
+    "word/document.xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Contrato com receita 42</w:t></w:r></w:p></w:body></w:document>`),
+  });
+  const pptx = zipSync({
+    "[Content_Types].xml": types(["ppt/presentation.xml", "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"], ["ppt/slides/slide1.xml", "application/vnd.openxmlformats-officedocument.presentationml.slide+xml"]), "_rels/.rels": rels("ppt/presentation.xml"),
+    "ppt/presentation.xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?><p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst></p:presentation>`),
+    "ppt/_rels/presentation.xml.rels": strToU8(`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/></Relationships>`),
+    "ppt/slides/slide1.xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?><p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><p:cSld><p:spTree><p:sp><p:txBody><a:p><a:r><a:t>Slide de metas 2027</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>`),
+  });
+  const f = await flow();
+  const saved = [];
+  for (const file of [new File([docx], "contrato.docx"), new File([pptx], "metas.pptx"), new File(["body { color: red; }"], "estilo.css"), new File(["<pedido><total>42</total></pedido>"], "pedido.xml"), new File(["meta: 100\n"], "config.yml"), new File(["SELECT total FROM vendas;"], "consulta.sql")])
+    saved.push(await saveAttachment(f.id, file));
+  assert.deepEqual(saved.map((a) => a.mime), ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "text/css", "application/xml", "application/yaml", "application/sql"]);
+  const context = await attachmentContext(f.id, await resolveAttachments(f.id, saved.slice(0, 5).map((a) => a.id)));
+  for (const text of ["Contrato com receita 42", "Slide de metas 2027", "color: red", "<total>42</total>", "meta: 100"]) assert.ok(context.text.includes(text), text);
+  await assert.rejects(() => saveAttachment(f.id, new File(["texto"], "falso.docx")), /DOCX válido/);
+  await assert.rejects(() => saveAttachment(f.id, new File([new Uint8Array([0xd0, 0xcf, 0x11, 0xe0])], "antigo.doc")), /DOC antigo.*DOCX ou PDF/);
+});
 test("recusa conteúdo disfarçado, arquivo inválido/vazio, texto binário e limites", async () => {
   const f = await flow();
   await assert.rejects(() => saveAttachment(f.id, new File(["texto"], "foto.png")), /Imagem inválida/);
