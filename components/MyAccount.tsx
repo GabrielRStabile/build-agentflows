@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { AccountUsage } from "@/lib/saas-plan";
 import { REGRA_SENHA } from "@/lib/conta-comum";
-import { Icon, StudioShell, request } from "./StudioUI";
+import { Icon, Modal, StudioShell, request } from "./StudioUI";
 import { PasswordStrength } from "./PasswordStrength";
 
 type Account = { name: string; email: string; hasPassword: boolean; google: boolean; usage: AccountUsage };
@@ -41,39 +41,44 @@ function Coupon({ code }: { code: string }) {
   );
 }
 
-function PasswordForm() {
+/** Alteração de senha em diálogo: ao concluir, fecha e deixa o aviso no cartão Perfil. */
+function PasswordDialog({ onClose, onChanged }: { onClose: () => void; onChanged: (message: string) => void }) {
   const [current, setCurrent] = useState(""), [password, setPassword] = useState(""), [confirmPassword, setConfirm] = useState("");
-  const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState("");
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
   async function submit(event: FormEvent) {
     event.preventDefault();
-    setError(""); setMessage("");
+    setError("");
     if (password !== confirmPassword) { setError("As senhas não são iguais."); return; }
     setBusy(true);
     try {
       await request("/api/conta/senha", "POST", { current, password, confirmPassword });
-      setCurrent(""); setPassword(""); setConfirm("");
-      setMessage("Senha alterada. As outras sessões desta conta foram encerradas.");
-    } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível alterar a senha."); }
-    finally { setBusy(false); }
+      onChanged("Senha alterada. As outras sessões desta conta foram encerradas.");
+      onClose();
+    } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível alterar a senha."); setBusy(false); }
   }
   return (
-    <form className="account-password" onSubmit={submit}>
-      <label className="account-field">Senha atual<input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} required maxLength={256} autoComplete="current-password" /></label>
-      <div className="account-new-password">
-        <label className="account-field">Nova senha<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required maxLength={256} autoComplete="new-password" aria-describedby="password-rule" /></label>
-        <small id="password-rule">{REGRA_SENHA}</small>
-        <PasswordStrength password={password} />
-      </div>
-      <label className="account-field">Confirmar nova senha<input type="password" value={confirmPassword} onChange={(e) => setConfirm(e.target.value)} required maxLength={256} autoComplete="new-password" /></label>
-      {error && <p role="alert" className="account-error">{error}</p>}
-      {message && <p role="status" className="account-success">{message}</p>}
-      <div><button type="submit" className="studio-button primary" disabled={busy}>{busy ? "Alterando…" : "Alterar senha"}</button></div>
-    </form>
+    <Modal title="Alterar senha" className="account-password-modal" onClose={() => { if (!busy) onClose(); }}>
+      <form className="account-password" onSubmit={submit}>
+        <label className="account-field">Senha atual<input type="password" autoFocus value={current} onChange={(e) => setCurrent(e.target.value)} required maxLength={256} autoComplete="current-password" disabled={busy} /></label>
+        <div className="account-new-password">
+          <label className="account-field">Nova senha<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required maxLength={256} autoComplete="new-password" aria-describedby="password-rule" disabled={busy} /></label>
+          <small id="password-rule">{REGRA_SENHA}</small>
+          <PasswordStrength password={password} />
+        </div>
+        <label className="account-field">Confirmar nova senha<input type="password" value={confirmPassword} onChange={(e) => setConfirm(e.target.value)} required maxLength={256} autoComplete="new-password" disabled={busy} /></label>
+        {error && <p role="alert" className="studio-error">{error}</p>}
+        <div className="modal-actions">
+          <button type="button" className="studio-button" disabled={busy} onClick={onClose}>Cancelar</button>
+          <button type="submit" className="studio-button primary" disabled={busy}>{busy ? "Alterando…" : "Alterar senha"}</button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
 export function MyAccount() {
   const [account, setAccount] = useState<Account | null>(null), [error, setError] = useState("");
+  const [passwordOpen, setPasswordOpen] = useState(false), [passwordMessage, setPasswordMessage] = useState("");
   const load = useCallback(async () => {
     try { setAccount(await request<Account>("/api/conta")); setError(""); }
     catch (e) { setError(e instanceof Error ? e.message : "Não foi possível carregar sua conta."); }
@@ -108,12 +113,16 @@ export function MyAccount() {
             </section>
           )}
           <section className="credential-manager-card account-card" aria-labelledby="account-profile">
-            <h2 id="account-profile">Perfil</h2>
+            <div className="account-card-title">
+              <h2 id="account-profile">Perfil</h2>
+              {account.hasPassword && <button type="button" className="studio-button" onClick={() => { setPasswordMessage(""); setPasswordOpen(true); }}>Alterar senha</button>}
+            </div>
             <dl className="account-profile">
               <div><dt>Nome</dt><dd>{account.name}</dd></div>
               <div><dt>E-mail</dt><dd>{account.email}</dd></div>
               <div><dt>Acesso</dt><dd>{[account.hasPassword && "E-mail e senha", account.google && "Google"].filter(Boolean).join(" · ")}</dd></div>
             </dl>
+            {passwordMessage && <p role="status" className="account-success">{passwordMessage}</p>}
           </section>
           <section className="credential-manager-card account-card" aria-labelledby="account-usage">
             <div className="account-card-title">
@@ -125,13 +134,8 @@ export function MyAccount() {
             <UsageMeter label="Armazenamento das bases de conhecimento" used={usage.storage.used} limit={usage.storage.limit} format={megabytes}
               note="Arquivos enviados às bases, até 10 MB cada. Excluir fontes libera espaço." />
           </section>
-          {account.hasPassword && (
-            <section className="credential-manager-card account-card" aria-labelledby="account-password">
-              <h2 id="account-password">Alterar senha</h2>
-              <PasswordForm />
-            </section>
-          )}
         </>}
+        {passwordOpen && <PasswordDialog onClose={() => setPasswordOpen(false)} onChanged={setPasswordMessage} />}
       </main>
     </StudioShell>
   );

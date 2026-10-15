@@ -4124,6 +4124,10 @@
 .account-coupon { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .account-coupon code { padding: 6px 10px; border: 1px dashed var(--studio-primary); border-radius: 8px; background: var(--studio-primary-soft); color: var(--studio-ink); font-size: 13px; font-weight: 700; letter-spacing: 0.06em; user-select: all; }
 .account-password { display: grid; gap: 12px; max-width: 420px; }
+.studio-modal.account-password-modal { width: min(440px, calc(100vw - 32px)); }
+.account-password-modal .account-password { max-width: none; }
+.account-password-modal .modal-actions { margin-top: 8px; }
+.account-profile + .account-success { margin: 12px 0 0; }
 .account-new-password { display: grid; gap: 6px; }
 .account-new-password .password-strength { margin-top: 0; }
 .account-field { display: grid; gap: 6px; font-size: 12px; font-weight: 600; color: var(--studio-ink); }
