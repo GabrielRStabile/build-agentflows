@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.46.1 — 15/10/2026
+
+- Criação de conta: turmas no mesmo Wi-Fi deixam de receber "Muitas tentativas" ao se cadastrar. Os limites por endereço dos fluxos de conta (cadastro, entrada, Google, reenvio de e-mail e links) passam a 1000 por janela, porque todos saem pelo mesmo IP público; sem `TRUSTED_CLIENT_IP_HEADER` configurado, o limite vale para o app inteiro e sobe para 10 mil. Dados inválidos (senha fraca, nome vazio, e-mail inválido) não gastam mais tentativas, e a mensagem informa quanto tempo esperar. Os limites por e-mail continuam iguais.
+
 ## 0.46.0 — 15/10/2026
 
 - Anexos: o chat de teste e o campo `file` da API passam a aceitar planilhas XLS e XLSX (cada aba chega ao modelo como CSV com o nome da aba, até 5 mil linhas por aba; fórmulas com o último valor calculado), páginas HTML (só o texto visível, sem scripts nem estilos), DOCX e PPTX (texto extraído) e CSS, XML, YAML e SQL como texto. O DOC antigo é recusado com a orientação de salvar como DOCX ou PDF. Documentos baixados saem com proteção que impede a execução de scripts no domínio do app.
