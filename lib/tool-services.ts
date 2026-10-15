@@ -7,6 +7,7 @@ import type { Builtin } from "./tools";
 import { fetchText, stripHtml, isPrivateHost } from "./tools";
 import { privateDataDirectory } from "./tenant-files";
 
+const E2B_MAX_IMAGES = 5;
 const string = (description?: string) => ({ type: "string", ...(description ? { description } : {}) });
 const object = { type: "object", additionalProperties: true };
 const schema = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required });
@@ -146,11 +147,30 @@ export const SERVICE_TOOLS: Builtin[] = [
     try { writeFileSync(fd, content); } finally { closeSync(fd); }
     return "Arquivo salvo: " + text(a, "caminho");
   } },
-  { id: "interno:e2b", name: "e2b", label: "Code Interpreter by E2B", category: "Arquivos e código", credential: "e2b", available: () => !!getConfig("TOOL_E2B_KEY"), description: "Executa Python ou JavaScript em um ambiente remoto isolado E2B. Retorna resultados e saída, sem acesso às credenciais do app.", schema: schema({ codigo: string(), linguagem: { type: "string", enum: ["python", "javascript"] } }, ["codigo"]), call: async (a) => {
+  { id: "interno:e2b", name: "e2b", label: "Code Interpreter by E2B", category: "Arquivos e código", credential: "e2b", available: () => !!getConfig("TOOL_E2B_KEY"), description: "Executa Python ou JavaScript em um ambiente remoto isolado E2B. Retorna resultados e saída, sem acesso às credenciais do app. Para gráficos, use matplotlib e termine com plt.show(): a imagem aparece automaticamente para a pessoa abaixo da sua resposta. Não salve gráficos em disco (não há pasta compartilhada) e não inclua links nem markdown da imagem.", schema: schema({ codigo: string(), linguagem: { type: "string", enum: ["python", "javascript"] } }, ["codigo"]), call: async (a) => {
     const { Sandbox } = await import("@e2b/code-interpreter");
     const sandbox = await Sandbox.create({ apiKey: getConfig("TOOL_E2B_KEY"), timeoutMs: 60000 });
-    try { const execution = await sandbox.runCode(required(a, "codigo"), { language: a.linguagem === "javascript" ? "javascript" : "python", timeoutMs: 45000 }); return JSON.stringify({ resultados: execution.results.map((r) => r.text), saida: execution.logs, erro: execution.error }).slice(0, 50000); }
+    let execution;
+    try { execution = await sandbox.runCode(required(a, "codigo"), { language: a.linguagem === "javascript" ? "javascript" : "python", timeoutMs: 45000 }); }
     finally { await sandbox.kill(); }
+    // Displayed images (plt.show, PIL) come back as base64: they become private attachments shown below the answer, never text for the model.
+    const images: Buffer[] = [], seen = new Set<string>();
+    const resultados = execution.results.map((r) => {
+      const data = r.png || r.jpeg;
+      if (!data) return r.text;
+      if (!seen.has(data) && images.length < E2B_MAX_IMAGES) { seen.add(data); images.push(Buffer.from(data, "base64")); }
+      return "[imagem exibida para a pessoa]";
+    });
+    const { toolRunScope } = await import("./replicate-tool");
+    const scope = toolRunScope.getStore();
+    let imagens: string | undefined;
+    if (images.length && scope) {
+      const { saveMediaFiles } = await import("./media-runtime");
+      const saved = await saveMediaFiles(scope.run.flowId, images, scope.signal);
+      scope.trace.images = [...(scope.trace.images || []), ...saved.files];
+      imagens = `${saved.files.length} imagem(ns) gerada(s); já aparecem para a pessoa abaixo da sua resposta. Não inclua links nem markdown delas.`;
+    } else if (images.length) imagens = "As imagens geradas só são exibidas quando a ferramenta é usada por um bloco Agente.";
+    return JSON.stringify({ resultados, ...(imagens ? { imagens } : {}), saida: execution.logs, erro: execution.error }).slice(0, 50000);
   } },
   ...([
     ["brave_mcp", "Brave Search MCP", "brave", "TOOL_BRAVE_KEY"],

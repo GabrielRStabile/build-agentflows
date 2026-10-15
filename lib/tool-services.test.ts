@@ -160,3 +160,26 @@ test("E2B executa em sandbox remoto e sempre encerra o ambiente", async (t) => {
   await assert.rejects(() => callTool("interno:e2b", { codigo: "fail" }), /exec failure/);
   assert.equal(killed, 2);
 });
+
+test("E2B: gráficos exibidos viram anexos da resposta, sem base64 para o modelo", async (t) => {
+  salvarCampos({ TOOL_E2B_KEY: "e2b-test-key" });
+  const sharp = (await import("sharp")).default;
+  const png = (await sharp({ create: { width: 4, height: 3, channels: 3, background: "#4f46e5" } }).png().toBuffer()).toString("base64");
+  const { Sandbox } = await import("@e2b/code-interpreter");
+  t.mock.method(Sandbox, "create", async () => ({
+    runCode: async () => ({ results: [{ text: "<PIL.Image.Image image mode=RGBA>", png }, { text: "<Figure size 1000x550 with 1 Axes>", png }, { text: "42" }], logs: { stdout: [], stderr: [] }, error: null }),
+    kill: async () => {},
+  }));
+  const outside = JSON.parse(await callTool("interno:e2b", { codigo: "plt.show()" }));
+  assert.deepEqual(outside.resultados, ["[imagem exibida para a pessoa]", "[imagem exibida para a pessoa]", "42"]);
+  assert.match(outside.imagens, /bloco Agente/);
+  const { createTenantFlow } = await import("./tenant-flows");
+  const { toolRunScope } = await import("./replicate-tool");
+  const flow = await createTenantFlow("Gráficos");
+  const trace = { nodeId: "a", type: "tool" } as import("./flow-types").Trace;
+  const run = { flowId: flow.id } as import("./flow-types").Run;
+  const output = await toolRunScope.run({ run, nodeId: "a", signal: new AbortController().signal, trace }, () => callTool("interno:e2b", { codigo: "plt.show()" }));
+  assert.doesNotMatch(output, /iVBOR/, "o base64 não vai para o modelo");
+  assert.match(JSON.parse(output).imagens, /1 imagem\(ns\) gerada/);
+  assert.deepEqual(trace.images?.map((image) => [image.kind, image.mime]), [["image", "image/png"]], "imagens repetidas são guardadas uma vez");
+});
