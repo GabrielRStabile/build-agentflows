@@ -116,6 +116,8 @@ scenario("imagens chegam ao turno pelo protocolo; modelo sem imagem é recusado"
   const image = "data:image/png;base64,aW1hZ2Vt";
   const result = await bridge.run({ system: "Analise", prompt: "inspect-images", images: [image] });
   assert.deepEqual(JSON.parse(result), [{ type: "text", text: "inspect-images" }, { type: "image", url: image }]);
+  const original = await bridge.run({ system: "Analise", prompt: "inspect-images", images: [image], imageDetail: "original" });
+  assert.deepEqual(JSON.parse(original)[1], { type: "image", url: image, detail: "original" }, "a qualidade escolhida segue no protocolo");
   const models = bridge.models;
   bridge.models = async () => [{ id: "text", name: "Texto", inputModalities: ["text"], isDefault: true }];
   try {

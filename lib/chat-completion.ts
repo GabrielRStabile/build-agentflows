@@ -21,6 +21,7 @@ export async function runChatCompletion({
   model,
   tools = [],
   images = [],
+  imageDetail,
   history: previous = [],
   signal,
   onText,
@@ -35,6 +36,8 @@ export async function runChatCompletion({
   model?: string;
   tools?: AgentTool[];
   images?: string[];
+  /** OpenAI image detail; providers without the field ignore it. */
+  imageDetail?: "low" | "high" | "auto" | "original";
   /** Turnos anteriores da conversa (pessoa e assistente), enviados com seus papéis antes da mensagem atual. */
   history?: { role: "user" | "assistant"; content: string }[];
   signal?: AbortSignal;
@@ -45,7 +48,7 @@ export async function runChatCompletion({
   const history: Msg[] = [
     { role: "system", content: system },
     ...previous.map((turn): Msg => ({ role: turn.role, content: turn.content })),
-    { role: "user", content: images.length ? [{ type: "text", text: prompt }, ...images.map((url) => ({ type: "image_url" as const, image_url: { url } }))] : prompt },
+    { role: "user", content: images.length ? [{ type: "text", text: prompt }, ...images.map((url) => ({ type: "image_url" as const, image_url: { url, ...(imageDetail && imageDetail !== "original" ? { detail: imageDetail } : {}) } }))] : prompt },
   ];
   let consumed: TokenUsage | undefined;
   let missingUsage = false;

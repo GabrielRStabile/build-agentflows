@@ -22,7 +22,18 @@ export type ReasoningEffort = typeof REASONING_EFFORTS[number];
 export const openaiReasoningModel = (model: string) => /^(o[1-9]|gpt-[5-9])/.test(model);
 /** Models whose Chat Completions endpoint only accepts function calling with reasoning_effort "none" (OpenAI model page). */
 export const toolsRequireNoReasoning = (model: string) => /^gpt-6-luna/.test(model);
+/** Image resolution sent to vision models. Blank means "high": uploaded images are usually read for data (tables, receipts, screenshots). */
+export const IMAGE_DETAILS = ["high", "original", "auto", "low"] as const;
+export type ImageDetail = typeof IMAGE_DETAILS[number];
+/** "original" (no downscaling) is only offered by the ChatGPT App Server; APIs accept low, high and auto. */
+export function imageDetail(config: Record<string, string>): ImageDetail {
+  const value = (config.imageDetail?.trim() || "high") as ImageDetail;
+  if (!IMAGE_DETAILS.includes(value)) throw new Error("A qualidade das imagens deve ser uma das opções da lista.");
+  if (value === "original" && modelProviderId(config.model || "") !== "chatgpt") throw new Error("A qualidade original das imagens só está disponível com o ChatGPT por assinatura.");
+  return value;
+}
 export function modelSettings(config: Record<string, string>) {
+  imageDetail(config);
   const result: { temperature?: number; maxTokens?: number; reasoningEffort?: ReasoningEffort } = {};
   if (config.modelReasoningEffort?.trim()) {
     const effort = config.modelReasoningEffort.trim() as ReasoningEffort;

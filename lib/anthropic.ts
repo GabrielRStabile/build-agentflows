@@ -3,6 +3,7 @@ import { providerFailure, fetchWithRateLimitRetry } from "./ai-provider-error";
 import type { runChatCompletion } from "./chat-completion";
 
 type Content = { type: string; text?: string; id?: string; name?: string; input?: unknown; [key: string]: unknown };
+// The Messages API has no image detail field: Anthropic resizes large images itself.
 export async function runAnthropic({ key, model, system, prompt, images = [], tools = [], history = [], signal, onText, onUsage, fetcher = fetch, settings = {} }:
   Omit<Parameters<typeof runChatCompletion>[0], "url" | "parameters"> & { settings?: { temperature?: number; maxTokens?: number } }) {
   if (settings.temperature !== undefined && (settings.temperature > 1 || /(?:opus|sonnet)-[5-9]/.test(model || ""))) throw new Error("Este modelo Claude não aceita a temperatura configurada.");

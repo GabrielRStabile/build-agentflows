@@ -167,7 +167,7 @@ test("cada agente recebe os documentos e imagens originais após a saída anteri
   g.nodes.push(second); g.edges[1].target = second.id; g.edges.push({ id: "segundo-fim", source: second.id, target: g.nodes[2].id });
   const f = await flow(g), img = await saveAttachment(f.id, picture()), doc = await saveAttachment(f.id, new File(["Receita: 42"], "dados.txt"));
   const prompts: string[] = [];
-  bridge.run = async (args) => { assert.match(args.prompt, /Receita: 42/); assert.equal(args.images?.[0], `data:image/png;base64,${png.toString("base64")}`); prompts.push(args.prompt); return "Primeira análise"; };
+  bridge.run = async (args) => { assert.match(args.prompt, /Receita: 42/); assert.equal(args.images?.[0], `data:image/png;base64,${png.toString("base64")}`); assert.equal(args.imageDetail, "high", "em branco, imagens vão em alta qualidade"); prompts.push(args.prompt); return "Primeira análise"; };
   const r = await startRun(f.id, "Analise", false, false, [img.id, doc.id]);
   assert.equal(r.status, "completed"); assert.equal(prompts.length, 2); assert.match(prompts[1], /Primeira análise/);
 });

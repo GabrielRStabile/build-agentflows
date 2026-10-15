@@ -17,7 +17,7 @@ import { interpolate, cites, unexecutedNote } from "./flow-references";
 import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { chatGPT } from "./chatgpt";
-import { modelProviderId } from "./ai-providers";
+import { imageDetail, modelProviderId } from "./ai-providers";
 import { modelCredentialKey } from "./ai-credentials";
 import { runProviderModel } from "./ai-runtime";
 import { getConfig } from "./store";
@@ -105,6 +105,7 @@ async function agent(n: Block, r: Run, signal: AbortSignal, details: Partial<Tra
     prompt: options.prompt,
     history: options.history,
     images: options.images,
+    imageDetail: imageDetail(c),
     model: c.model || undefined,
     // Ferramentas escolhidas no agente têm prioridade sobre a busca nativa.
     webSearch: tools.length === 0 && !knowledge.context,
@@ -190,7 +191,7 @@ async function agent(n: Block, r: Run, signal: AbortSignal, details: Partial<Tra
   const generated = mediaMarkdown(r.trace.slice(firstTrace).flatMap((trace) => trace.type === "tool" && trace.nodeId === n.id ? trace.images || [] : []));
   if ((r.attachments?.length || 0) > initialAttachments) {
     const updated = await attachmentContext(r.flowId, r.attachments);
-    const answer = await runner({ system: interpolate(c.system, r), prompt: originalMessage + "\nResposta preliminar: " + result + "\nAnalise agora a captura recebida. Não afirme ter visto a imagem se ela não estiver disponível." + updated.text + knowledge.followupContext(), images: updated.images, model: c.model || undefined, signal });
+    const answer = await runner({ system: interpolate(c.system, r), prompt: originalMessage + "\nResposta preliminar: " + result + "\nAnalise agora a captura recebida. Não afirme ter visto a imagem se ela não estiver disponível." + updated.text + knowledge.followupContext(), images: updated.images, imageDetail: imageDetail(c), model: c.model || undefined, signal });
     return withMedia(answer, generated) + knowledgeReferences(knowledge.referenceHits);
   }
   return withMedia(result, generated) + knowledgeReferences(knowledge.referenceHits);

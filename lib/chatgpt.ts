@@ -486,6 +486,7 @@ export class ChatGPTBridge {
     model,
     tools = [],
     images = [],
+    imageDetail,
     history = [],
     signal,
     onText,
@@ -498,6 +499,7 @@ export class ChatGPTBridge {
     model?: string;
     tools?: AgentTool[];
     images?: string[];
+    imageDetail?: "low" | "high" | "auto" | "original";
     /** Turnos anteriores (pessoa e assistente). O App Server só recebe texto da pessoa: a troca é simulada em texto. */
     history?: { role: "user" | "assistant"; content: string }[];
     signal?: AbortSignal;
@@ -588,7 +590,7 @@ export class ChatGPTBridge {
       }
       void this.rpc<{ turn: { id: string } }>("turn/start", {
         threadId: id,
-        input: [{ type: "text", text: transcript(history, prompt) }, ...images.map((url) => ({ type: "image", url }))],
+        input: [{ type: "text", text: transcript(history, prompt) }, ...images.map((url) => ({ type: "image", url, ...(imageDetail ? { detail: imageDetail } : {}) }))],
         environments: [],
       })
         .then((result) => {

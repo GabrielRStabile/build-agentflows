@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { request, Icon, IconButton } from "./StudioUI";
 import { AI_PROVIDERS, REASONING_EFFORTS, aiProvider, modelProviderId, aiCredentialProvider, type AiModel } from "@/lib/ai-providers";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
@@ -68,12 +68,19 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
     setCredentials(items => [...items.filter(i => i.id !== c.id), c]); setEditor(null);
     onConfigChange({ modelCredentialId: c.id }); setRetry(n => n + 1);
   }
+  // Uploaded images are usually read for data, so blank means high quality; "original" exists only in the ChatGPT App Server.
+  const imageField = (original: boolean): ReactNode => <label>Qualidade das imagens<select aria-label="Qualidade das imagens" value={!original && config.imageDetail === "original" ? "" : config.imageDetail || ""} onChange={e => onConfigChange({ imageDetail: e.target.value })}>
+      <option value="">Alta (padrão)</option>
+      {original && <option value="original">Original, sem redução</option>}
+      <option value="auto">Automática</option>
+      <option value="low">Baixa, economiza tokens</option>
+    </select><small>Vale para imagens anexadas na conversa. A alta lê textos pequenos, tabelas e recibos{original ? "; a original envia a imagem sem reduzir, para documentos muito densos (mais tokens)" : ""}. A baixa usa uma versão reduzida.</small></label>;
   return <div className="model-picker provider-picker">
     <ToolSelect label="Fornecedor" listLabel="Fornecedores de IA" value={provider === "chatgpt" ? "chatgpt" : `credential:ai_${provider}`} catalog={catalog}
       onChange={id => {
         const next = id === "chatgpt" ? "chatgpt" : id.replace("credential:ai_", "");
         const firstCredential = credentials.find(c => c.provider === aiCredentialProvider(next));
-        onConfigChange({ model: next === "chatgpt" ? "" : next === "openrouter" ? OPENROUTER_AUTO : `${next}:`, modelCredentialId: firstCredential?.id || "", modelTemperature: "", modelMaxTokens: "", modelReasoningEffort: "" });
+        onConfigChange({ model: next === "chatgpt" ? "" : next === "openrouter" ? OPENROUTER_AUTO : `${next}:`, modelCredentialId: firstCredential?.id || "", modelTemperature: "", modelMaxTokens: "", modelReasoningEffort: "", imageDetail: "" });
         setModels([]); setExpanded(true);
       }} />
     <section className="provider-parameters">
@@ -88,6 +95,7 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
             {chatModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             {value && !chatModels.some(m => m.id === value) && <option value={value}>{value} · modelo salvo</option>}
           </select></label>
+          {(chatModels.find(m => m.id === value)?.inputModalities || ["image"]).includes("image") && imageField(true)}
         </> : <>
           <label>Credencial<div className="provider-credential-row">
             {/* The last option is an action: it opens the dialog and the controlled value stays unchanged. */}
@@ -113,6 +121,7 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
             <option value="">Padrão do modelo (none quando necessário)</option>
             {REASONING_EFFORTS.map(effort => <option key={effort} value={effort}>{effort}</option>)}
           </select><small>Cada modelo aceita alguns níveis; o fornecedor informa quando recusa. Em branco, vale o padrão do modelo; se o modelo só aceitar ferramentas com “none”, o Agente usa “none” sozinho.</small></label>}
+          {selected?.inputModalities.includes("image") && provider !== "anthropic" && !isMediaModel(value) && imageField(false)}
           {selected?.parameters.includes("max_tokens") && <label>Máximo de tokens de saída<input aria-label="Máximo de tokens de saída" type="number" min="1" max={selected.maxOutputTokens || 1000000} step="1" placeholder="4000" value={config.modelMaxTokens || ""} onChange={e => onConfigChange({ modelMaxTokens: e.target.value })} /></label>}
           {isMediaModel(value) && provider !== "replicate" && <small>Gera imagens com o saldo do fornecedor. {mediaModel(value)?.inputModalities.includes("image") ? "Aceita até 5 referências e 6 MB no total." : "Recebe descrições em texto."}</small>}
         </>}

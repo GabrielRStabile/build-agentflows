@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createTenantTestContext, commitTestConfig } from "../scripts/tenant-test-context";
 import { saveToolCredential, listToolCredentials, deleteToolCredential } from "./tool-credential-store";
 import { modelCredentialKey, importModelCredentials, saveOpenRouterOAuth } from "./ai-credentials";
-import { AI_PROVIDERS, modelSettings } from "./ai-providers";
+import { AI_PROVIDERS, imageDetail, modelSettings } from "./ai-providers";
 import { runProviderModel } from "./ai-runtime";
 import { providerModels } from "./ai-models";
 import { publicModelCache } from "./public-model-cache";
@@ -181,6 +181,16 @@ test("OpenAI: esforço de raciocínio é enviado e o gpt-6-luna usa ferramentas 
     assert.equal(sent[3].reasoning_effort, undefined, "modelos sem raciocínio ignoram o nível");
     await assert.rejects(runProviderModel({ model: "openai:gpt-6-luna", modelCredentialId: c.id, modelReasoningEffort: "high" }, { system: "s", prompt: "p", tools, fetcher }), /só usa ferramentas com esforço de raciocínio "none"/);
     assert.throws(() => modelSettings({ modelReasoningEffort: "turbo" }), /esforço de raciocínio/);
+    // Qualidade das imagens: em branco é alta; original só no ChatGPT por assinatura.
+    assert.equal(imageDetail({}), "high");
+    assert.equal(imageDetail({ model: "", imageDetail: "original" }), "original");
+    assert.throws(() => modelSettings({ model: "openai:gpt-5.5", imageDetail: "original" }), /original.*ChatGPT/);
+    assert.throws(() => modelSettings({ imageDetail: "máxima" }), /qualidade das imagens/);
+    const image = "data:image/png;base64,aW1hZ2Vt";
+    for (const detail of ["high", "low"] as const) {
+      await runProviderModel({ model: "openai:gpt-5.5", modelCredentialId: c.id }, { system: "s", prompt: "p", images: [image], imageDetail: detail, fetcher });
+      assert.deepEqual((sent.at(-1)!.messages as { content: unknown }[])[1].content, [{ type: "text", text: "p" }, { type: "image_url", image_url: { url: image, detail } }]);
+    }
     // Em branco: o padrão do modelo; se o fornecedor exigir none para ferramentas, repete uma vez com none e lembra o modelo.
     const tries: unknown[] = [];
     const strict: typeof fetch = async (_url, init) => {
