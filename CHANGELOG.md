@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.44.0 — 14/10/2026
+
+- Exportação de fluxos genérica: o arquivo `build-agentflows/v1` deixa de levar identificadores da conta (credencial do modelo, credenciais dos cartões de ferramenta, bases de conhecimento, subfluxos e contas conectadas). Importar em outra conta não falha mais com "Credencial não encontrada nesta conta": a importação também descarta esses vínculos em arquivos antigos, e quem importa seleciona as próprias credenciais, bases e subfluxos nos blocos. Duplicar dentro da mesma conta continua copiando tudo.
+
 ## 0.43.1 — 14/10/2026
 
 - Minha conta: a alteração de senha deixa de ser um cartão fixo e passa a abrir em um diálogo pelo botão **Alterar senha** no cartão Perfil (só para contas com senha), com os mesmos campos, a regra e o nível da senha. Ao concluir, o diálogo fecha e o aviso aparece no Perfil.
