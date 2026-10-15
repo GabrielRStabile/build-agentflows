@@ -1,5 +1,13 @@
 # Histórico de versões
 
+## 0.46.0 — 15/10/2026
+
+- Anexos: o chat de teste e o campo `file` da API passam a aceitar planilhas XLS e XLSX (cada aba chega ao modelo como CSV com o nome da aba, até 5 mil linhas por aba; fórmulas com o último valor calculado), páginas HTML (só o texto visível, sem scripts nem estilos), DOCX e PPTX (texto extraído) e CSS, XML, YAML e SQL como texto. O DOC antigo é recusado com a orientação de salvar como DOCX ou PDF. Documentos baixados saem com proteção que impede a execução de scripts no domínio do app.
+- Code Interpreter by E2B: gráficos exibidos pelo código (`plt.show()`, imagens PIL) aparecem para a pessoa abaixo da resposta do Agente, como as imagens geradas pela Replicate, até 5 por execução e sem repetidas. Antes, a imagem era descartada e o modelo improvisava o gráfico em texto. O modelo recebe só um marcador, nunca o conteúdo da imagem, e a ferramenta orienta a não salvar gráficos em disco.
+- Qualidade das imagens: novo campo nos blocos LLM e Agente com modelos que aceitam imagens. Em branco vale **Alta**, para extrair dados de tabelas, recibos e capturas de tela; **Original, sem redução** existe no ChatGPT por assinatura; também há Automática e Baixa. Vale para ChatGPT, OpenAI e OpenRouter; a API da Anthropic não oferece o ajuste.
+- Esforço de raciocínio: com o campo em branco e ferramentas no bloco, se o fornecedor recusar dizendo que o modelo só usa ferramentas com "none", o Agente repete a chamada uma vez com "none" e passa a usá-lo direto nas próximas. Um nível escolhido no bloco nunca é trocado.
+- Ações das ferramentas (Custom MCP, Brave, Browserless, Postgres, GitHub, Composio e OpenAPI): a lista de caixas de seleção vira busca com lista suspensa (nome e descrição); cada ação escolhida aparece como etiqueta com botão de remover, com "Remover todas" e "Adicionar todas". A lista é consultada ao abrir a busca, e "Atualizar lista" fica como botão discreto.
+
 ## 0.45.0 — 15/10/2026
 
 - Repetir e memória: quando a repetição volta a um LLM ou Agente com memória ligada, o resultado do bloco anterior deixa de chegar como Entrada sem autor (ou como turno do próprio assistente) e permanece na Memória, identificado pelo nome do bloco que o produziu. A etapa recebe então a conversa (Mensagem em branco) ou apenas a Mensagem, com a memória completa ao lado. Um Supervisor que decide pelo histórico passa a ver, por exemplo, o post como resposta do Escritor e o parecer como resposta do Revisor. Memória desligada e resultados que não vêm de LLM/Agente mantêm o comportamento anterior.
