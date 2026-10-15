@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.43.1 — 14/10/2026
+
+- Minha conta: a alteração de senha deixa de ser um cartão fixo e passa a abrir em um diálogo pelo botão **Alterar senha** no cartão Perfil (só para contas com senha), com os mesmos campos, a regra e o nível da senha. Ao concluir, o diálogo fecha e o aviso aparece no Perfil.
+
 ## 0.43.0 — 14/10/2026
 
 - Convite mais fluido: o `?invite=` do link de cadastro segue por todas as telas, vai no link de confirmação de e-mail (vale em outro navegador) e é aplicado sem clique assim que a conta está confirmada, ao entrar com senha, ao abrir o link de confirmação já na conta ou ao voltar do Google. Convite válido leva direto ao espaço; inválido ou esgotado abre Seu acesso com a explicação. O reenvio da confirmação também leva o convite.
