@@ -34,11 +34,24 @@ function estimatedTokens(message: MemoryMessage) {
   return Math.ceil(JSON.stringify(message).length / 4);
 }
 
+// Bloco alcançado por Repetir, com memória ligada, cujo resultado anterior já é uma resposta de
+// LLM/Agente desta execução: o conteúdo fica na memória, identificado pelo nome do bloco, em vez de
+// chegar como entrada da etapa sem autor. A etapa recebe então a conversa (Mensagem em branco) ou
+// só a Mensagem, com a memória inteira ao lado.
+export function continuedByLoop(run: Run, config: Record<string, string>): boolean {
+  if (!memorySettings(config).enabled) return false;
+  const last = [...run.trace].reverse().find((entry) => entry.type !== "tool");
+  const node = last && run.graph.nodes.find((candidate) => candidate.id === last.nodeId);
+  if (node?.data.kind !== "loop") return false;
+  return memoryMessages(run).some((message) => message.role === "assistant" && !!message.name && message.content === run.output);
+}
+
 // Mensagem preenchida com memória ligada: a conversa vira a pergunta da pessoa, o resultado
 // anterior (quando existe) a primeira resposta e a Mensagem a pergunta seguinte, como duas
-// interações. Turnos já citados por referência não se repetem.
+// interações. Turnos já citados por referência não se repetem. Depois de um Repetir, o resultado
+// anterior fica na memória e a Mensagem chega sozinha, com a memória completa ao lado.
 export function previousExchange(run: Run, config: Record<string, string>): ConversationTurn[] {
-  if (!config.prompt?.trim() || !memorySettings(config).enabled) return [];
+  if (!config.prompt?.trim() || !memorySettings(config).enabled || continuedByLoop(run, config)) return [];
   const cited = citedValues(run, config.system, config.prompt);
   const turns: ConversationTurn[] = [];
   if (run.input.trim() && !cited.has(run.input)) turns.push({ role: "user", content: run.input });

@@ -212,6 +212,51 @@ test("a resposta de abertura do bloco com Mensagem entra na memória dos próxim
   assert.deepEqual(memoryMessages(run).map((m) => m.content), ["O futuro do trabalho", answers[0], "ESCRITOR", "Texto escrito.", "Revisado."]);
 });
 
+test("depois de Repetir, o resultado anterior fica na memória com o nome do bloco e a etapa recebe a conversa", async () => {
+  const created = await createFlow("Repetição");
+  const nodes = [block("start", "inicio", 0, 0), block("agent", "Supervisor", 0, 0), block("loop", "volta", 0, 0)];
+  nodes[2].data.config = { target: nodes[1].id, limit: "1", limitMessage: "" };
+  const graph = { nodes, edges: [{ id: "e0", source: nodes[0].id, target: nodes[1].id }, { id: "e1", source: nodes[1].id, target: nodes[2].id }] };
+  const f = await saveFlow(created.id, { ...created, graph });
+  // Mensagem em branco: a segunda passagem recebe o assunto, e a primeira resposta vai na memória, com autor.
+  let calls: { prompt: string; history?: { role: string; content: string }[] }[] = [];
+  bridge.run = async ({ prompt, history }) => { calls.push({ prompt, history }); return ["ESCRITOR", "REVISOR"][calls.length - 1]; };
+  let result = await execute(await prepareRun(f.id, "o futuro do trabalho", false, false));
+  assert.equal(result.status, "completed");
+  assert.equal(result.output, "REVISOR");
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].prompt, "o futuro do trabalho");
+  assert.match(calls[1].prompt, /Mensagem desta etapa:\no futuro do trabalho$/);
+  assert.match(calls[1].prompt, /"content":"ESCRITOR","name":"Agente"/, "a resposta da primeira passagem está na memória, com o nome do bloco");
+  assert.equal(calls[1].prompt.split("o futuro do trabalho").length - 1, 1, "a conversa não se repete na memória");
+  let steps = (await getRun(result.id)).trace.filter((entry) => entry.type === "step" && entry.nodeId === nodes[1].id);
+  assert.equal(steps[1].input, "o futuro do trabalho");
+  assert.match(steps[1].memory ?? "", /ESCRITOR/);
+  // Mensagem preenchida: a segunda passagem recebe só a Mensagem, sem turno do assistente, e a memória inteira ao lado.
+  nodes[1].data.config.prompt = "Decida o próximo agente";
+  await saveFlow(f.id, { ...f, graph });
+  calls = [];
+  bridge.run = async ({ prompt, history }) => { calls.push({ prompt, history }); return ["Abertura", "ESCRITOR", "REVISOR"][calls.length - 1]; };
+  result = await execute(await prepareRun(f.id, "o futuro do trabalho", false, false));
+  assert.equal(result.output, "REVISOR");
+  assert.equal(calls.length, 3, "abertura e Mensagem na primeira passagem; só a Mensagem na segunda");
+  assert.deepEqual(calls[2].history, []);
+  assert.match(calls[2].prompt, /Mensagem desta etapa:\nDecida o próximo agente$/);
+  assert.match(calls[2].prompt, /"content":"o futuro do trabalho"/, "a conversa fica na memória");
+  assert.match(calls[2].prompt, /"content":"Abertura","name":"Agente"/);
+  assert.match(calls[2].prompt, /"content":"ESCRITOR","name":"Agente"/);
+  steps = (await getRun(result.id)).trace.filter((entry) => entry.type === "step" && entry.nodeId === nodes[1].id);
+  assert.equal(steps[1].input, "Decida o próximo agente");
+  // Memória desligada: o contrato anterior continua, o resultado anterior chega como entrada.
+  nodes[1].data.config.prompt = "";
+  nodes[1].data.config.memoryEnabled = "false";
+  await saveFlow(f.id, { ...f, graph });
+  calls = [];
+  bridge.run = async ({ prompt, history }) => { calls.push({ prompt, history }); return ["ESCRITOR", "REVISOR"][calls.length - 1]; };
+  result = await execute(await prepareRun(f.id, "o futuro do trabalho", false, false));
+  assert.equal(calls[1].prompt, "ESCRITOR");
+});
+
 test("memória preserva passagens repetidas e exclui chamadas internas de ferramentas", async () => {
   const run = await prepareRun((await flow()).id, "Pedido", false, false);
   const entry = { nodeId: "a", label: "Agente", output: "Primeira passagem", at: "", ms: 1 };

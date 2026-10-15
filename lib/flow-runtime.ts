@@ -12,7 +12,7 @@ import { runBudgetMs } from "./run-limits";
 import { mediaMarkdown, runMedia } from "./media-runtime";
 import { toolRunScope } from "./replicate-tool";
 import { tenantConversationHistory } from "./conversation";
-import { memoryContext, previousExchange, transcript, type ConversationTurn } from "./flow-memory";
+import { continuedByLoop, memoryContext, previousExchange, transcript, type ConversationTurn } from "./flow-memory";
 import { interpolate, cites, unexecutedNote } from "./flow-references";
 import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -39,7 +39,9 @@ export { interpolate };
 // Se as instruções já citam esse conteúdo, ele não é enviado de novo.
 export function message(c: Record<string, string>, r: Run) {
   if (c.prompt?.trim()) return interpolate(c.prompt, r);
-  return cites(r, r.output, c.system) ? "" : r.output;
+  // Depois de um Repetir o resultado anterior já está na memória com o nome do bloco: a etapa volta a receber a conversa.
+  const source = continuedByLoop(r, c) ? r.input : r.output;
+  return cites(r, source, c.system) ? "" : source;
 }
 const withMedia = (text: string, media: string) => media ? [text.trim(), media].filter(Boolean).join("\n\n") : text;
 // Mensagem enviada quando todo o conteúdo já está nas instruções; provedores exigem texto do usuário.
