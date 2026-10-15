@@ -2,7 +2,7 @@ import type { Database } from "./saas-db";
 import { saasDatabase } from "./saas-db";
 import { AuthError, appOrigin } from "./saas-security";
 import { consumeActionToken, findSession, loginUser, redeemInvite, registerUser, requestActionMail, revokeSession, requireBetaAccess, SAAS_SESSION_COOKIE, SESSION_SECONDS } from "./saas-auth";
-import { consumeRateLimit, rateLimitClient, RateLimitError } from "./saas-rate-limit";
+import { addressLimit, consumeRateLimit, rateLimitClient, RateLimitError } from "./saas-rate-limit";
 import { withTenantSession } from "./tenant-context";
 import { FlowError } from "./flow-store";
 import { AI_ACTION_URL, PlanLimitError } from "./saas-plan";
@@ -77,7 +77,7 @@ export async function authAction(db: Database, req: Request, action: string) {
     if (req.method !== "POST") return privateJson({ error: "Método não permitido." }, { status: 405, headers: { Allow: "POST" } });
     assertSameOrigin(req);
     const client = rateLimitClient(req.headers);
-    await consumeRateLimit(db, `auth:ip:${client}`, 60, 60);
+    await consumeRateLimit(db, `auth:ip:${client}`, addressLimit(client), 60);
     if (action === "logout") {
       await revokeSession(db, sessionToken(req));
       // Another account signing in on this browser must not inherit the pending invite.
@@ -100,7 +100,7 @@ export async function authAction(db: Database, req: Request, action: string) {
       return privateJson({ message: "Se houver uma conta elegível, enviaremos um link para seu e-mail." }, { status: 202 });
     }
     if (action === "verify-email" || action === "reset-password") {
-      await consumeRateLimit(db, `action-token:ip:${client}`, 10, 60);
+      await consumeRateLimit(db, `action-token:ip:${client}`, addressLimit(client), 60);
       await consumeActionToken(db, data.token, action === "verify-email" ? "verify_email" : "reset_password", data.password);
       return privateJson({ ok: true });
     }

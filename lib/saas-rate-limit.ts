@@ -4,11 +4,21 @@ import { AuthError, hashToken } from "./saas-security";
 export class RateLimitError extends AuthError {
   retryAfter: number;
   constructor(retryAfter: number) {
-    super("Muitas tentativas. Aguarde antes de tentar novamente.", 429);
+    super(`Muitas tentativas. Tente novamente em ${waitLabel(retryAfter)}.`, 429);
     this.retryAfter = retryAfter;
   }
 }
 
+const waitLabel = (seconds: number) => seconds < 60 ? `${seconds} segundo${seconds === 1 ? "" : "s"}` : `${Math.ceil(seconds / 60)} minuto${Math.ceil(seconds / 60) === 1 ? "" : "s"}`;
+export const UNATTRIBUTED = "unattributed";
+/** Without TRUSTED_CLIENT_IP_HEADER every request shares one key, so a per-address budget becomes app-wide. */
+const SHARED_ADDRESS_FACTOR = 10;
+/**
+ * Per-address budget for account flows. A class on the same Wi-Fi leaves through one public IP (DEPLOY-COOLIFY.md,
+ * 150 people), so these limits only stop floods; per-e-mail limits keep protecting accounts and inboxes.
+ */
+export const ADDRESS_LIMIT = 1000;
+export const addressLimit = (client: string, perAddress = ADDRESS_LIMIT) => client === UNATTRIBUTED ? perAddress * SHARED_ADDRESS_FACTOR : perAddress;
 /** Atomic shared fixed windows. No in-memory fallback when the database is unavailable. */
 export async function consumeRateLimit(sql: Sql, key: string, limit: number, windowSeconds: number) {
   if (!Number.isInteger(limit) || limit < 1 || !Number.isInteger(windowSeconds) || windowSeconds < 1) throw new Error("Limite inválido.");
@@ -25,6 +35,6 @@ export async function consumeRateLimit(sql: Sql, key: string, limit: number, win
 /** Only trust a header explicitly set AND overwritten by the deployment's reverse proxy. */
 export function rateLimitClient(headers: Headers) {
   const header = process.env.TRUSTED_CLIENT_IP_HEADER;
-  if (!header) return "unattributed";
-  return headers.get(header)?.trim().slice(0, 200) || "unattributed";
+  if (!header) return UNATTRIBUTED;
+  return headers.get(header)?.trim().slice(0, 200) || UNATTRIBUTED;
 }

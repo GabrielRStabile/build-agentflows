@@ -7,7 +7,7 @@ import { migrateDatabase } from "./db/migrate";
 import { registerUser, loginUser, findSession, requestActionMail, consumeActionToken, redeemInvite, requireBetaAccess, loginGoogleIdentity, revokeSession } from "./saas-auth";
 import { appOrigin, hashToken, randomToken, seal, unseal, verifyPassword } from "./saas-security";
 import { credentialsFor } from "./saas-credentials";
-import { consumeRateLimit } from "./saas-rate-limit";
+import { addressLimit, consumeRateLimit, RateLimitError } from "./saas-rate-limit";
 import { deliverAuthMail, mailStats, senderStatus, senderDomain, resetSenderCache } from "./saas-mail";
 import { beginGoogleLogin, finishGoogleLogin, verifyGoogleIdToken } from "./saas-google";
 import { authAction } from "./saas-http";
@@ -254,6 +254,17 @@ test("credenciais são privadas por usuário e ciphertext não pode ser movido e
   assert.throws(() => unseal(cipher.replace(/^v2/, "v1"), "purpose"));
   await ca.set("REPLICATE_API_TOKEN", null);
   assert.equal(await ca.get("REPLICATE_API_TOKEN"), undefined);
+});
+
+test("turma no mesmo endereço cria contas; dados inválidos não gastam o limite do endereço", async () => {
+  for (let i = 0; i < 250; i++)
+    await assert.rejects(registerUser(db, { name: "Aluno", email: `fraca-${i}@example.com`, password: "123" }, "sala-a"), (error: unknown) => (error as { status: number }).status !== 429);
+  await Promise.all(Array.from({ length: 30 }, (_, i) => registerUser(db, { name: `Aluno ${i}`, email: `aluno-${i}@turma.example.com`, password: "Senha-Forte-2026!" }, "sala-a")));
+  assert.equal((await db.query("SELECT id FROM users WHERE email LIKE '%@turma.example.com'")).rows.length, 30);
+  assert.equal(addressLimit("203.0.113.9"), 1000, "mil tentativas por endereço em cada janela");
+  assert.equal(addressLimit("unattributed"), 10000, "sem cabeçalho confiável o limite é de todo o app");
+  assert.match(new RateLimitError(1800).message, /Tente novamente em 30 minutos\./);
+  assert.match(new RateLimitError(45).message, /em 45 segundos\./);
 });
 
 test("rate limit atômico persiste entre chamadas e retorna espera", async () => {

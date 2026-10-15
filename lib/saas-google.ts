@@ -2,7 +2,7 @@ import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 import type { Database } from "./saas-db";
 import { appOrigin, AuthError, hashToken, randomToken, seal, unseal } from "./saas-security";
 import { loginGoogleIdentity } from "./saas-auth";
-import { consumeRateLimit } from "./saas-rate-limit";
+import { addressLimit, consumeRateLimit } from "./saas-rate-limit";
 
 const googleKeys = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 type OAuthPayload = { verifier: string; nonce: string };
@@ -14,7 +14,7 @@ function settings() {
 }
 
 export async function beginGoogleLogin(db: Database, client: string) {
-  await consumeRateLimit(db, `google:ip:${client}`, 10, 600);
+  await consumeRateLimit(db, `google:ip:${client}`, addressLimit(client), 600);
   const config = settings();
   const state = randomToken(), binding = randomToken(), verifier = randomToken(), nonce = randomToken();
   const stateHash = hashToken(state);

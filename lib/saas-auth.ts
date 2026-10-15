@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Database, Sql } from "./saas-db";
 import { AuthError, hashToken, normalizedEmail, passwordHash, randomToken, validatePassword, verifyPassword } from "./saas-security";
 import { enqueueAuthMail, enqueueExistingAccountMail } from "./saas-mail";
-import { consumeRateLimit } from "./saas-rate-limit";
+import { addressLimit, consumeRateLimit } from "./saas-rate-limit";
 
 export type SaasUser = {
   id: string; name: string; email: string; email_verified_at: Date | null;
@@ -47,10 +47,11 @@ async function issueAction(sql: Sql, user: Pick<SaasUser, "id" | "email">, purpo
 }
 
 export async function registerUser(db: Database, data: { name: unknown; email: unknown; password: unknown }, client: string, invite?: string) {
-  await consumeRateLimit(db, `register:ip:${client}`, 5, 3600);
+  // Invalid input (weak password, empty name) is answered before it spends the address budget.
   const email = normalizedEmail(data.email);
   if (typeof data.name !== "string" || !data.name.trim() || data.name.trim().length > 120) throw new AuthError("Informe um nome com até 120 caracteres.");
   validatePassword(data.password);
+  await consumeRateLimit(db, `register:ip:${client}`, addressLimit(client), 3600);
   const encoded = await passwordHash(data.password);
   const name = data.name.trim();
   // A duplicate gets the same HTTP outcome; never sign in or replace an existing account.
@@ -74,7 +75,7 @@ export async function registerUser(db: Database, data: { name: unknown; email: u
 }
 
 export async function loginUser(db: Database, data: { email: unknown; password: unknown }, client: string) {
-  await consumeRateLimit(db, `login:ip:${client}`, 20, 60);
+  await consumeRateLimit(db, `login:ip:${client}`, addressLimit(client), 60);
   const email = normalizedEmail(data.email);
   await consumeRateLimit(db, `login:email:${email}`, 10, 900);
   const { rows } = await db.query<SaasUser & { password_hash: string | null }>(`SELECT ${USER_FIELDS},password_hash FROM users WHERE email=$1`, [email]);
@@ -94,7 +95,7 @@ export async function loginUser(db: Database, data: { email: unknown; password: 
 }
 
 export async function requestActionMail(db: Database, emailInput: unknown, purpose: "verify_email" | "reset_password", client: string, invite?: string) {
-  await consumeRateLimit(db, `mail:ip:${client}`, 10, 3600);
+  await consumeRateLimit(db, `mail:ip:${client}`, addressLimit(client), 3600);
   const email = normalizedEmail(emailInput);
   await consumeRateLimit(db, `mail:email:${email}`, 3, 3600);
   await db.transaction(async (sql) => {
