@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.46.2 — 15/10/2026
+
+- Cadastro de 1000 pessoas ao mesmo tempo: os limites por endereço passam a contar pessoas com folga (1000 pessoas × três tentativas; cinco requisições por minuto por pessoa no conjunto dos fluxos de conta), para que repetir o envio ou errar uma confirmação não bloqueie ninguém por uma hora. Verificado com 1000 cadastros simultâneos pelo mesmo IP, sem falhas.
+- E-mails de confirmação saem no ritmo da conta Resend (`RESEND_ENVIOS_POR_SEGUNDO`, padrão 2). Quando a Resend responde 429, o envio respeita o tempo pedido, devolve o restante do lote à fila e não gasta tentativas; antes, cada 429 adiava a mensagem por minutos crescentes e consumia uma das oito tentativas. Mensagens que passam um dia inteiro recebendo 429 (cota esgotada) são encerradas.
+
 ## 0.46.1 — 15/10/2026
 
 - Criação de conta: turmas no mesmo Wi-Fi deixam de receber "Muitas tentativas" ao se cadastrar. Os limites por endereço dos fluxos de conta (cadastro, entrada, Google, reenvio de e-mail e links) passam a 1000 por janela, porque todos saem pelo mesmo IP público; sem `TRUSTED_CLIENT_IP_HEADER` configurado, o limite vale para o app inteiro e sobe para 10 mil. Dados inválidos (senha fraca, nome vazio, e-mail inválido) não gastam mais tentativas, e a mensagem informa quanto tempo esperar. Os limites por e-mail continuam iguais.
