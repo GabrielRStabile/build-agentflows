@@ -32,9 +32,35 @@ export function imageDetail(config: Record<string, string>): ImageDetail {
   if (value === "original" && modelProviderId(config.model || "") !== "chatgpt") throw new Error("A qualidade original das imagens só está disponível com o ChatGPT por assinatura.");
   return value;
 }
+/** Ferramentas nativas executadas pelo próprio fornecedor, marcadas no bloco em config.builtinTools, separadas por vírgula. */
+export const BUILTIN_TOOLS = {
+  openai: [
+    { id: "web_search", name: "Busca na web", description: "Pesquisa na internet informações atualizadas." },
+    { id: "code_interpreter", name: "Interpretador de código", description: "Escreve e executa Python em um ambiente isolado da OpenAI." },
+    { id: "image_generation", name: "Geração de imagens", description: "Cria imagens a partir de uma descrição em texto." },
+  ],
+  google: [
+    { id: "url_context", name: "Contexto de URLs", description: "Lê o conteúdo dos endereços citados na conversa." },
+    { id: "google_search", name: "Busca Google", description: "Pesquisa na web conteúdo em tempo real." },
+    { id: "code_execution", name: "Execução de código", description: "Escreve e executa Python em um ambiente isolado do Google." },
+  ],
+} as const;
+export type BuiltinProvider = keyof typeof BUILTIN_TOOLS;
+export type BuiltinTool = typeof BUILTIN_TOOLS[BuiltinProvider][number]["id"];
+export const builtinProvider = (model = "") => { const id = modelProviderId(model); return id in BUILTIN_TOOLS ? id as BuiltinProvider : undefined; };
+export const builtinToolName = (id: string) => Object.values(BUILTIN_TOOLS).flat().find(tool => tool.id === id)?.name || id;
+export function builtinTools(config: Record<string, string>): BuiltinTool[] {
+  const ids = [...new Set((config.builtinTools || "").split(",").map(id => id.trim()).filter(Boolean))];
+  if (!ids.length) return [];
+  const provider = builtinProvider(config.model);
+  if (!provider) throw new Error("Ferramentas nativas só funcionam com modelos da OpenAI ou do Google.");
+  const offered: readonly { id: string }[] = BUILTIN_TOOLS[provider];
+  if (ids.some(id => !offered.some(tool => tool.id === id))) throw new Error(`As ferramentas nativas devem ser opções da lista de ${aiProvider(provider)!.name}.`);
+  return ids as BuiltinTool[];
+}
 export function modelSettings(config: Record<string, string>) {
   imageDetail(config);
-  const result: { temperature?: number; maxTokens?: number; reasoningEffort?: ReasoningEffort } = {};
+  const result: { temperature?: number; maxTokens?: number; reasoningEffort?: ReasoningEffort; builtins: BuiltinTool[] } = { builtins: builtinTools(config) };
   if (config.modelReasoningEffort?.trim()) {
     const effort = config.modelReasoningEffort.trim() as ReasoningEffort;
     if (!REASONING_EFFORTS.includes(effort)) throw new Error("O esforço de raciocínio deve ser um dos níveis da lista.");

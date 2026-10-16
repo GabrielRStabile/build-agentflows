@@ -3,6 +3,8 @@ import { modelCredentialKey } from "./ai-credentials";
 import { runChatCompletion } from "./chat-completion";
 import { runOpenRouter } from "./openrouter";
 import { runAnthropic } from "./anthropic";
+import { runOpenAIResponses, type BuiltinCall } from "./openai-responses";
+import { runGeminiNative } from "./gemini-native";
 
 /** Models that already refused function calling without "none" in this process; later calls start with it. */
 const toolsNeedNone = new Set<string>();
@@ -10,7 +12,10 @@ const toolsNeedNone = new Set<string>();
 export const requiresNoReasoning = (error: unknown) =>
   error instanceof Error && (error as { status?: number }).status === 400 && /reasoning_effort[^.]*\bnone\b/i.test(error.message);
 
-export async function runProviderModel(config: Record<string, string>, options: Omit<Parameters<typeof runChatCompletion>[0], "key" | "url" | "parameters">) {
+export async function runProviderModel(config: Record<string, string>, options: Omit<Parameters<typeof runChatCompletion>[0], "key" | "url" | "parameters"> & {
+  /** Presente só na conversa do bloco: ativa as ferramentas nativas marcadas (OpenAI, Google) e recebe o registro de cada uso. */
+  onBuiltin?: (call: BuiltinCall) => Promise<void>;
+}) {
   const provider = modelProviderId(config.model);
   if (provider === "chatgpt") throw new Error("Selecione um fornecedor de API.");
   const key = modelCredentialKey(provider, config.modelCredentialId);
@@ -20,8 +25,17 @@ export async function runProviderModel(config: Record<string, string>, options: 
   const model = config.model.slice(provider.length + 1);
   if (!model || !p.url) throw new Error("Selecione um modelo de texto válido.");
   if (provider === "anthropic") return runAnthropic({ ...options, model, key, settings });
+  const builtins = options.onBuiltin ? settings.builtins : [];
+  // Ferramentas nativas do Gemini só existem na API generateContent; sem elas o bloco continua no endpoint compatível.
+  if (provider === "google" && builtins.length) return runGeminiNative({ ...options, model, key, builtins, settings });
   const reasoning = provider === "openai" && openaiReasoningModel(model);
   if (reasoning && settings.temperature !== undefined) throw new Error("Remova a temperatura personalizada deste modelo de raciocínio.");
+  // Ferramentas nativas só existem na Responses API; sem elas o bloco continua em Chat Completions.
+  if (provider === "openai" && builtins.length) return runOpenAIResponses({ ...options, model, key, url: p.url, builtins, parameters: {
+    max_output_tokens: settings.maxTokens || 4000,
+    ...(settings.temperature !== undefined ? { temperature: settings.temperature } : {}),
+    ...(reasoning && settings.reasoningEffort ? { reasoning: { effort: settings.reasoningEffort } } : {}),
+  } });
   let effort = reasoning ? settings.reasoningEffort : undefined;
   // Chat Completions only accepts tools on these models without reasoning; without an explicit choice the engine adapts.
   const withTools = reasoning && !!options.tools?.length;

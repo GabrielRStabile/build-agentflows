@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import { request, Icon, IconButton } from "./StudioUI";
-import { AI_PROVIDERS, REASONING_EFFORTS, aiProvider, modelProviderId, aiCredentialProvider, type AiModel } from "@/lib/ai-providers";
+import { AI_PROVIDERS, BUILTIN_TOOLS, REASONING_EFFORTS, builtinProvider, aiProvider, modelProviderId, aiCredentialProvider, type AiModel } from "@/lib/ai-providers";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
 import { formatCredentialExpiry } from "@/lib/credential-expiry";
 import { ToolSelect } from "./ToolSelect";
@@ -62,6 +62,8 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
   }, [provider, credentialId, retry]);
   const selected = models.find(m => m.id === value);
   const selectedCredential = matching.find(c => c.id === credentialId);
+  const builtins = (config.builtinTools || "").split(",").map(id => id.trim());
+  const builtinProviderId = builtinProvider(value), offered: readonly { id: string; name: string; description: string }[] = builtinProviderId ? BUILTIN_TOOLS[builtinProviderId] : [];
   // Agents call tools in a text loop; Replicate generation models belong to the LLM block. Saved agents keep their choice.
   const catalog = [{ id: "chatgpt", name: "ChatGPT · assinatura" }, ...AI_PROVIDERS.filter(p => kind !== "agent" || p.id !== "replicate" || provider === "replicate").map(p => ({ id: `credential:ai_${p.id}`, name: p.name }))];
   function saved(c: SavedToolCredential) {
@@ -80,7 +82,7 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
       onChange={id => {
         const next = id === "chatgpt" ? "chatgpt" : id.replace("credential:ai_", "");
         const firstCredential = credentials.find(c => c.provider === aiCredentialProvider(next));
-        onConfigChange({ model: next === "chatgpt" ? "" : next === "openrouter" ? OPENROUTER_AUTO : `${next}:`, modelCredentialId: firstCredential?.id || "", modelTemperature: "", modelMaxTokens: "", modelReasoningEffort: "", imageDetail: "" });
+        onConfigChange({ model: next === "chatgpt" ? "" : next === "openrouter" ? OPENROUTER_AUTO : `${next}:`, modelCredentialId: firstCredential?.id || "", modelTemperature: "", modelMaxTokens: "", modelReasoningEffort: "", imageDetail: "", builtinTools: "" });
         setModels([]); setExpanded(true);
       }} />
     <section className="provider-parameters">
@@ -121,6 +123,14 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
             <option value="">Padrão do modelo (none quando necessário)</option>
             {REASONING_EFFORTS.map(effort => <option key={effort} value={effort}>{effort}</option>)}
           </select><small>Cada modelo aceita alguns níveis; o fornecedor informa quando recusa. Em branco, vale o padrão do modelo; se o modelo só aceitar ferramentas com “none”, o Agente usa “none” sozinho.</small></label>}
+          {!!offered.length && value !== `${provider}:` && !isMediaModel(value) && <fieldset className="builtin-tools">
+            <legend>Ferramentas nativas de {metadata?.name}</legend>
+            {offered.map(tool => <label key={tool.id}>
+              <input type="checkbox" checked={builtins.includes(tool.id)} onChange={e => onConfigChange({ builtinTools: offered.map(t => t.id).filter(id => id === tool.id ? e.target.checked : builtins.includes(id)).join(",") })} />
+              <span><strong>{tool.name}</strong><small>{tool.description}</small></span>
+            </label>)}
+            <small>Executadas pelo próprio fornecedor e cobradas na sua chave. {provider === "openai" ? "Imagens geradas aparecem abaixo da resposta. " : "Gráficos do código aparecem abaixo da resposta. "}Nem todo modelo aceita todas; o fornecedor informa quando recusa.</small>
+          </fieldset>}
           {selected?.inputModalities.includes("image") && provider !== "anthropic" && !isMediaModel(value) && imageField(false)}
           {selected?.parameters.includes("max_tokens") && <label>Máximo de tokens de saída<input aria-label="Máximo de tokens de saída" type="number" min="1" max={selected.maxOutputTokens || 1000000} step="1" placeholder="4000" value={config.modelMaxTokens || ""} onChange={e => onConfigChange({ modelMaxTokens: e.target.value })} /></label>}
           {isMediaModel(value) && provider !== "replicate" && <small>Gera imagens com o saldo do fornecedor. {mediaModel(value)?.inputModalities.includes("image") ? "Aceita até 5 referências e 6 MB no total." : "Recebe descrições em texto."}</small>}

@@ -4189,3 +4189,15 @@
 :root[data-studio-theme="dark"] .password-strength[data-level="1"] .filled { background: #f0899a; }
 :root[data-studio-theme="dark"] .password-strength[data-level="2"] .filled { background: #e4b65d; }
 :root[data-studio-theme="dark"] .password-strength[data-level="3"] .filled, :root[data-studio-theme="dark"] .password-strength[data-level="4"] .filled { background: #6fd19c; }
+
+/* Ferramentas nativas do fornecedor (OpenAI, Google) no ModelPicker. */
+.builtin-tools { display: grid; gap: 0; margin: 14px 0 0; padding: 0; border: 0; min-width: 0; }
+.builtin-tools legend { font-size: 11px; font-weight: 650; padding: 0; margin-bottom: 7px; }
+.node-fields .builtin-tools label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--studio-line); cursor: pointer; }
+.builtin-tools label:first-of-type { border-radius: 8px 8px 0 0; }
+.builtin-tools label:last-of-type { border-radius: 0 0 8px 8px; }
+.builtin-tools label + label { border-top: 0; }
+.node-fields .builtin-tools input { width: 16px; height: 16px; margin: 2px 0 0; padding: 0; flex-shrink: 0; accent-color: var(--studio-primary); box-shadow: none; }
+.builtin-tools label > span { display: grid; gap: 2px; min-width: 0; font-weight: 400; overflow-wrap: anywhere; }
+.builtin-tools label strong { font-size: 12px; font-weight: 600; }
+.node-fields .builtin-tools label small { margin-top: 0; }
