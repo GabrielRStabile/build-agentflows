@@ -2604,7 +2604,7 @@
 .reference-menu {
   /* Posição e altura vêm do componente (coordenadas da janela), para não ser cortado pelo diálogo. */
   position: fixed;
-  z-index: 5;
+  z-index: 20;
   overflow: auto;
   margin: 0;
   padding: 4px;

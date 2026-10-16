@@ -7,6 +7,26 @@ export type Reference = { value: string; label: string; hint?: string; alias?: s
 // A camada de destaque espelha o campo (fonte, espaçamento, bordas e posição) para colorir as
 // referências sem mexer no texto digitado: o campo fica com o texto transparente por cima dela.
 const MIRRORED = ["font", "lineHeight", "letterSpacing", "wordSpacing", "textIndent", "textTransform", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth", "borderRadius", "boxSizing"] as const;
+// Linha do cursor na janela: uma cópia invisível da área de texto (mesma fonte, largura e quebras)
+// recebe o texto até o cursor, e um marcador no fim dá a posição.
+function caretLine(el: HTMLTextAreaElement) {
+  const style = getComputedStyle(el), rect = el.getBoundingClientRect();
+  const copy = document.createElement("div");
+  for (const prop of MIRRORED) copy.style[prop] = style[prop];
+  Object.assign(copy.style, { position: "fixed", top: "0", left: "-9999px", visibility: "hidden", whiteSpace: "pre-wrap", overflowWrap: "break-word", borderStyle: "solid", boxSizing: "content-box" });
+  // clientWidth já desconta bordas e barra de rolagem: a cópia quebra as linhas no mesmo ponto.
+  copy.style.width = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) + "px";
+  copy.textContent = el.value.slice(0, el.selectionStart ?? el.value.length);
+  const marker = document.createElement("span");
+  marker.textContent = "\u200b";
+  copy.appendChild(marker);
+  document.body.appendChild(copy);
+  const offsetTop = marker.offsetTop, offsetLeft = marker.offsetLeft, height = marker.offsetHeight;
+  copy.remove();
+  // offsetTop/offsetLeft partem da borda interna da cópia; somam-se as bordas do campo.
+  const top = rect.top + el.clientTop + offsetTop - el.scrollTop;
+  return { top, bottom: top + height, left: rect.left + el.clientLeft + offsetLeft - el.scrollLeft };
+}
 // Campo de texto com autocompletar: ao digitar "{{" aparece a lista de referências (entrada,
 // resultado anterior, variáveis e blocos do fluxo) e a escolha entra como {{...}} no lugar certo.
 export function ReferenceField({
@@ -76,7 +96,8 @@ export function ReferenceField({
         );
   const current = options.length ? Math.min(active, options.length - 1) : 0;
   // O menu usa coordenadas da janela: dentro de um diálogo curto (ex.: Resposta), um menu absoluto
-  // seria cortado pela rolagem do próprio diálogo. Abre para cima quando falta espaço abaixo.
+  // seria cortado pela rolagem do próprio diálogo. Na área de texto ele abre junto à linha do cursor,
+  // porque em instruções longas o campo ocupa a tela inteira; abre para cima quando falta espaço abaixo.
   const menu = useRef<HTMLUListElement | null>(null);
   const menuOpen = options.length > 0;
   useLayoutEffect(() => {
@@ -85,20 +106,24 @@ export function ReferenceField({
       const el = ref.current, list = menu.current;
       if (!el || !list) return;
       const rect = el.getBoundingClientRect();
-      const below = window.innerHeight - rect.bottom - 12, above = rect.top - 12;
-      const up = below < 160 && above > below;
-      const room = Math.max(96, Math.min(220, up ? above : below));
-      list.style.left = rect.left + "px";
-      list.style.width = rect.width + "px";
+      const line = el instanceof HTMLTextAreaElement ? caretLine(el) : { top: rect.top, bottom: rect.bottom, left: rect.left };
+      // A linha do cursor pode estar fora da parte visível do campo (rolagem): fica dentro dele.
+      const top = Math.max(rect.top, Math.min(line.top, rect.bottom)), bottom = Math.max(rect.top, Math.min(line.bottom, rect.bottom));
+      const below = window.innerHeight - bottom - 12, above = top - 12;
+      const up = below < 200 && above > below;
+      const room = Math.max(96, Math.min(320, up ? above : below));
+      const width = el instanceof HTMLTextAreaElement ? Math.min(rect.width, 420) : rect.width;
+      list.style.left = Math.max(rect.left, Math.min(line.left, rect.right - width, window.innerWidth - width - 12)) + "px";
+      list.style.width = width + "px";
       list.style.maxHeight = room + "px";
-      list.style.top = up ? "auto" : rect.bottom - 4 + "px";
-      list.style.bottom = up ? window.innerHeight - rect.top + 4 + "px" : "auto";
+      list.style.top = up ? "auto" : bottom + 4 + "px";
+      list.style.bottom = up ? window.innerHeight - top + 4 + "px" : "auto";
     };
     place();
     window.addEventListener("resize", place);
     document.addEventListener("scroll", place, true);
     return () => { window.removeEventListener("resize", place); document.removeEventListener("scroll", place, true); };
-  }, [menuOpen]);
+  }, [menuOpen, query, start]);
   function detect(text: string, caret: number) {
     replacementEnd.current = null;
     const before = text.slice(0, caret);
