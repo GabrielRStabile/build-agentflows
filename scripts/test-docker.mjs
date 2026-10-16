@@ -78,6 +78,8 @@ try {
     nodes[1].data.config.text = 'Worker completed';
     const flow = await request(tokenA, '/api/flows', { name: 'Docker flow', description: '', graph: { nodes, edges: [{ id: 'edge', source: 'start', target: 'end' }] } });
     assert.equal(flow.status, 200);
+    // Grafo com LLM que o navegador cria (e apaga) para conferir o aviso que impede fechar o diálogo do bloco.
+    const llmGraph = { nodes: [block('start', 'start', 0, 0), block('llm', 'llm', 260, 0), block('end', 'end', 520, 0)], edges: [{ id: 'e1', source: 'start', target: 'llm' }, { id: 'e2', source: 'llm', target: 'end' }] };
     assert.equal((await request(tokenB, '/api/flows/' + flow.body.id)).status, 404);
     assert.equal((await request('', '/api/flows')).status, 401);
     const configured = await request(tokenA, '/api/conexoes', { campos: { REPLICATE_API_TOKEN: 'container-private-replicate-token' } }, 'PUT');
@@ -98,7 +100,7 @@ try {
     }
     assert.equal((await request(tokenA, '/api/flows/' + flow.body.id + '/run', { input: 'Over quota', demo: true })).status, 429);
     assert.equal((await request(tokenB, '/api/runs/' + runs[0])).status, 404);
-    await writeFile('/app/data/docker-test.json', JSON.stringify({ a, b, tokenA, tokenB, runs, flowId: flow.body.id, imageId: image.id, png: png.toString('base64'), encrypted: seal('persisted-secret', 'docker-test') }), { mode: 0o600 });
+    await writeFile('/app/data/docker-test.json', JSON.stringify({ a, b, tokenA, tokenB, runs, flowId: flow.body.id, llmGraph, imageId: image.id, png: png.toString('base64'), encrypted: seal('persisted-secret', 'docker-test') }), { mode: 0o600 });
     await db.close();
   `);
   console.log("Docker: checking two workers against the same queue...");

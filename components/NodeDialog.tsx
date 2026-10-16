@@ -100,7 +100,7 @@ export function NodeDialog({
     [nameSaved, setNameSaved] = useState(false);
   const [nameEditing, setNameEditing] = useState(false);
   const [criteria, setCriteria] = useState<Criterion[]>(() => node.data.kind === "condition" ? conditionCriteria(node.data.config) : []);
-  const [closeError, setCloseError] = useState("");
+  const [blocked, setBlocked] = useState<{ message: string; at: unknown[] } | null>(null);
   // Instruções (system) do LLM/Agente abertas num modal maior, só com o campo de edição.
   const [expanded, setExpanded] = useState(false);
   const [variables, setVariables] = useState<{ key: string; value: string }[]>(() => {
@@ -109,6 +109,10 @@ export function NodeDialog({
   const [updates, setUpdates] = useState<{ key: string; value: string }[]>(() => {
     try { const rows = JSON.parse(node.data.config.stateUpdates || "[]"); return Array.isArray(rows) ? rows.filter((u) => u && typeof u.key === "string" && typeof u.value === "string") : []; } catch { return []; }
   });
+  // Qualquer edição tira o aviso antigo; ele volta na próxima tentativa de fechar se o problema continuar.
+  const editState = [draft, variables, updates, criteria];
+  const closeError = blocked && blocked.at.every((value, i) => value === editState[i]) ? blocked.message : "";
+  const setCloseError = (message: string) => setBlocked({ message, at: editState });
   const invalidVariables = variables.some((v) => !/^[a-zA-Z][a-zA-Z0-9_]{0,60}$/.test(v.key)) || new Set(variables.map((v) => v.key)).size !== variables.length;
   const c = draft.data.config,
     k = draft.data.kind;
@@ -438,7 +442,11 @@ export function NodeDialog({
           <button className="studio-button" disabled={!updateKeys.size || updates.length >= updateKeys.size} onClick={() => setUpdates([...updates, { key: [...updateKeys].find((key) => !updates.some((u) => u.key === key)) || "", value: `{{nodes.${node.id}}}` }])}>Atualizar variável de estado</button>
         </section>}
       </div>
-      {closeError && <p className="studio-error" role="alert">{closeError}</p>}
+      {/* Fixo no rodapé do diálogo: o motivo de não fechar fica visível em qualquer ponto da rolagem. */}
+      {closeError && <div className="node-close-error" role="alert">
+        <p>{closeError}</p>
+        <button type="button" className="studio-button" onClick={onClose}>Descartar alterações</button>
+      </div>}
     </Modal>
   );
 }

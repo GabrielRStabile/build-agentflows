@@ -4201,3 +4201,33 @@
 .builtin-tools label > span { display: grid; gap: 2px; min-width: 0; font-weight: 400; overflow-wrap: anywhere; }
 .builtin-tools label strong { font-size: 12px; font-weight: 600; }
 .node-fields .builtin-tools label small { margin-top: 0; }
+/* Aviso que impede fechar o diálogo do bloco: preso ao rodapé enquanto o conteúdo rola. */
+.node-close-error {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin: 20px -24px -24px;
+  padding: 12px 24px 16px;
+  background: var(--studio-panel);
+  border-top: 1px solid var(--studio-line);
+  box-shadow: 0 -10px 24px #1a19370f;
+}
+.node-close-error p {
+  flex: 1 1 260px;
+  margin: 0;
+  padding: 10px 13px;
+  background: #fff0f1;
+  color: #a53a4c;
+  border: 1px solid #f4d5db;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.node-close-error .studio-button {
+  flex: none;
+}

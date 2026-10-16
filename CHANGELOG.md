@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.48.1 — 16/10/2026
+
+- Diálogo do bloco que não pode fechar (por exemplo, Replicate sem o modelo `empresa/modelo`): o motivo fica fixo no rodapé do diálogo, visível em qualquer ponto da rolagem e no celular, com o botão "Descartar alterações" para sair sem salvar. O aviso some assim que algo é editado e volta na próxima tentativa de fechar se o problema continuar. Antes a mensagem ficava no fim do conteúdo, fora da tela.
+
 ## 0.48.0 — 16/10/2026
 
 - Fila de execução: 200 vagas simultâneas por padrão (`EXECUCOES_SIMULTANEAS`, antes 6), para turmas inteiras testarem ao mesmo tempo sem esperar na fila. Cada conta continua com uma execução por vez.

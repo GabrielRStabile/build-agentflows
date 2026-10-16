@@ -60,6 +60,35 @@ export async function verifyEmbedBrowser(origin, fixture) {
     assert.equal((await media.json()).some(c => c.provider.startsWith("ai_")), false);
     await other.getByText(/Nenhuma credencial salva/).waitFor();
     assert.equal((await b.request.get(origin + "/api/flows/" + fixture.flowId + "/embed")).status(), 404);
+
+    // Bloco que não pode fechar: o motivo fica visível no rodapé do diálogo, e dá para descartar as alterações.
+    const llmFlowId = await other.evaluate(async (graph) => (await (await fetch("/api/flows", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Docker LLM", description: "", graph }) })).json()).id, fixture.llmGraph);
+    assert.ok(llmFlowId);
+    await other.goto(origin + "/flows/" + llmFlowId);
+    await other.locator(".react-flow__node").filter({ hasText: /LLM/ }).first().dblclick();
+    const dialog = other.locator("dialog.studio-modal[open]");
+    await dialog.getByRole("combobox", { name: "Fornecedor" }).click();
+    await dialog.getByRole("option", { name: "Replicate" }).click();
+    await dialog.getByRole("textbox", { name: "Modelo da Replicate" }).waitFor();
+    await dialog.evaluate(el => { el.scrollTop = 0; });
+    const close = () => dialog.locator("header").getByRole("button", { name: "Fechar diálogo" }).click();
+    await close();
+    const blocked = dialog.locator(".node-close-error");
+    await blocked.getByText(/Replicate/).waitFor();
+    assert.equal(await dialog.count(), 1);
+    const inView = () => blocked.evaluate(el => { const box = el.getBoundingClientRect(), frame = el.closest("dialog").getBoundingClientRect(); return box.top >= frame.top && box.bottom <= frame.bottom + 1; });
+    assert.ok(await inView(), "aviso de fechamento fora da área visível do diálogo");
+    await other.screenshot({ path: "/tmp/agentflows-node-close-error.png" });
+    await other.setViewportSize({ width: 390, height: 844 });
+    assert.ok(await inView(), "aviso de fechamento fora da área visível no celular");
+    await other.screenshot({ path: "/tmp/agentflows-node-close-error-mobile.png" });
+    await dialog.getByRole("textbox", { name: "Modelo da Replicate" }).fill("google/nano-banana");
+    assert.equal(await blocked.count(), 0);
+    await dialog.getByRole("textbox", { name: "Modelo da Replicate" }).fill("");
+    await close();
+    await blocked.getByRole("button", { name: "Descartar alterações" }).click();
+    await dialog.waitFor({ state: "detached" });
+    assert.equal(await other.evaluate(async (id) => (await fetch("/api/flows/" + id, { method: "DELETE" })).status, llmFlowId), 200);
     console.log("Browser passed: separate accounts, iframe preview, queued conversation, reload, desktop and mobile.");
   } finally { await browser.close(); }
 }
