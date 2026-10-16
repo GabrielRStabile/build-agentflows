@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.47.0 — 15/10/2026
+
+- Ferramentas nativas dos fornecedores no LLM e no Agente, marcadas nos parâmetros do modelo. OpenAI: Busca na web, Interpretador de código e Geração de imagens (Responses API). Google: Contexto de URLs, Busca Google e Execução de código (API generateContent do Gemini). As ferramentas rodam no fornecedor e são cobradas na chave da conta; cada uso aparece como etapa de ferramenta (consulta e fontes, código e saída), e imagens geradas ou gráficos do código aparecem abaixo da resposta como anexos privados. Sem nenhuma marcada, os blocos continuam nas APIs de antes. Funciona junto com as ferramentas escolhidas no Agente, quando o modelo aceita a combinação.
+
 ## 0.46.2 — 15/10/2026
 
 - Cadastro de 1000 pessoas ao mesmo tempo: os limites por endereço passam a contar pessoas com folga (1000 pessoas × três tentativas; cinco requisições por minuto por pessoa no conjunto dos fluxos de conta), para que repetir o envio ou errar uma confirmação não bloqueie ninguém por uma hora. Verificado com 1000 cadastros simultâneos pelo mesmo IP, sem falhas.
