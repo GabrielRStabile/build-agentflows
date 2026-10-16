@@ -140,13 +140,17 @@ o worker continua consultando a fila durável. Não há repetição automática 
 uma execução interrompida que possa ter produzido efeitos externos.
 
 Limites configuráveis por ambiente (padrão entre parênteses):
-`EXECUCOES_SIMULTANEAS` (6) tarefas simultâneas no total, `FILA_LIMITE_USUARIO`
+`EXECUCOES_SIMULTANEAS` (200) tarefas simultâneas no total, `FILA_LIMITE_USUARIO`
 (100) pendentes/ativas por conta, `FILA_LIMITE_TOTAL` (2000) no total,
 `LIMITE_EXECUCAO_SEGUNDOS` (180, entre 30 e 900) de tempo por execução comum
-(fluxos com modelo de mídia mantêm 10 minutos) e `POSTGRES_CONEXOES` (10) por
-processo. Cada conta executa uma tarefa por vez, porque a sessão ChatGPT abre um
+(fluxos com modelo de mídia mantêm 10 minutos) `POSTGRES_CONEXOES` (20) por
+processo web e `WORKER_POSTGRES_CONEXOES` (60) no worker, com `POSTGRES_MAX_CONEXOES`
+(200) no PostgreSQL. Uma falha momentânea ao renovar a vaga não interrompe a
+execução; ela só é abortada quando a autorização é revogada ou fica 45 s sem
+renovação. Cada conta executa uma tarefa por vez, porque a sessão ChatGPT abre um
 único processo Codex; cada execução simultânea consome cerca de 100 a 200 MB e
-cerca de 40 PIDs do worker (lançador Node e binário Codex), então aumente
+cerca de 40 PIDs do worker (lançador Node e binário Codex); execuções com
+modelos por API (OpenAI, OpenRouter, Anthropic, Google) usam poucos MB. Aumente
 `WORKER_MEM_LIMIT` e `WORKER_PIDS_LIMIT` junto com `EXECUCOES_SIMULTANEAS`. O
 limite de conexões ChatGPT por processo acompanha `EXECUCOES_SIMULTANEAS`. A
 autorização do worker expira em 60 segundos, é renovada a cada dez segundos e a
@@ -174,10 +178,11 @@ posição na fila, mas a capacidade continua sendo a decisão principal.
 
 | Vagas (`EXECUCOES_SIMULTANEAS`) | Capacidade com execuções de ~30 s | Espera máxima com 150 envios simultâneos | Worker: memória / PIDs |
 | --- | --- | --- | --- |
-| 6 (padrão) | ~12 por minuto | ~12 min | 2 GB / 512 |
+| 6 (padrão até 0.47) | ~12 por minuto | ~12 min | 2 GB / 512 |
 | 16 | ~32 por minuto | ~4,5 min | 4 GB / 1024 |
 | 24 (recomendado) | ~48 por minuto | ~3 min | 6 GB / 1536 |
 | 40 | ~80 por minuto | ~2 min | 9 GB / 2048 |
+| 200 (padrão desde 0.48.0) | ~400 por minuto | sem espera | 6 GB / 4096 com modelos por API; ~30 GB / 8192 se todas forem ChatGPT |
 
 Na prática os envios se espalham por alguns minutos, então 24 vagas atendem a
 turma com esperas de segundos a poucos minutos. Fluxos com ferramentas ou mais de
@@ -188,12 +193,14 @@ exercício exigir isso.
 nomes):
 
 ```sh
-EXECUCOES_SIMULTANEAS=24
+EXECUCOES_SIMULTANEAS=200
 LIMITE_EXECUCAO_SEGUNDOS=180
 POSTGRES_CONEXOES=20
+WORKER_POSTGRES_CONEXOES=60
+POSTGRES_MAX_CONEXOES=200
 WORKER_MEM_LIMIT=6g
 WORKER_CPUS=4
-WORKER_PIDS_LIMIT=1536
+WORKER_PIDS_LIMIT=4096
 WORKER_STOP_GRACE=210s
 APP_MEM_LIMIT=2g
 APP_CPUS=3

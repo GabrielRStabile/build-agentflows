@@ -9,16 +9,21 @@ import { indexKnowledge, processKnowledgeSource } from "./tenant-knowledge-index
 import { FlowError } from "./flow-store";
 import { AuthError } from "./saas-security";
 
+const LEASE_GRACE_MS = 45_000;
+
 /** One leased job, suitable for CLI worker and integration tests. */
 export async function runClaimedJob(db: Database, job: Job, shutdown?: AbortSignal) {
   if (!job.lease_token || job.status !== "running") throw new Error("Job sem autorização de execução.");
   const abort = new AbortController();
   const signal = AbortSignal.any([abort.signal, ...(shutdown ? [shutdown] : []), AbortSignal.timeout(15 * 60_000)]);
-  let heartbeat = Promise.resolve(), checking = false;
+  // A revoked lease aborts at once; a transient database error (busy pool with many slots) only aborts
+  // once the 60 s lease could have expired, since the next renewal usually succeeds.
+  let heartbeat = Promise.resolve(), checking = false, renewedAt = Date.now();
   const timer = setInterval(() => {
     if (checking) return;
     checking = true;
-    heartbeat = heartbeatJob(db, job).then((valid) => { if (!valid) abort.abort(); }).catch(() => abort.abort()).finally(() => { checking = false; });
+    heartbeat = heartbeatJob(db, job).then((valid) => { if (valid) renewedAt = Date.now(); else abort.abort(); })
+      .catch(() => { if (Date.now() - renewedAt >= LEASE_GRACE_MS) abort.abort(); }).finally(() => { checking = false; });
   }, 10000);
   let failure: string | undefined;
   try {

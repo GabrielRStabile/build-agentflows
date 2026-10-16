@@ -103,10 +103,10 @@ test("erros do provedor viram orientação em português e preservam o detalhe",
 test("conexões por processo nunca ficam abaixo das execuções simultâneas", () => {
   const before = process.env.EXECUCOES_SIMULTANEAS;
   try {
-    delete process.env.EXECUCOES_SIMULTANEAS; assert.equal(maxBridges(), 6);
+    delete process.env.EXECUCOES_SIMULTANEAS; assert.equal(maxBridges(), 200);
     process.env.EXECUCOES_SIMULTANEAS = "2"; assert.equal(maxBridges(), 4);
     process.env.EXECUCOES_SIMULTANEAS = "24"; assert.equal(maxBridges(), 24);
-    process.env.EXECUCOES_SIMULTANEAS = "abc"; assert.equal(maxBridges(), 6);
+    process.env.EXECUCOES_SIMULTANEAS = "abc"; assert.equal(maxBridges(), 200);
   } finally { if (before === undefined) delete process.env.EXECUCOES_SIMULTANEAS; else process.env.EXECUCOES_SIMULTANEAS = before; }
 });
 

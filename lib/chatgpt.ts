@@ -20,7 +20,7 @@ import type { ModelCapability } from "./model-capabilities";
 /** Every concurrent run in the worker holds one bridge; the cap must never be below EXECUCOES_SIMULTANEAS. */
 export function maxBridges() {
   const running = Number(process.env.EXECUCOES_SIMULTANEAS);
-  return Math.max(4, Number.isInteger(running) && running > 0 ? running : 6);
+  return Math.max(4, Number.isInteger(running) && running > 0 ? running : 200);
 }
 /** Web requests hold the session for about a second (usage, models); a worker run waits for them instead of failing. */
 const LEASE_RETRY = { request: { attempts: 20, delayMs: 100 }, job: { attempts: 150, delayMs: 100 } };

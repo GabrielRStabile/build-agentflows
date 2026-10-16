@@ -109,7 +109,7 @@ test("limites da fila vêm do ambiente, com padrões para turmas grandes e uma e
   const keys = ["FILA_LIMITE_USUARIO", "FILA_LIMITE_TOTAL", "EXECUCOES_SIMULTANEAS"] as const, saved = keys.map((key) => process.env[key]);
   try {
     delete process.env.FILA_LIMITE_USUARIO; delete process.env.EXECUCOES_SIMULTANEAS; process.env.FILA_LIMITE_TOTAL = "0";
-    assert.deepEqual(queueLimits(), { perUser: 100, total: 2000, running: 6 });
+    assert.deepEqual(queueLimits(), { perUser: 100, total: 2000, running: 200 });
     process.env.FILA_LIMITE_USUARIO = "3"; process.env.EXECUCOES_SIMULTANEAS = "1";
     const flow = await asA(create), other = await asB(create);
     for (let i = 0; i < 3; i++) await asA(() => enqueueRun(flow.id, `Env ${i}`, false, true));

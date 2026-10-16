@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 0.48.0 — 16/10/2026
+
+- Fila de execução: 200 vagas simultâneas por padrão (`EXECUCOES_SIMULTANEAS`, antes 6), para turmas inteiras testarem ao mesmo tempo sem esperar na fila. Cada conta continua com uma execução por vez.
+- Compose do Coolify dimensionado para as 200 vagas: pool do worker com 60 conexões (`WORKER_POSTGRES_CONEXOES`), web com 20, PostgreSQL com `max_connections=200` (`POSTGRES_MAX_CONEXOES`) e 1 GB, worker com 6 GB, 4 CPUs e 4096 PIDs (suficiente para modelos por API; execuções ChatGPT custam ~40 PIDs e 100 a 200 MB cada).
+- Uma falha momentânea ao renovar a vaga da execução (pool ocupado) não interrompe mais a execução; ela só é abortada com a autorização revogada ou após 45 s sem renovação.
+
 ## 0.47.2 — 16/10/2026
 
 - Referências com `{{` em instruções longas: a lista abre junto à linha do cursor (abaixo dela, ou acima quando falta espaço), com até 320px de altura e acima do cabeçalho do diálogo. Antes ela se posicionava pela borda do campo e, no modal de instruções, ficava espremida longe do cursor.

@@ -14,7 +14,7 @@ export type Job = { id: string; user_id: string; kind: "run" | "index" | "extrac
 export const queueLock = (sql: Sql) => sql.query("SELECT pg_advisory_xact_lock(742193802)");
 const positive = (name: string, fallback: number) => { const n = Number(process.env[name]); return Number.isInteger(n) && n > 0 ? n : fallback; };
 /** Read per call so tests and deploys can tune limits without code changes. Each account still runs one job at a time (ChatGPT session lease). */
-export const queueLimits = () => ({ perUser: positive("FILA_LIMITE_USUARIO", 100), total: positive("FILA_LIMITE_TOTAL", 2000), running: positive("EXECUCOES_SIMULTANEAS", 6) });
+export const queueLimits = () => ({ perUser: positive("FILA_LIMITE_USUARIO", 100), total: positive("FILA_LIMITE_TOTAL", 2000), running: positive("EXECUCOES_SIMULTANEAS", 200) });
 export async function capacity(sql: Sql, owner: string) {
   await queueLock(sql);
   const user = await sql.query("SELECT id FROM users WHERE id=$1 AND beta_status='approved' AND email_verified_at IS NOT NULL FOR UPDATE", [owner]);
