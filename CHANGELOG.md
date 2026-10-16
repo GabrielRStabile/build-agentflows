@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.47.2 — 16/10/2026
+
+- Referências com `{{` em instruções longas: a lista abre junto à linha do cursor (abaixo dela, ou acima quando falta espaço), com até 320px de altura e acima do cabeçalho do diálogo. Antes ela se posicionava pela borda do campo e, no modal de instruções, ficava espremida longe do cursor.
+
 ## 0.47.1 — 16/10/2026
 
 - Ações permitidas das ferramentas: o botão "Atualizar lista" fica em uma linha, alinhado ao título; em painéis estreitos é o contador que desce para a linha de baixo.
