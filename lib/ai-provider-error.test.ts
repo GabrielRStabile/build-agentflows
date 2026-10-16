@@ -13,6 +13,9 @@ test("falha do fornecedor inclui a explicação devolvida no corpo", async () =>
   assert.equal(providerDetail("<html><body>Bad gateway</body></html>"), "", "páginas HTML não entram na mensagem");
   assert.equal(providerDetail("x".repeat(400)).length, 301, "detalhes longos são cortados");
   assert.equal(providerDetail('{"message":"texto"}'), "texto");
+  const gemini = '[{ "error": { "code": 400, "message": "Unhandled generated data mime type: image/jpeg", "status": "INVALID_ARGUMENT" } } ]';
+  assert.equal(providerDetail(gemini), "Unhandled generated data mime type: image/jpeg", "o endpoint compatível do Gemini envolve o erro em uma lista");
+  assert.match(providerFailure(400, gemini).message, /^O modelo do Google respondeu com uma imagem.*modelo de imagem do Gemini/);
   assert.equal(providerFailure(503, "upstream down").status, 502);
   await assert.rejects(runChatCompletion({ key: "k", url: "https://api.openai.com/v1/chat/completions", system: "s", prompt: "p", model: "gpt-6-luna",
     fetcher: async () => new Response(body, { status: 400 }) }), /Resposta do fornecedor: Function calling/);

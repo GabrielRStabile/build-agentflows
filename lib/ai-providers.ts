@@ -14,7 +14,11 @@ export const aiProvider = (id: string) => AI_PROVIDERS.find(p => p.id === id);
 export const modelProviderId = (model = ""): AiProvider | "chatgpt" => aiProvider(model.split(":")[0])?.id || "chatgpt";
 export const aiCredentialProvider = (id: string) => `ai_${id}`;
 export const AI_CREDENTIAL_CATALOG = AI_PROVIDERS.map(p => ({ id: `credential:ai_${p.id}`, provider: aiCredentialProvider(p.id), name: `${p.name} · Modelos`, icon: p.icon }));
-export type AiModel = { id: string; name: string; inputModalities: string[]; parameters: string[]; contextLength?: number; maxOutputTokens?: number };
+export type AiModel = { id: string; name: string; inputModalities: string[]; outputModalities?: string[]; parameters: string[]; contextLength?: number; maxOutputTokens?: number };
+/** Gemini models that answer with images (gemini-*-image*, "Nano Banana"): only the native generateContent API returns them. */
+export const geminiImageModel = (model = "") => /^google:gemini-[\w.-]*image/.test(model);
+/** Native tools accepted by the Gemini image models (Google documents only search grounding for them). */
+const GEMINI_IMAGE_BUILTINS: readonly string[] = ["google_search"];
 /** Níveis aceitos pela OpenAI; cada modelo suporta um subconjunto e o fornecedor recusa os demais. */
 export const REASONING_EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 export type ReasoningEffort = typeof REASONING_EFFORTS[number];
@@ -48,14 +52,20 @@ export const BUILTIN_TOOLS = {
 export type BuiltinProvider = keyof typeof BUILTIN_TOOLS;
 export type BuiltinTool = typeof BUILTIN_TOOLS[BuiltinProvider][number]["id"];
 export const builtinProvider = (model = "") => { const id = modelProviderId(model); return id in BUILTIN_TOOLS ? id as BuiltinProvider : undefined; };
+/** Native tools the model can use: the provider's list, narrowed for the Gemini image models. */
+export const builtinToolsFor = (model = ""): readonly { id: string; name: string; description: string }[] => {
+  const provider = builtinProvider(model);
+  if (!provider) return [];
+  return geminiImageModel(model) ? BUILTIN_TOOLS[provider].filter(tool => GEMINI_IMAGE_BUILTINS.includes(tool.id)) : BUILTIN_TOOLS[provider];
+};
 export const builtinToolName = (id: string) => Object.values(BUILTIN_TOOLS).flat().find(tool => tool.id === id)?.name || id;
 export function builtinTools(config: Record<string, string>): BuiltinTool[] {
   const ids = [...new Set((config.builtinTools || "").split(",").map(id => id.trim()).filter(Boolean))];
   if (!ids.length) return [];
   const provider = builtinProvider(config.model);
   if (!provider) throw new Error("Ferramentas nativas só funcionam com modelos da OpenAI ou do Google.");
-  const offered: readonly { id: string }[] = BUILTIN_TOOLS[provider];
-  if (ids.some(id => !offered.some(tool => tool.id === id))) throw new Error(`As ferramentas nativas devem ser opções da lista de ${aiProvider(provider)!.name}.`);
+  const offered: readonly { id: string }[] = builtinToolsFor(config.model);
+  if (ids.some(id => !offered.some(tool => tool.id === id))) throw new Error(geminiImageModel(config.model) ? "Os modelos de imagem do Gemini aceitam apenas a Busca Google como ferramenta nativa." : `As ferramentas nativas devem ser opções da lista de ${aiProvider(provider)!.name}.`);
   return ids as BuiltinTool[];
 }
 export function modelSettings(config: Record<string, string>) {

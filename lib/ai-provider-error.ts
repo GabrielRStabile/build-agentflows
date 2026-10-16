@@ -4,7 +4,9 @@ export function providerDetail(body: string | undefined) {
   if (!body) return "";
   let text = body.trim();
   try {
-    const data = JSON.parse(text) as { error?: { message?: string } | string; message?: string };
+    // The Gemini OpenAI-compatible endpoint wraps the error in an array.
+    const parsed = JSON.parse(text) as unknown;
+    const data = (Array.isArray(parsed) ? parsed[0] : parsed) as { error?: { message?: string } | string; message?: string };
     const inner = typeof data.error === "string" ? data.error : data.error?.message || data.message;
     if (inner) text = String(inner).trim();
   } catch { /* plain text */ }
@@ -19,6 +21,8 @@ export function providerFailure(status: number, body?: string) {
     : status === 400 ? "O fornecedor recusou os parâmetros ou a mensagem. Revise as configurações do modelo."
     : "O fornecedor está indisponível. Tente novamente em alguns instantes.";
   const detail = providerDetail(body);
+  // Gemini's OpenAI-compatible endpoint cannot return generated images; only the native API (image models) does.
+  if (status === 400 && /Unhandled generated data mime type: image\//i.test(detail)) return new FlowError("O modelo do Google respondeu com uma imagem, que esta forma de chamada não entrega. Para gerar imagens, escolha um modelo de imagem do Gemini (nome com \"image\").", 400);
   return new FlowError(detail ? `${message} Resposta do fornecedor: ${detail}` : message, status >= 400 && status < 500 ? status : 502);
 }
 

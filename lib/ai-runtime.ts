@@ -1,4 +1,4 @@
-import { aiProvider, modelProviderId, modelSettings, openaiReasoningModel, toolsRequireNoReasoning } from "./ai-providers";
+import { aiProvider, geminiImageModel, modelProviderId, modelSettings, openaiReasoningModel, toolsRequireNoReasoning } from "./ai-providers";
 import { modelCredentialKey } from "./ai-credentials";
 import { runChatCompletion } from "./chat-completion";
 import { runOpenRouter } from "./openrouter";
@@ -27,7 +27,8 @@ export async function runProviderModel(config: Record<string, string>, options: 
   if (provider === "anthropic") return runAnthropic({ ...options, model, key, settings });
   const builtins = options.onBuiltin ? settings.builtins : [];
   // Ferramentas nativas do Gemini só existem na API generateContent; sem elas o bloco continua no endpoint compatível.
-  if (provider === "google" && builtins.length) return runGeminiNative({ ...options, model, key, builtins, settings });
+  // Os modelos de imagem também vão sempre por ela: o endpoint compatível recusa respostas com imagens.
+  if (provider === "google" && (builtins.length || geminiImageModel(config.model))) return runGeminiNative({ ...options, model, key, builtins, settings, imageOutput: geminiImageModel(config.model) });
   const reasoning = provider === "openai" && openaiReasoningModel(model);
   if (reasoning && settings.temperature !== undefined) throw new Error("Remova a temperatura personalizada deste modelo de raciocínio.");
   // Ferramentas nativas só existem na Responses API; sem elas o bloco continua em Chat Completions.

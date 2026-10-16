@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, type ReactNode } from "react";
 import { request, Icon, IconButton } from "./StudioUI";
-import { AI_PROVIDERS, BUILTIN_TOOLS, REASONING_EFFORTS, builtinProvider, aiProvider, modelProviderId, aiCredentialProvider, type AiModel } from "@/lib/ai-providers";
+import { AI_PROVIDERS, REASONING_EFFORTS, builtinToolsFor, geminiImageModel, aiProvider, modelProviderId, aiCredentialProvider, type AiModel } from "@/lib/ai-providers";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
 import { formatCredentialExpiry } from "@/lib/credential-expiry";
 import { ToolSelect } from "./ToolSelect";
@@ -63,7 +63,7 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
   const selected = models.find(m => m.id === value);
   const selectedCredential = matching.find(c => c.id === credentialId);
   const builtins = (config.builtinTools || "").split(",").map(id => id.trim());
-  const builtinProviderId = builtinProvider(value), offered: readonly { id: string; name: string; description: string }[] = builtinProviderId ? BUILTIN_TOOLS[builtinProviderId] : [];
+  const offered = builtinToolsFor(value);
   // Agents call tools in a text loop; Replicate generation models belong to the LLM block. Saved agents keep their choice.
   const catalog = [{ id: "chatgpt", name: "ChatGPT · assinatura" }, ...AI_PROVIDERS.filter(p => kind !== "agent" || p.id !== "replicate" || provider === "replicate").map(p => ({ id: `credential:ai_${p.id}`, name: p.name }))];
   function saved(c: SavedToolCredential) {
@@ -114,8 +114,8 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
             <small>Use o nome exibido na Replicate, como google/nano-banana. O resultado pode ser texto, imagens ou um vídeo, conforme o modelo. <a href="https://replicate.com/explore" target="_blank" rel="noreferrer">Explorar modelos</a></small>
           </label> : loading ? <small role="status">Carregando modelos…</small> : <>
             <ToolSelect label="Modelo de IA" listLabel="Modelos de IA" value={value} catalog={models} icon={<Icon name="spark" size={18} />} emptyMessage="Nenhum modelo disponível. Conecte uma credencial e tente novamente." missingLabel={modelLabel(value)}
-              onChange={model => onConfigChange({ model, modelTemperature: "", modelMaxTokens: "", modelReasoningEffort: "" })} />
-            {!!models.length && <small>{models.length} modelos disponíveis{selected?.contextLength ? ` · contexto de ${selected.contextLength.toLocaleString("pt-BR")} tokens` : ""}{selected?.inputModalities.includes("image") ? " · aceita imagens" : ""}</small>}
+              onChange={model => onConfigChange({ model, modelTemperature: "", modelMaxTokens: "", modelReasoningEffort: "", ...(geminiImageModel(model) !== geminiImageModel(value) ? { builtinTools: "" } : {}) })} />
+            {!!models.length && <small>{models.length} modelos disponíveis{selected?.contextLength ? ` · contexto de ${selected.contextLength.toLocaleString("pt-BR")} tokens` : ""}{selected?.inputModalities.includes("image") ? " · aceita imagens" : ""}{selected?.outputModalities?.includes("image") ? " · gera imagens" : ""}</small>}
           </>}
           {error && <div role="alert"><p className="studio-error">{error}</p><button type="button" className="tool-text-button" onClick={() => setRetry(n => n + 1)}>Tentar novamente</button></div>}
           {selected?.parameters.includes("temperature") && <label>Temperatura<input aria-label="Temperatura" type="number" min="0" max={provider === "anthropic" ? "1" : "2"} step="0.1" placeholder="Padrão do modelo" value={config.modelTemperature || ""} onChange={e => onConfigChange({ modelTemperature: e.target.value })} /></label>}
@@ -129,10 +129,11 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
               <input type="checkbox" checked={builtins.includes(tool.id)} onChange={e => onConfigChange({ builtinTools: offered.map(t => t.id).filter(id => id === tool.id ? e.target.checked : builtins.includes(id)).join(",") })} />
               <span><strong>{tool.name}</strong><small>{tool.description}</small></span>
             </label>)}
-            <small>Executadas pelo próprio fornecedor e cobradas na sua chave. {provider === "openai" ? "Imagens geradas aparecem abaixo da resposta. " : "Gráficos do código aparecem abaixo da resposta. "}Nem todo modelo aceita todas; o fornecedor informa quando recusa.</small>
+            <small>Executadas pelo próprio fornecedor e cobradas na sua chave. {provider === "openai" ? "Imagens geradas aparecem abaixo da resposta. " : geminiImageModel(value) ? "" : "Gráficos do código aparecem abaixo da resposta. "}Nem todo modelo aceita todas; o fornecedor informa quando recusa.</small>
           </fieldset>}
           {selected?.inputModalities.includes("image") && provider !== "anthropic" && !isMediaModel(value) && imageField(false)}
           {selected?.parameters.includes("max_tokens") && <label>Máximo de tokens de saída<input aria-label="Máximo de tokens de saída" type="number" min="1" max={selected.maxOutputTokens || 1000000} step="1" placeholder="4000" value={config.modelMaxTokens || ""} onChange={e => onConfigChange({ modelMaxTokens: e.target.value })} /></label>}
+          {geminiImageModel(value) && <small>Responde com texto e imagens, que aparecem abaixo da resposta. Cada imagem é cobrada na sua chave do Google.</small>}
           {isMediaModel(value) && provider !== "replicate" && <small>Gera imagens com o saldo do fornecedor. {mediaModel(value)?.inputModalities.includes("image") ? "Aceita até 5 referências e 6 MB no total." : "Recebe descrições em texto."}</small>}
         </>}
         <a className="tool-text-button" href="/credenciais" target="_blank" rel="noreferrer">Gerenciar todas as credenciais</a>

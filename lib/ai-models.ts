@@ -1,4 +1,4 @@
-import { aiProvider, type AiProvider, type AiModel } from "./ai-providers";
+import { aiProvider, geminiImageModel, type AiProvider, type AiModel } from "./ai-providers";
 import { modelCredentialKey } from "./ai-credentials";
 import { listModels } from "./openrouter";
 import { MEDIA_MODELS } from "./media-models";
@@ -26,13 +26,14 @@ export async function providerModels(provider: AiProvider, credentialId?: string
       if (provider === "google") m.id = m.id.replace(/^models\//, "");
       // The OpenAI /models endpoint also lists embedding, speech and image endpoints.
       if (provider === "openai" && (!/^(gpt-|o[1-9]|chatgpt-)/.test(m.id) || /audio|realtime|transcribe|tts|image|search|instruct|codex/.test(m.id))) continue;
-      if (provider === "google" && (!m.id.startsWith("gemini-") || /embedding|live|tts|image|robotics/.test(m.id))) continue;
+      // Gemini image models ("Nano Banana") stay: they answer through the native API with the images saved as media.
+      if (provider === "google" && (!m.id.startsWith("gemini-") || /embedding|live|tts|robotics/.test(m.id))) continue;
       if (provider === "groq" && /whisper|tts|guard|orpheus/.test(m.id)) continue;
       const reasoning = provider === "openai" && /^(o[1-9]|gpt-[5-9])/.test(m.id);
       // Be conservative for unrecognized models; parameters remain optional.
       const temperature = !reasoning && !(provider === "anthropic" && /(?:opus|sonnet)-[5-9]/.test(m.id));
       const vision = (provider === "anthropic" && m.capabilities?.image_input?.supported !== false) || provider === "google" || (provider === "openai" && /^(gpt-4o|gpt-4\.[1-9]|gpt-[5-9]|o[3-9])/.test(m.id)) || (provider === "groq" && /llama-4/.test(m.id));
-      models.push({ id: `${provider}:${m.id}`, name: m.display_name || m.name || m.id, inputModalities: vision ? ["text", "image"] : ["text"], parameters: ["max_tokens", ...(temperature ? ["temperature"] : []), ...(reasoning ? ["reasoning_effort"] : [])], contextLength: m.max_input_tokens || m.context_window, maxOutputTokens: m.max_tokens || undefined });
+      models.push({ id: `${provider}:${m.id}`, name: m.display_name || m.name || m.id, inputModalities: vision ? ["text", "image"] : ["text"], ...(geminiImageModel(`${provider}:${m.id}`) ? { outputModalities: ["text", "image"] } : {}), parameters: ["max_tokens", ...(temperature ? ["temperature"] : []), ...(reasoning ? ["reasoning_effort"] : [])], contextLength: m.max_input_tokens || m.context_window, maxOutputTokens: m.max_tokens || undefined });
     }
     const next = data.has_more && data.last_id ? data.last_id : "";
     if (next === after) break;

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createTenantTestContext, commitTestConfig } from "../scripts/tenant-test-context";
 import { saveToolCredential, listToolCredentials, deleteToolCredential } from "./tool-credential-store";
 import { modelCredentialKey, importModelCredentials, saveOpenRouterOAuth } from "./ai-credentials";
-import { AI_PROVIDERS, imageDetail, modelSettings } from "./ai-providers";
+import { AI_PROVIDERS, builtinToolsFor, imageDetail, modelSettings } from "./ai-providers";
 import { runProviderModel } from "./ai-runtime";
 import { providerModels } from "./ai-models";
 import { publicModelCache } from "./public-model-cache";
@@ -328,5 +328,57 @@ test("Google: ferramentas nativas usam generateContent, devolvem o turno do mode
     const plain: string[] = [];
     await runProviderModel({ model: "google:gemini-3-pro", modelCredentialId: c.id }, { system: "s", prompt: "p", onBuiltin: async () => {}, fetcher: async url => { plain.push(String(url)); return Response.json({ choices: [{ message: { content: "ok" } }] }); } });
     assert.deepEqual(plain, ["https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"]);
+  });
+});
+
+test("Google: modelos de imagem entram no catálogo e respondem pela API nativa com as imagens entregues", async t => {
+  const tenant = await createTenantTestContext(); t.after(tenant.close);
+  await tenant.asTenant(async () => {
+    const c = saveToolCredential({ name: "Google", provider: "ai_google", fields: { GEMINI_API_KEY: "secret-gemini" } });
+    const models = await providerModels("google", c.id, async () => Response.json({ data: [{ id: "models/gemini-3-pro" }, { id: "models/gemini-2.5-flash-image" }, { id: "models/gemini-embedding-001" }] }));
+    assert.deepEqual(models.map(m => [m.id, m.outputModalities]), [["google:gemini-2.5-flash-image", ["text", "image"]], ["google:gemini-3-pro", undefined]]);
+    assert.deepEqual(builtinToolsFor("google:gemini-3-pro-image-preview").map(tool => tool.id), ["google_search"]);
+    assert.throws(() => modelSettings({ model: "google:gemini-2.5-flash-image", builtinTools: "code_execution" }), /apenas a Busca Google/);
+    const bodies: Record<string, unknown>[] = [], urls: string[] = [];
+    const jpeg = Buffer.from("jpeg");
+    const fetcher: typeof fetch = async (url, init) => {
+      urls.push(String(url)); bodies.push(JSON.parse(String(init?.body)));
+      return Response.json({ usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 1290, totalTokenCount: 1295 }, candidates: [{ finishReason: "STOP", content: { role: "model", parts: [
+        { inlineData: { mimeType: "image/png", data: Buffer.from("rascunho").toString("base64") }, thought: true },
+        { text: "Aqui está." },
+        { inlineData: { mimeType: "image/jpeg", data: jpeg.toString("base64") } },
+      ] } }] });
+    };
+    const calls: { tool: string; input: string; images: Buffer[] }[] = [];
+    const text = await runProviderModel({ model: "google:gemini-2.5-flash-image", modelCredentialId: c.id }, { system: "s", prompt: "Desenhe um gato", fetcher, onBuiltin: async call => { calls.push(call); } });
+    assert.equal(text, "Aqui está.");
+    assert.deepEqual(urls, ["https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent"], "sem ferramentas nativas, o modelo de imagem também usa a API nativa");
+    assert.deepEqual(bodies[0].generationConfig, { responseModalities: ["TEXT", "IMAGE"] }, "o limite de saída fica com o modelo, pois cada imagem consome muitos tokens");
+    assert.deepEqual(bodies[0].tools, []);
+    assert.deepEqual(calls.map(call => [call.tool, call.input, call.images]), [["image_generation", "Desenhe um gato", [jpeg]]], "a imagem do raciocínio não é entregue");
+    // Resposta sem texto nem imagem vira erro claro.
+    await assert.rejects(runProviderModel({ model: "google:gemini-2.5-flash-image", modelCredentialId: c.id, modelMaxTokens: "800" }, { system: "s", prompt: "p", onBuiltin: async () => {},
+      fetcher: async (_url, init) => { assert.equal(JSON.parse(String(init?.body)).generationConfig.maxOutputTokens, 800); return Response.json({ candidates: [{ finishReason: "IMAGE_SAFETY", content: { parts: [] } }] }); } }), /não gerou imagem \(IMAGE_SAFETY\)/);
+  });
+});
+
+test("motor mostra a imagem gerada por um modelo de imagem do Gemini", async t => {
+  const tenant = await createTenantTestContext(); t.after(tenant.close);
+  await tenant.asTenant(async () => {
+    const c = saveToolCredential({ name: "Google", provider: "ai_google", fields: { GEMINI_API_KEY: "private-gemini" } }); await commitTestConfig();
+    const { default: sharp } = await import("sharp");
+    const jpeg = await sharp({ create: { width: 4, height: 4, channels: 3, background: "#00f" } }).jpeg().toBuffer();
+    const f = await createFlow("Gemini imagem"); const graph = template();
+    graph.nodes[1].data.config = { model: "google:gemini-2.5-flash-image", modelCredentialId: c.id, system: "Ajude" };
+    await saveFlow(f.id, { ...f, graph });
+    t.mock.method(globalThis, "fetch", async (url: unknown) => {
+      assert.equal(String(url), "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent");
+      return Response.json({ candidates: [{ finishReason: "STOP", content: { role: "model", parts: [{ inlineData: { mimeType: "image/jpeg", data: jpeg.toString("base64") } }] } }] });
+    });
+    const run = await startRun(f.id, "Desenhe", false, false);
+    assert.equal(run.status, "completed", run.error);
+    assert.match(run.output, /^!\[Imagem gerada 1\]\(\/api\/attachments\/[^)]+\)/);
+    const step = run.trace.find(trace => trace.label === "Google: Geração de imagens")!;
+    assert.equal(step.type, "tool"); assert.equal(step.images?.length, 1);
   });
 });

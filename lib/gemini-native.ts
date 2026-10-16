@@ -28,11 +28,13 @@ export function geminiUsage(value: unknown): TokenUsage | undefined {
 
 // Ferramentas nativas do Gemini só existem na API generateContent; o endpoint compatível com OpenAI não as oferece.
 export async function runGeminiNative({
-  key, model, builtins, system, prompt, history = [], images = [], imageDetail, tools = [], settings = {}, signal, onText, onUsage, onBuiltin, fetcher = fetch,
+  key, model, builtins, imageOutput = false, system, prompt, history = [], images = [], imageDetail, tools = [], settings = {}, signal, onText, onUsage, onBuiltin, fetcher = fetch,
 }: {
   key: string;
   model: string;
   builtins: BuiltinTool[];
+  /** Modelos de imagem: a resposta pode trazer imagens, entregues como uso de "Geração de imagens". */
+  imageOutput?: boolean;
   system: string;
   prompt: string;
   history?: { role: "user" | "assistant"; content: string }[];
@@ -71,7 +73,8 @@ export async function runGeminiNative({
       method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, signal, redirect: "error",
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] }, contents, tools: declared,
-        generationConfig: { maxOutputTokens: settings.maxTokens || 4000, ...(settings.temperature !== undefined ? { temperature: settings.temperature } : {}), ...(resolution && images.length ? { mediaResolution: resolution } : {}) },
+        // Cada imagem gerada consome mais de mil tokens de saída; os modelos de imagem partem do limite deles.
+        generationConfig: { ...(imageOutput ? { responseModalities: ["TEXT", "IMAGE"] } : {}), ...(settings.maxTokens || !imageOutput ? { maxOutputTokens: settings.maxTokens || 4000 } : {}), ...(settings.temperature !== undefined ? { temperature: settings.temperature } : {}), ...(resolution && images.length ? { mediaResolution: resolution } : {}) },
       }),
     }), signal);
     if (!response.ok) throw providerFailure(response.status, detail);
@@ -87,15 +90,20 @@ export async function runGeminiNative({
     const parts = candidate.content?.parts || [];
     // Código e resultado vêm em partes separadas e em ordem: cada execução vira um registro.
     let code: string | undefined;
+    const generated: Buffer[] = [];
     for (const part of parts) {
+      // Rascunhos do raciocínio (inclusive imagens intermediárias) não fazem parte da resposta.
+      if (part.thought) continue;
       if (part.executableCode) code = part.executableCode.code || "";
       else if (part.codeExecutionResult) {
         await onBuiltin?.({ tool: "code_execution", input: code || "", output: part.codeExecutionResult.output || `Resultado: ${part.codeExecutionResult.outcome || "sem saída"}`, images: [] });
         code = undefined;
       } else if (part.inlineData?.data && /^image\/(png|jpeg|webp)$/.test(part.inlineData.mimeType || "")) {
-        await onBuiltin?.({ tool: "code_execution", input: "Imagem gerada pelo código", output: "1 imagem gerada.", images: [Buffer.from(part.inlineData.data, "base64")] });
+        if (imageOutput) generated.push(Buffer.from(part.inlineData.data, "base64"));
+        else await onBuiltin?.({ tool: "code_execution", input: "Imagem gerada pelo código", output: "1 imagem gerada.", images: [Buffer.from(part.inlineData.data, "base64")] });
       }
     }
+    if (generated.length) await onBuiltin?.({ tool: "image_generation", input: prompt.slice(0, 2000), output: `${generated.length} imagem(ns) gerada(s).`, images: generated });
     const grounding = candidate.groundingMetadata;
     if (grounding?.webSearchQueries?.length) {
       const sources = (grounding.groundingChunks || []).map((chunk) => chunk.web ? [chunk.web.title, chunk.web.uri].filter(Boolean).join(" · ") : "").filter(Boolean);
@@ -107,6 +115,7 @@ export async function runGeminiNative({
     if (text) onText?.(text);
     const calls = parts.filter((part) => part.functionCall);
     if (!calls.length) {
+      if (imageOutput && !text && !generated.length) throw new Error(`O Gemini não gerou imagem${candidate.finishReason && candidate.finishReason !== "STOP" ? ` (${candidate.finishReason})` : ""}. Reformule o pedido ou confira as políticas de conteúdo do Google.`);
       if (!text && candidate.finishReason && candidate.finishReason !== "STOP") throw new Error(`O Gemini interrompeu a resposta (${candidate.finishReason}). Aumente o máximo de tokens de saída ou simplifique o pedido.`);
       return text;
     }
