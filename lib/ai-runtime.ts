@@ -18,6 +18,7 @@ export async function runProviderModel(config: Record<string, string>, options: 
 }) {
   const provider = modelProviderId(config.model);
   if (provider === "chatgpt") throw new Error("Selecione um fornecedor de API.");
+  if (provider === "typesafe") throw new Error("Os modelos Jev só respondem perguntas fechadas: use-os no bloco Decisão.");
   const key = modelCredentialKey(provider, config.modelCredentialId);
   const settings = modelSettings(config);
   if (provider === "openrouter") return runOpenRouter({ ...options, apiKey: key, settings });

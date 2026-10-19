@@ -58,6 +58,7 @@ export type IconName =
   | "start"
   | "agent"
   | "condition"
+  | "decision"
   | "state"
   | "http"
   | "tool"
@@ -173,6 +174,12 @@ const paths: Record<string, ReactNode> = {
   condition: (
     <>
       <path d="M6 3v5c0 5 12 3 12 9v4M6 8v13m-3-3 3 3 3-3m6 0 3 3 3-3" />
+    </>
+  ),
+  decision: (
+    <>
+      <path d="M12 3v7m0 0-7 6m7-6 7 6M5 16v5m14-5v5m-7-11v11" />
+      <circle cx="12" cy="3.5" r="1.5" />
     </>
   ),
   state: <path d="M4 5h16M4 12h16M4 19h16M8 3v4m8 3v4M8 17v4" />,

@@ -1,4 +1,5 @@
 import { conditionCriteria, FALLBACK_HANDLE } from "./flow-conditions";
+import { decisionOutputs } from "./flow-decisions";
 import type { Graph, Kind, Link } from "./flow-types";
 export type Output = { id: string | null; label: string };
 // Saídas de cada tipo de bloco, na ordem em que aparecem no lado direito.
@@ -7,6 +8,7 @@ export function outputs(kind: Kind, config: Record<string, string> = {}): Output
     const criteria = conditionCriteria(config);
     return [...criteria.map((row, index) => ({ id: row.id, label: String(index + 1) })), { id: FALLBACK_HANDLE, label: String(criteria.length + 1) }];
   }
+  if (kind === "decision") return decisionOutputs(config);
   if (kind === "approval")
     return [
       { id: "yes", label: "Aprovar" },
@@ -70,7 +72,7 @@ export function connectionProblem(g: Graph, c: Candidate): string | null {
   if (target.data.kind === "start") return "O Início não recebe conexões.";
   const handle = c.sourceHandle || null;
   if (!outputs(source.data.kind, source.data.config).some((o) => o.id === handle))
-    return source.data.kind === "condition" ? "Esta saída não existe mais. Confira os critérios do bloco." : source.data.kind === "loop" ? "Repetir não tem saída: escolha dentro dele o bloco para onde voltar." : "A Resposta encerra o fluxo e não tem saída.";
+    return source.data.kind === "condition" ? "Esta saída não existe mais. Confira os critérios do bloco." : source.data.kind === "decision" ? "Esta saída não existe mais. Confira as opções da primeira pergunta." : source.data.kind === "loop" ? "Repetir não tem saída: escolha dentro dele o bloco para onde voltar." : "A Resposta encerra o fluxo e não tem saída.";
   if (
     g.edges.some(
       (e) => e.source === c.source && (e.sourceHandle || null) === handle,

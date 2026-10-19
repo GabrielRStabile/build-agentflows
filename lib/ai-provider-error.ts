@@ -6,8 +6,8 @@ export function providerDetail(body: string | undefined) {
   try {
     // The Gemini OpenAI-compatible endpoint wraps the error in an array.
     const parsed = JSON.parse(text) as unknown;
-    const data = (Array.isArray(parsed) ? parsed[0] : parsed) as { error?: { message?: string } | string; message?: string };
-    const inner = typeof data.error === "string" ? data.error : data.error?.message || data.message;
+    const data = (Array.isArray(parsed) ? parsed[0] : parsed) as { error?: { message?: string } | string; message?: string; detail?: unknown };
+    const inner = typeof data.error === "string" ? data.error : data.error?.message || data.message || (typeof data.detail === "string" ? data.detail : undefined);
     if (inner) text = String(inner).trim();
   } catch { /* plain text */ }
   if (!text || text.startsWith("<")) return "";
@@ -18,7 +18,7 @@ export function providerFailure(status: number, body?: string) {
     : status === 402 ? "Sua conta no fornecedor está sem saldo para este modelo."
     : status === 429 ? "O fornecedor atingiu o limite de uso. Aguarde ou escolha outro modelo."
     : status === 404 ? "Este modelo não está disponível para a credencial selecionada."
-    : status === 400 ? "O fornecedor recusou os parâmetros ou a mensagem. Revise as configurações do modelo."
+    : status === 400 || status === 422 ? "O fornecedor recusou os parâmetros ou a mensagem. Revise as configurações do modelo."
     : "O fornecedor está indisponível. Tente novamente em alguns instantes.";
   const detail = providerDetail(body);
   // Gemini's OpenAI-compatible endpoint cannot return generated images; only the native API (image models) does.

@@ -15,11 +15,14 @@ import { memorySettings } from "@/lib/memory-settings";
 import { isMediaModel, MEDIA_PROMPT, validateMediaConfig } from "@/lib/media-models";
 import { modelSettings } from "@/lib/ai-providers";
 import { MemoryFields } from "./MemoryFields";
+import { DecisionFields } from "./DecisionFields";
+import { validateDecisionConfig } from "@/lib/flow-decisions";
 const fields: Record<Kind, string[]> = {
   start: [],
   llm: ["model", "system", "memoryType", "prompt"],
   agent: ["model", "system", "memoryType", "prompt", "tools"],
   condition: [],
+  decision: [],
   state: ["key", "value"],
   http: ["url", "method", "body", "credential"],
   tool: ["tool", "args"],
@@ -162,6 +165,12 @@ export function NodeDialog({
         return false;
       }
     }
+    if (k === "decision") {
+      try { validateDecisionConfig(c); } catch (error) {
+        setCloseError((error as Error).message);
+        return false;
+      }
+    }
     if (k === "agent" || k === "llm") {
       try { if (!media) memorySettings(c); modelSettings(c); validateMediaConfig(c); } catch (error) {
         setCloseError((error as Error).message);
@@ -296,6 +305,9 @@ export function NodeDialog({
           </div>)}
           <button className="studio-button" disabled={criteria.length >= 119} onClick={() => setCriteria([...criteria, { id: 'criterion_' + crypto.randomUUID(), value: '{{last}}', operator: 'equals', compare: '' }])}><Icon name="plus" size={16} />Adicionar critério</button>
         </section>}
+
+        {k === "decision" && <DecisionFields config={c} references={references} variables={[...updateKeys]}
+          onChange={(values) => setDraft((d) => ({ ...d, data: { ...d.data, config: { ...d.data.config, ...values } } }))} />}
 
         {fields[k].filter((key) => !media || !["memoryType", "prompt"].includes(key)).map((key) => (
           <div className="node-field" key={key}>

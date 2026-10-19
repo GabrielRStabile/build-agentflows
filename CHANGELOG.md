@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.49.0 — 19/10/2026
+
+- Bloco Decisão (TypeSafe Jev): triagem por perguntas fechadas (escolha, sim/não ou escala) respondidas com probabilidades, sem gerar texto. Cada opção da primeira pergunta vira uma saída, com a saída Incerta para respostas fora da lista ou abaixo da confiança mínima; as demais perguntas podem guardar a resposta em variáveis do Início. Todas as perguntas vão numa única chamada a `/v1/systemone`, com a credencial TypeSafe da conta. O Jev não aparece no Agente, no LLM nem no gerador de fluxos.
+- Modelos de imagem do Gemini (`gemini-*-image`) geram imagens no Agente e no LLM pela API nativa do Google; as imagens aparecem abaixo da resposta. Antes o fornecedor recusava com "Unhandled generated data mime type".
+
 ## 0.48.1 — 16/10/2026
 
 - Diálogo do bloco que não pode fechar (por exemplo, Replicate sem o modelo `empresa/modelo`): o motivo fica fixo no rodapé do diálogo, visível em qualquer ponto da rolagem e no celular, com o botão "Descartar alterações" para sair sem salvar. O aviso some assim que algo é editado e volta na próxima tentativa de fechar se o problema continuar. Antes a mensagem ficava no fim do conteúdo, fora da tela.

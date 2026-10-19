@@ -1,5 +1,6 @@
 import { modelSettings } from "./ai-providers";
 import { conditionCriteria, COMPARISONS } from "./flow-conditions";
+import { decisionQuestions, validateDecisionConfig } from "./flow-decisions";
 import { memorySettings } from "./memory-settings";
 import { validateMediaConfig } from "./media-models";
 import { knowledgeSettings } from "./knowledge-settings";
@@ -56,6 +57,9 @@ export function validateGraph(value: unknown, executable = false): Graph {
       );
     if (n.data.kind === "condition") {
       try { conditionCriteria(n.data.config); } catch (error) { throw new FlowError((error as Error).message); }
+    }
+    if (n.data.kind === "decision") {
+      try { validateDecisionConfig(n.data.config); } catch (error) { throw new FlowError((error as Error).message); }
     }
     if (n.data.kind === "agent" || n.data.kind === "llm") {
       try { memorySettings(n.data.config); } catch (error) { throw new FlowError((error as Error).message); }
@@ -149,6 +153,12 @@ export function validateGraph(value: unknown, executable = false): Graph {
           const initial = JSON.parse(starts[0].data.config.state || "{}");
           if (!Array.isArray(updates) || updates.length > 50 || updates.some((u) => !u || typeof u.key !== "string" || !Object.hasOwn(initial, u.key) || typeof u.value !== "string") || new Set(updates.map((u) => u.key)).size !== updates.length) throw 0;
         } catch { throw new FlowError("Escolha variáveis definidas no Início para atualizar, sem repetições."); }
+      }
+      if (k === "decision") {
+        let initial: Record<string, unknown> = {};
+        try { initial = JSON.parse(starts[0].data.config.state || "{}"); } catch { /* validated with the Início block */ }
+        const missing = decisionQuestions(c).find((q) => q.variable && !Object.hasOwn(initial, q.variable));
+        if (missing) throw new FlowError(`A pergunta “${missing.name}” guarda a resposta em uma variável que não existe no Início.`);
       }
       if (k === "start") {
         try {

@@ -6,9 +6,11 @@ import { layout, outputs } from "./flow-graph";
 export type Generated = { name: string; description: string; graph: Graph; summary?: string };
 export type GenerationPhase = "interpreting" | "planning" | "creating" | "repairing";
 export type GenerationEvent = { phase: GenerationPhase } | { result: Generated } | { error: string };
-const KINDS = Object.keys(BLOCKS) as Kind[];
+// A Decisão depende de uma credencial TypeSafe escolhida pela pessoa; o gerador não a cria.
+type GeneratedKind = Exclude<Kind, "decision">;
+const KINDS = (Object.keys(BLOCKS) as Kind[]).filter((k): k is GeneratedKind => k !== "decision");
 // Campos de configuração aceitos por tipo, para o modelo preencher além dos blocos e conexões.
-const FIELDS: Record<Kind, string> = {
+const FIELDS: Record<GeneratedKind, string> = {
   start: "state (JSON com valores de texto, opcional)",
   llm: "system (instruções), prompt (opcional: em branco o bloco recebe a conversa ou o resultado da etapa anterior; use {{input}}, {{last}}, {{nodes.id}}, {{fluxo.nome}} só quando precisar combinar textos)",
   agent:
@@ -69,7 +71,7 @@ export function parseGenerated(answer: string): Generated {
   if (!Array.isArray(raw.nodes) || !Array.isArray(raw.edges))
     throw new FlowError("A resposta do ChatGPT não trouxe blocos e conexões.");
   const nodes = raw.nodes.map((n: Record<string, unknown>, i: number) => {
-    const kind = String(n.kind) as Kind;
+    const kind = String(n.kind) as GeneratedKind;
     if (!KINDS.includes(kind))
       throw new FlowError(`Tipo de bloco desconhecido: ${String(n.kind)}.`);
     const id =

@@ -2,6 +2,8 @@ import { agentKnowledge, knowledgeReferences } from "./knowledge-agent";
 import { referenceChunks } from "./knowledge-references";
 import { addTokenUsage, type TokenUsage } from "./token-usage";
 import { conditionCriteria, matchesCriterion, FALLBACK_HANDLE } from "./flow-conditions";
+import { decisionQuestions, decisionMinConfidence, DECISION_FALLBACK } from "./flow-decisions";
+import { runJev, type DecisionAnswer } from "./typesafe";
 import { pageTools } from "./embed-tools";
 import { cancelCommands, getSession, assertEmbedRun } from "./embed-store";
 import { attachmentContext, resolveAttachments, markAttachmentsUsed } from "./attachment-service";
@@ -209,6 +211,35 @@ async function agent(n: Block, r: Run, signal: AbortSignal, details: Partial<Tra
   }
   return withMedia(result, generated) + knowledgeReferences(knowledge.referenceHits);
 }
+const percent = (value: number) => `${Math.round(value * 100)}%`;
+// Decisão: o Jev responde todas as perguntas numa chamada; a primeira define a saída e as demais só guardam respostas.
+async function decide(n: Block, r: Run, signal: AbortSignal, details: Partial<Trace>): Promise<{ handle: string; summary: string }> {
+  const c = n.data.config;
+  const questions = decisionQuestions(c);
+  const minimum = decisionMinConfidence(c);
+  const state = interpolate(c.input, r);
+  const asked = questions.map((question) => ({ question, instructions: interpolate(question.instructions, r) }));
+  details.input = state;
+  details.instructions = asked.map(({ question, instructions }) => `${question.name}: ${instructions}\nOpções: ${question.options.map((o) => o.value).join(" · ")}`).join("\n\n");
+  if (r.attachments?.length) details.notes = [details.notes, "Anexos não são enviados ao Jev, que só avalia texto: " + r.attachments.map((item) => item.name).join(", ")].filter(Boolean).join("\n\n");
+  let answers: DecisionAnswer[];
+  if (r.demo) {
+    answers = questions.map((q) => ({ question: q.name, optionId: q.options[0].id, value: q.options[0].value, confidence: 1, probabilities: [] }));
+  } else {
+    const result = await runJev({ key: modelCredentialKey("typesafe", c.modelCredentialId), model: c.model.slice("typesafe:".length), state, questions: asked, signal });
+    answers = result.answers;
+    if (result.usage) details.usage = result.usage;
+  }
+  for (const [index, q] of questions.entries())
+    if (q.variable && answers[index].value) r.state[q.variable] = answers[index].value;
+  const routed = answers[0];
+  const uncertain = routed.optionId === DECISION_FALLBACK || (minimum !== undefined && (routed.confidence ?? 0) * 100 < minimum);
+  const lines = answers.map((a) => `${a.question}: ${a.value || "sem resposta válida"}${a.confidence !== undefined ? ` (confiança ${percent(a.confidence)})` : ""}`);
+  if (uncertain) lines.push(routed.value ? `Seguiu pela saída Incerta: a confiança ficou abaixo de ${minimum}%.` : "Seguiu pela saída Incerta: o modelo não escolheu uma das opções.");
+  const odds = answers.filter((a) => a.probabilities.length).map((a) => `${a.question}: ${a.probabilities.map((p) => `${p.value} ${percent(p.probability)}`).join(" · ")}`);
+  if (odds.length) details.notes = [details.notes, "Probabilidades\n" + odds.join("\n")].filter(Boolean).join("\n\n");
+  return { handle: uncertain ? DECISION_FALLBACK : routed.optionId, summary: (r.demo ? "[Demonstração] " : "") + lines.join("\n") };
+}
 const activeRuns = new Map<string, AbortController>();
 const executionSignals = new AsyncLocalStorage<AbortSignal>();
 const runKey = (id: string) => `${tenantId()}:${id}`;
@@ -301,6 +332,18 @@ export async function execute(r: Run, externalSignal?: AbortSignal): Promise<Run
       if (k === "condition") {
         const matched = conditionCriteria(c).find((row) => matchesCriterion(row.operator, interpolate(row.value, r), interpolate(row.compare, r)));
         handle = matched?.id || FALLBACK_HANDLE;
+      }
+      // A Decisão não troca o resultado anterior: {{Etapa anterior}} continua sendo o que chegou a ela.
+      const passed = r.output;
+      if (k === "decision") {
+        try {
+          const decision = await decide(n, r, controller.signal, details);
+          handle = decision.handle;
+          output = decision.summary;
+        } catch (error) {
+          record(r, n, error instanceof Error ? error.message : "A etapa falhou.", start, { ...details, status: "failed" });
+          throw error;
+        }
       }
       // Repetir volta ao bloco escolhido até o limite; depois entrega a mensagem do limite (ou o resultado anterior) e encerra.
       let jump: string | null = null;
@@ -408,6 +451,7 @@ export async function execute(r: Run, externalSignal?: AbortSignal): Promise<Run
       if ((await getRun(r.id)).status === "cancelled") return await getRun(r.id);
       if (controller.signal.aborted) throw new FlowError(interruption());
       record(r, n, output, start, details);
+      if (k === "decision") r.output = passed;
       if (k === "agent" || k === "llm") {
         const updates: { key: string; value: string }[] = JSON.parse(c.stateUpdates || "[]");
         const values = updates.map((u) => [u.key, interpolate(u.value, r)] as const);
@@ -473,6 +517,7 @@ export async function buildRun(
       const provider = modelProviderId(node.data.config.model);
       if (provider !== "chatgpt") modelCredentialKey(provider, node.data.config.modelCredentialId);
     }
+    for (const node of graph.nodes) if (node.data.kind === "decision") modelCredentialKey("typesafe", node.data.config.modelCredentialId);
     if (nodes.some(node => modelProviderId(node.data.config.model) === "chatgpt") && !(await chatGPT().account()).account)
       throw new FlowError("Conecte o ChatGPT para executar os blocos que usam sua assinatura.", 409);
   }

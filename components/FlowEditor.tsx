@@ -1183,7 +1183,7 @@ export function FlowEditor({ id }: { id: string }) {
             </div>
           </div>
           <p>
-            {info === "condition" ? "Adicione critérios para criar saídas numeradas. O primeiro critério atendido define o caminho; a última saída recebe os demais casos." : outputLabel(info, "yes")
+            {info === "condition" ? "Adicione critérios para criar saídas numeradas. O primeiro critério atendido define o caminho; a última saída recebe os demais casos." : info === "decision" ? "Cada opção da primeira pergunta vira uma saída. A saída Incerta recebe as respostas com confiança abaixo do mínimo. As demais perguntas só guardam respostas em variáveis do fluxo." : outputLabel(info, "yes")
               ? `Este bloco tem duas saídas (${outputLabel(info, "yes")} e ${outputLabel(info, "no")}). Conecte cada uma ao próximo passo.`
               : info === "loop"
                 ? "Repetir não tem setas de saída: escolha dentro dele o bloco para onde voltar e o máximo de passagens. Ao atingir o limite, entrega a mensagem configurada (ou o resultado anterior) e encerra."

@@ -89,6 +89,36 @@ export async function verifyEmbedBrowser(origin, fixture) {
     await blocked.getByRole("button", { name: "Descartar alterações" }).click();
     await dialog.waitFor({ state: "detached" });
     assert.equal(await other.evaluate(async (id) => (await fetch("/api/flows/" + id, { method: "DELETE" })).status, llmFlowId), 200);
+
+    // Decisão: credencial, modelo e perguntas no diálogo; cada opção da primeira pergunta vira uma saída.
+    await other.setViewportSize({ width: 1280, height: 900 });
+    const decisionFlowId = await other.evaluate(async (graph) => (await (await fetch("/api/flows", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Docker Decisão", description: "", graph }) })).json()).id, fixture.decisionGraph);
+    assert.ok(decisionFlowId);
+    await other.goto(origin + "/flows/" + decisionFlowId);
+    const decisionNode = other.locator(".react-flow__node").filter({ hasText: /Decisão/ }).first();
+    await decisionNode.getByLabel("Saída Incerta de Decisão").waitFor({ state: "attached" });
+    await decisionNode.dblclick();
+    await dialog.getByRole("combobox", { name: "Credencial TypeSafe" }).waitFor();
+    assert.equal(await dialog.getByRole("combobox", { name: "Modelo de decisão" }).inputValue(), "typesafe:jev-latest");
+    assert.equal(await dialog.getByRole("textbox", { name: "Opção 1 da pergunta 1", exact: true }).inputValue(), "suporte");
+    await dialog.getByRole("button", { name: "Adicionar opção" }).click();
+    await close();
+    await blocked.getByText(/Preencha todas as opções/).waitFor();
+    await dialog.getByRole("textbox", { name: "Opção 3 da pergunta 1", exact: true }).fill("financeiro");
+    assert.equal(await blocked.count(), 0);
+    await other.screenshot({ path: "/tmp/agentflows-decision-dialog.png" });
+    await close();
+    await dialog.waitFor({ state: "detached" });
+    await decisionNode.getByLabel("Saída financeiro de Decisão").waitFor({ state: "attached" });
+    assert.equal(await decisionNode.locator(".af-handle-out").count(), 4);
+    await other.setViewportSize({ width: 390, height: 844 });
+    await decisionNode.dblclick();
+    await dialog.getByRole("group", { name: "Pergunta 1" }).waitFor();
+    assert.ok(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth + 1), "diálogo da Decisão rola na horizontal no celular");
+    await other.screenshot({ path: "/tmp/agentflows-decision-dialog-mobile.png" });
+    await dialog.locator("header").getByRole("button", { name: "Fechar diálogo" }).click();
+    await dialog.waitFor({ state: "detached" });
+    assert.equal(await other.evaluate(async (id) => (await fetch("/api/flows/" + id, { method: "DELETE" })).status, decisionFlowId), 200);
     console.log("Browser passed: separate accounts, iframe preview, queued conversation, reload, desktop and mobile.");
   } finally { await browser.close(); }
 }
