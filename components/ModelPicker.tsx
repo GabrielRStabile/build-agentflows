@@ -65,7 +65,7 @@ export function ModelPicker({ value, kind, chatModels, connected, config, onConf
   const builtins = (config.builtinTools || "").split(",").map(id => id.trim());
   const offered = builtinToolsFor(value);
   // Agents call tools in a text loop; Replicate generation models belong to the LLM block. Saved agents keep their choice.
-  const catalog = [{ id: "chatgpt", name: "ChatGPT · assinatura" }, ...AI_PROVIDERS.filter(p => (kind !== "agent" || p.id !== "replicate" || provider === "replicate") && (p.id !== "typesafe" || provider === "typesafe")).map(p => ({ id: `credential:ai_${p.id}`, name: p.name }))];
+  const catalog = [{ id: "chatgpt", name: "ChatGPT · assinatura" }, ...AI_PROVIDERS.filter(p => (kind !== "agent" || p.id !== "replicate" || provider === "replicate")).map(p => ({ id: `credential:ai_${p.id}`, name: p.name }))];
   function saved(c: SavedToolCredential) {
     setCredentials(items => [...items.filter(i => i.id !== c.id), c]); setEditor(null);
     onConfigChange({ modelCredentialId: c.id }); setRetry(n => n + 1);

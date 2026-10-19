@@ -5,10 +5,10 @@ import { ReferenceField, type Reference } from "./ReferenceField";
 import { ToolCredentialDialog } from "./ToolCredentialDialog";
 import type { SavedToolCredential } from "@/lib/tool-credential-store";
 import { aiCredentialProvider } from "@/lib/ai-providers";
-import { DECISION_TYPES, JEV_MODELS, YES_NO, defaultDecisionQuestions, type DecisionOption, type DecisionQuestion, type DecisionType } from "@/lib/flow-decisions";
+import { formatCredentialExpiry } from "@/lib/credential-expiry";
+import { DECISION_MODELS, DECISION_PROVIDERS, DECISION_TYPES, YES_NO, decisionProvider, defaultDecisionQuestions, type DecisionOption, type DecisionQuestion, type DecisionType } from "@/lib/flow-decisions";
 
 const NEW_CREDENTIAL = "__nova_credencial__";
-const PROVIDER = aiCredentialProvider("typesafe");
 const optionId = () => "opt_" + crypto.randomUUID();
 function parse(value: string | undefined): DecisionQuestion[] {
   try { const rows = JSON.parse(value || "[]"); return Array.isArray(rows) && rows.length ? rows : defaultDecisionQuestions(); } catch { return defaultDecisionQuestions(); }
@@ -18,7 +18,7 @@ function optionsFor(type: DecisionType, current: DecisionOption[]): DecisionOpti
   if (type === "score") return ["Baixa", "Média", "Alta"].map((value) => ({ id: optionId(), value, description: "" }));
   return [{ id: optionId(), value: "", description: "" }, { id: optionId(), value: "", description: "" }];
 }
-// Campos do bloco Decisão: credencial e modelo Jev, o conteúdo avaliado e as perguntas fechadas.
+// Campos do bloco Decisão: fornecedor (OpenRouter ou OpenAI), credencial e modelo de decisão, o conteúdo avaliado e as perguntas fechadas.
 // A primeira pergunta define as saídas; as demais só guardam respostas em variáveis do fluxo.
 export function DecisionFields({ config, references, variables, onChange }: {
   config: Record<string, string>; references: Reference[]; variables: string[]; onChange: (values: Record<string, string>) => void;
@@ -28,35 +28,46 @@ export function DecisionFields({ config, references, variables, onChange }: {
   const [error, setError] = useState("");
   useEffect(() => {
     let alive = true;
-    void request<SavedToolCredential[]>("/api/tool-credentials").then((items) => { if (alive) setCredentials(items.filter((c) => c.provider === PROVIDER)); }).catch((e) => { if (alive) setError(e.message); });
+    void request<SavedToolCredential[]>("/api/tool-credentials").then((items) => { if (alive) setCredentials(items); }).catch((e) => { if (alive) setError(e.message); });
     return () => { alive = false; };
   }, []);
   const questions = parse(config.questions);
   const save = (next: DecisionQuestion[]) => onChange({ questions: JSON.stringify(next) });
   const update = (id: string, values: Partial<DecisionQuestion>) => save(questions.map((q) => q.id === id ? { ...q, ...values } : q));
+  // Modelo fora da lista (por exemplo, de uma versão anterior) mantém o fornecedor padrão até ser trocado.
+  const provider = decisionProvider(config.model) || DECISION_MODELS[0].provider;
+  const credentialProvider = aiCredentialProvider(provider);
+  const providerName = DECISION_PROVIDERS.find((p) => p.id === provider)!.name;
+  const available = credentials.filter((c) => c.provider === credentialProvider);
   const credentialId = config.modelCredentialId || "";
-  const selected = credentials.find((c) => c.id === credentialId);
+  const selected = available.find((c) => c.id === credentialId);
   return <>
+    <div className="node-field"><span className="field-title">Fornecedor</span>
+      <select aria-label="Fornecedor da decisão" value={provider} onChange={(e) => onChange({ model: DECISION_MODELS.find((m) => m.provider === e.target.value)!.id, modelCredentialId: "" })}>
+        {DECISION_PROVIDERS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </div>
     <div className="node-field">
-      <span className="field-title">Credencial TypeSafe</span>
+      <span className="field-title">Credencial {providerName}</span>
       <div className="provider-credential-row">
         {/* The last option is an action: it opens the dialog and the controlled value stays unchanged. */}
-        <select aria-label="Credencial TypeSafe" value={credentialId} onChange={(e) => e.target.value === NEW_CREDENTIAL ? setEditor("new") : onChange({ modelCredentialId: e.target.value })}>
-          <option value="">{credentials.length ? "Selecione uma credencial" : "Conecte uma credencial"}</option>
-          {credentials.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        <select aria-label={`Credencial ${providerName}`} value={credentialId} onChange={(e) => e.target.value === NEW_CREDENTIAL ? setEditor("new") : onChange({ modelCredentialId: e.target.value })}>
+          <option value="">{available.length ? "Selecione uma credencial" : "Conecte uma credencial"}</option>
+          {available.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           {credentialId && !selected && <option value={credentialId}>Credencial indisponível</option>}
           <option value={NEW_CREDENTIAL}>+ Conectar nova credencial…</option>
         </select>
-        {selected && !selected.readOnly && <IconButton icon="pencil" label="Editar credencial TypeSafe" onClick={() => setEditor(selected)} />}
+        {selected && !selected.readOnly && <IconButton icon="pencil" label={`Editar credencial ${providerName}`} onClick={() => setEditor(selected)} />}
       </div>
+      {selected?.expiresAt && <small>Credencial gratuita, válida até {formatCredentialExpiry(selected.expiresAt)}. Depois disso, cadastre sua própria chave.</small>}
       {error && <small role="alert">{error}</small>}
     </div>
     <div className="node-field"><span className="field-title">Modelo de decisão</span>
       <select aria-label="Modelo de decisão" value={config.model || ""} onChange={(e) => onChange({ model: e.target.value })}>
-        {JEV_MODELS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        {config.model && !JEV_MODELS.some((m) => m.id === config.model) && <option value={config.model}>{config.model} · indisponível</option>}
+        {DECISION_MODELS.filter((m) => m.provider === provider).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        {config.model && !decisionProvider(config.model) && <option value={config.model}>{config.model} · indisponível</option>}
       </select>
-      <small>O Jev responde só perguntas fechadas, com probabilidades, sem gerar texto. Cobrado por token de entrada na sua chave.</small>
+      <small>Modelos de decisão respondem só perguntas fechadas, com probabilidades, sem gerar texto. Cobrados por token de entrada na sua chave.</small>
     </div>
     <div className="node-field"><span className="field-title">Conteúdo a avaliar</span>
       <ReferenceField multiline rows={3} ariaLabel="Conteúdo a avaliar" value={config.input || ""} references={references} onChange={(input) => onChange({ input })} />
@@ -96,7 +107,7 @@ export function DecisionFields({ config, references, variables, onChange }: {
       <input aria-label="Confiança mínima" type="number" min={0} max={100} step={1} placeholder="Sem mínimo" value={config.minConfidence || ""} onChange={(e) => onChange({ minConfidence: e.target.value })} />
       <small>Abaixo deste valor na primeira pergunta, o fluxo segue pela saída Incerta, por exemplo para uma aprovação humana.</small>
     </div>
-    {editor && <ToolCredentialDialog provider={PROVIDER} credential={editor === "new" ? undefined : editor} onClose={() => setEditor(null)}
+    {editor && <ToolCredentialDialog provider={credentialProvider} credential={editor === "new" ? undefined : editor} onClose={() => setEditor(null)}
       onSaved={(c) => { setCredentials((items) => [...items.filter((i) => i.id !== c.id), c]); setEditor(null); onChange({ modelCredentialId: c.id }); }} />}
   </>;
 }

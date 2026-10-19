@@ -1,15 +1,23 @@
-// Bloco Decisão: perguntas fechadas respondidas por um modelo de decisão (TypeSafe Jev).
+// Bloco Decisão: perguntas fechadas respondidas por um modelo de decisão (Jev pelo OpenRouter ou Decisions API da OpenAI).
 // Puro: usado pelo editor, pela validação do grafo e pelo motor.
 export type DecisionType = "choice" | "yesno" | "score";
 export type DecisionOption = { id: string; value: string; description: string };
 export type DecisionQuestion = { id: string; name: string; type: DecisionType; instructions: string; options: DecisionOption[]; variable?: string };
 export const DECISION_TYPES: [DecisionType, string][] = [["choice", "Escolha entre opções"], ["yesno", "Sim ou não"], ["score", "Nota em níveis"]];
-export const JEV_MODELS = [
-  { id: "typesafe:jev-latest", name: "Jev (versão estável)" },
-  { id: "typesafe:jev-preview", name: "Jev (versão mais nova)" },
-  { id: "typesafe:jev-1.14.0", name: "Jev 1.14.0" },
-  { id: "typesafe:jev-1.13.0", name: "Jev 1.13.0" },
+/** Modelos de decisão por fornecedor: o Jev e o GPT-6 Luna pelo OpenRouter, ou o GPT-6 Luna direto na OpenAI. */
+export const DECISION_MODELS = [
+  { id: "openrouter:~typesafe/jev-latest", name: "Jev (versão mais recente)", provider: "openrouter" },
+  { id: "openrouter:typesafe/jev-1.14", name: "Jev 1.14", provider: "openrouter" },
+  { id: "openrouter:typesafe/jev-1.13", name: "Jev 1.13", provider: "openrouter" },
+  { id: "openrouter:openai/gpt-6-luna-decisions", name: "GPT-6 Luna Decisions", provider: "openrouter" },
+  { id: "openai:gpt-6-luna", name: "GPT-6 Luna (Decisions API)", provider: "openai" },
 ] as const;
+export type DecisionProvider = (typeof DECISION_MODELS)[number]["provider"];
+export const DECISION_PROVIDERS: { id: DecisionProvider; name: string }[] = [{ id: "openrouter", name: "OpenRouter" }, { id: "openai", name: "OpenAI" }];
+export const DEFAULT_DECISION_MODEL = DECISION_MODELS[0].id;
+export const decisionProvider = (model = ""): DecisionProvider | undefined => DECISION_MODELS.find((m) => m.id === model)?.provider;
+/** Modelos que só respondem perguntas fechadas: o Agente e o LLM os recusam. O GPT-6 Luna direto na OpenAI também conversa. */
+export const decisionOnlyModel = (model = "") => /^openrouter:~?typesafe\//.test(model) || /^openrouter:[^:]*-decisions?$/.test(model);
 /** Saída usada quando a confiança fica abaixo do mínimo ou a resposta não corresponde a uma opção. */
 export const DECISION_FALLBACK = "incerto";
 export const YES_NO: DecisionOption[] = [{ id: "true", value: "Sim", description: "" }, { id: "false", value: "Não", description: "" }];
@@ -62,7 +70,7 @@ export function decisionMinConfidence(config: Record<string, string>): number | 
   return n;
 }
 export function validateDecisionConfig(config: Record<string, string>) {
-  if (!JEV_MODELS.some((m) => m.id === config.model)) throw new Error("Escolha um modelo Jev da lista.");
+  if (!decisionProvider(config.model)) throw new Error("Escolha um modelo de decisão da lista.");
   if (!config.input?.trim()) throw new Error("Informe o conteúdo a avaliar na decisão.");
   decisionQuestions(config);
   decisionMinConfidence(config);

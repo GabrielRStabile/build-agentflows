@@ -6,7 +6,6 @@ export const AI_PROVIDERS = [
   { id: "openrouter", name: "OpenRouter", key: "OPENROUTER_API_KEY", url: "https://openrouter.ai/api/v1", link: "https://openrouter.ai/settings/keys", icon: "/provider-icons/openrouter.svg" },
   { id: "groq", name: "Groq", key: "GROQ_API_KEY", url: "https://api.groq.com/openai/v1", link: "https://console.groq.com/keys", icon: "/provider-icons/groq.svg" },
   // Modelo de decisão: só o bloco Decisão usa (não gera texto, então não aparece no Agente nem no LLM).
-  { id: "typesafe", name: "TypeSafe", key: "TYPESAFE_API_KEY", url: "https://api.typesafe.ai/v1", link: "https://docs.typesafe.ai/api", icon: "/provider-icons/typesafe.svg" },
   { id: "replicate", name: "Replicate", key: "REPLICATE_API_TOKEN", url: "", link: "https://replicate.com/account/api-tokens", icon: "/provider-icons/replicate.svg" },
   { id: "higgsfield", name: "Higgsfield", key: "HIGGSFIELD_API_KEY", url: "", link: "https://cloud.higgsfield.ai/", icon: "/provider-icons/higgsfield.ico" },
   { id: "muapi", name: "MuAPI", key: "MUAPI_API_KEY", url: "", link: "https://muapi.ai/", icon: "/provider-icons/muapi.png" },

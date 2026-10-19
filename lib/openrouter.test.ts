@@ -120,10 +120,12 @@ test("catálogo informa modalidades e envia imagens no conteúdo nativo do model
     { id: "test/vision", name: "Visão", architecture: { input_modalities: ["text", "image"] } },
     { id: "test/text", name: "Texto", architecture: { input_modalities: ["text"] } },
     { id: "test/unknown", name: "Desconhecido" },
+    { id: "typesafe/jev-1.14", name: "Jev", architecture: { input_modalities: ["text", "image"], output_modalities: ["decisions"] } },
   ] });
   try {
     const models = await listModels(true);
     assert.deepEqual(models.find((m) => m.id === "test/vision")?.inputModalities, ["text", "image"]);
+    assert.ok(!models.some((m) => m.id === "typesafe/jev-1.14"), "modelos de decisão ficam só no bloco Decisão");
     const image = "data:image/png;base64,aW1hZ2Vt";
     const { fetcher, calls } = fakeFetch([{ choices: [{ message: { content: "Imagem lida" } }] }]);
     assert.equal(await runOpenRouter({ system: "", prompt: "Analise", model: "openrouter:test/vision", images: [image], fetcher }), "Imagem lida");

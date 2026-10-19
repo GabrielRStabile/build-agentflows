@@ -1,5 +1,6 @@
 import { aiProvider, geminiImageModel, modelProviderId, modelSettings, openaiReasoningModel, toolsRequireNoReasoning } from "./ai-providers";
 import { modelCredentialKey } from "./ai-credentials";
+import { decisionOnlyModel } from "./flow-decisions";
 import { runChatCompletion } from "./chat-completion";
 import { runOpenRouter } from "./openrouter";
 import { runAnthropic } from "./anthropic";
@@ -18,7 +19,7 @@ export async function runProviderModel(config: Record<string, string>, options: 
 }) {
   const provider = modelProviderId(config.model);
   if (provider === "chatgpt") throw new Error("Selecione um fornecedor de API.");
-  if (provider === "typesafe") throw new Error("Os modelos Jev só respondem perguntas fechadas: use-os no bloco Decisão.");
+  if (decisionOnlyModel(config.model)) throw new Error("Modelos de decisão só respondem perguntas fechadas: use-os no bloco Decisão.");
   const key = modelCredentialKey(provider, config.modelCredentialId);
   const settings = modelSettings(config);
   if (provider === "openrouter") return runOpenRouter({ ...options, apiKey: key, settings });

@@ -16,9 +16,10 @@ export type ModelOption = { id: string; nome: string; provedor: string; inputMod
 export const listModels = publicModelCache(async (): Promise<ModelOption[]> => {
   const r = await fetch("https://openrouter.ai/api/v1/models", { signal: AbortSignal.timeout(20000), redirect: "error" });
   if (!r.ok) throw new Error("O OpenRouter não devolveu a lista de modelos.");
-  const data = (await r.json()) as { data?: { id: string; name?: string; architecture?: { input_modalities?: string[] }; supported_parameters?: string[]; context_length?: number; top_provider?: { max_completion_tokens?: number } }[] };
+  const data = (await r.json()) as { data?: { id: string; name?: string; architecture?: { input_modalities?: string[]; output_modalities?: string[] }; supported_parameters?: string[]; context_length?: number; top_provider?: { max_completion_tokens?: number } }[] };
   if (!Array.isArray(data.data) || !data.data.length) throw new Error("O catálogo do OpenRouter está indisponível.");
-  const modelos = data.data.filter(m => typeof m.id === "string" && m.id.includes("/")).map(m => ({
+  // Decision models (output "decisions", no text) are left out: they only answer closed questions in the Decision block.
+  const modelos = data.data.filter(m => typeof m.id === "string" && m.id.includes("/") && (!Array.isArray(m.architecture?.output_modalities) || m.architecture.output_modalities.includes("text"))).map(m => ({
     id: m.id, nome: m.name || m.id, provedor: m.id.split("/")[0],
     inputModalities: m.architecture?.input_modalities || ["text"],
     parameters: m.supported_parameters || [], contextLength: m.context_length,

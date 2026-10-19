@@ -90,7 +90,7 @@ export async function verifyEmbedBrowser(origin, fixture) {
     await dialog.waitFor({ state: "detached" });
     assert.equal(await other.evaluate(async (id) => (await fetch("/api/flows/" + id, { method: "DELETE" })).status, llmFlowId), 200);
 
-    // Decisão: credencial, modelo e perguntas no diálogo; cada opção da primeira pergunta vira uma saída.
+    // Decisão: fornecedor, credencial, modelo e perguntas no diálogo; cada opção da primeira pergunta vira uma saída.
     await other.setViewportSize({ width: 1280, height: 900 });
     const decisionFlowId = await other.evaluate(async (graph) => (await (await fetch("/api/flows", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Docker Decisão", description: "", graph }) })).json()).id, fixture.decisionGraph);
     assert.ok(decisionFlowId);
@@ -98,8 +98,12 @@ export async function verifyEmbedBrowser(origin, fixture) {
     const decisionNode = other.locator(".react-flow__node").filter({ hasText: /Decisão/ }).first();
     await decisionNode.getByLabel("Saída Incerta de Decisão").waitFor({ state: "attached" });
     await decisionNode.dblclick();
-    await dialog.getByRole("combobox", { name: "Credencial TypeSafe" }).waitFor();
-    assert.equal(await dialog.getByRole("combobox", { name: "Modelo de decisão" }).inputValue(), "typesafe:jev-latest");
+    await dialog.getByRole("combobox", { name: "Credencial OpenRouter" }).waitFor();
+    assert.equal(await dialog.getByRole("combobox", { name: "Modelo de decisão" }).inputValue(), "openrouter:~typesafe/jev-latest");
+    // Trocar o fornecedor escolhe o modelo da OpenAI e a credencial passa a ser da OpenAI.
+    await dialog.getByRole("combobox", { name: "Fornecedor da decisão" }).selectOption("openai");
+    assert.equal(await dialog.getByRole("combobox", { name: "Modelo de decisão" }).inputValue(), "openai:gpt-6-luna");
+    await dialog.getByRole("combobox", { name: "Credencial OpenAI" }).waitFor();
     assert.equal(await dialog.getByRole("textbox", { name: "Opção 1 da pergunta 1", exact: true }).inputValue(), "suporte");
     await dialog.getByRole("button", { name: "Adicionar opção" }).click();
     await close();

@@ -2,8 +2,8 @@ import { agentKnowledge, knowledgeReferences } from "./knowledge-agent";
 import { referenceChunks } from "./knowledge-references";
 import { addTokenUsage, type TokenUsage } from "./token-usage";
 import { conditionCriteria, matchesCriterion, FALLBACK_HANDLE } from "./flow-conditions";
-import { decisionQuestions, decisionMinConfidence, DECISION_FALLBACK } from "./flow-decisions";
-import { runJev, type DecisionAnswer } from "./typesafe";
+import { decisionQuestions, decisionMinConfidence, decisionProvider, DECISION_FALLBACK } from "./flow-decisions";
+import { runDecision, type DecisionAnswer } from "./decision-models";
 import { pageTools } from "./embed-tools";
 import { cancelCommands, getSession, assertEmbedRun } from "./embed-store";
 import { attachmentContext, resolveAttachments, markAttachmentsUsed } from "./attachment-service";
@@ -212,7 +212,7 @@ async function agent(n: Block, r: Run, signal: AbortSignal, details: Partial<Tra
   return withMedia(result, generated) + knowledgeReferences(knowledge.referenceHits);
 }
 const percent = (value: number) => `${Math.round(value * 100)}%`;
-// Decisão: o Jev responde todas as perguntas numa chamada; a primeira define a saída e as demais só guardam respostas.
+// Decisão: o modelo de decisão responde todas as perguntas numa chamada; a primeira define a saída e as demais só guardam respostas.
 async function decide(n: Block, r: Run, signal: AbortSignal, details: Partial<Trace>): Promise<{ handle: string; summary: string }> {
   const c = n.data.config;
   const questions = decisionQuestions(c);
@@ -221,12 +221,14 @@ async function decide(n: Block, r: Run, signal: AbortSignal, details: Partial<Tr
   const asked = questions.map((question) => ({ question, instructions: interpolate(question.instructions, r) }));
   details.input = state;
   details.instructions = asked.map(({ question, instructions }) => `${question.name}: ${instructions}\nOpções: ${question.options.map((o) => o.value).join(" · ")}`).join("\n\n");
-  if (r.attachments?.length) details.notes = [details.notes, "Anexos não são enviados ao Jev, que só avalia texto: " + r.attachments.map((item) => item.name).join(", ")].filter(Boolean).join("\n\n");
+  if (r.attachments?.length) details.notes = [details.notes, "Anexos não são enviados ao modelo de decisão, que só avalia o texto do conteúdo: " + r.attachments.map((item) => item.name).join(", ")].filter(Boolean).join("\n\n");
   let answers: DecisionAnswer[];
   if (r.demo) {
     answers = questions.map((q) => ({ question: q.name, optionId: q.options[0].id, value: q.options[0].value, confidence: 1, probabilities: [] }));
   } else {
-    const result = await runJev({ key: modelCredentialKey("typesafe", c.modelCredentialId), model: c.model.slice("typesafe:".length), state, questions: asked, signal });
+    const provider = decisionProvider(c.model);
+    if (!provider) throw new Error("Escolha um modelo de decisão da lista.");
+    const result = await runDecision({ key: modelCredentialKey(provider, c.modelCredentialId), model: c.model, state, questions: asked, signal });
     answers = result.answers;
     if (result.usage) details.usage = result.usage;
   }
@@ -517,7 +519,10 @@ export async function buildRun(
       const provider = modelProviderId(node.data.config.model);
       if (provider !== "chatgpt") modelCredentialKey(provider, node.data.config.modelCredentialId);
     }
-    for (const node of graph.nodes) if (node.data.kind === "decision") modelCredentialKey("typesafe", node.data.config.modelCredentialId);
+    for (const node of graph.nodes) if (node.data.kind === "decision") {
+      const provider = decisionProvider(node.data.config.model);
+      if (provider) modelCredentialKey(provider, node.data.config.modelCredentialId);
+    }
     if (nodes.some(node => modelProviderId(node.data.config.model) === "chatgpt") && !(await chatGPT().account()).account)
       throw new FlowError("Conecte o ChatGPT para executar os blocos que usam sua assinatura.", 409);
   }

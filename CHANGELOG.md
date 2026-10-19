@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 0.50.0 — 19/10/2026
+
+- Bloco Decisão com dois fornecedores, escolhidos no bloco (Fornecedor → Credencial → Modelo): **OpenRouter** (`POST /api/alpha/decisions`), com os modelos Jev da TypeSafe (`~typesafe/jev-latest`, 1.14 e 1.13) e `openai/gpt-6-luna-decisions`, usando a chave do OpenRouter (inclusive OAuth) e mostrando o custo informado; e **OpenAI** (Decisions API, `POST /v1/decisions`), com `gpt-6-luna`, usando qualquer credencial OpenAI, inclusive a compartilhada. Recusa do modelo segue pela saída Incerta.
+- O fornecedor TypeSafe direto da 0.49.0 foi retirado: blocos salvos com ele mostram o modelo como indisponível até escolher um dos novos.
+- Modelos só de decisão do OpenRouter ficam fora da lista do Agente e do LLM.
+
 ## 0.49.0 — 19/10/2026
 
 - Bloco Decisão (TypeSafe Jev): triagem por perguntas fechadas (escolha, sim/não ou escala) respondidas com probabilidades, sem gerar texto. Cada opção da primeira pergunta vira uma saída, com a saída Incerta para respostas fora da lista ou abaixo da confiança mínima; as demais perguntas podem guardar a resposta em variáveis do Início. Todas as perguntas vão numa única chamada a `/v1/systemone`, com a credencial TypeSafe da conta. O Jev não aparece no Agente, no LLM nem no gerador de fluxos.

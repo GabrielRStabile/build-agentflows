@@ -2,15 +2,14 @@ import { aiProvider, geminiImageModel, type AiProvider, type AiModel } from "./a
 import { modelCredentialKey } from "./ai-credentials";
 import { listModels } from "./openrouter";
 import { MEDIA_MODELS } from "./media-models";
-import { JEV_MODELS } from "./flow-decisions";
+import { decisionOnlyModel } from "./flow-decisions";
 import { providerFailure } from "./ai-provider-error";
 
 export async function providerModels(provider: AiProvider, credentialId?: string, fetcher = fetch): Promise<AiModel[]> {
-  if (provider === "openrouter") return (await listModels()).map(m => ({ ...m, id: `openrouter:${m.id}`, name: m.nome }));
+  // Decision models (Jev and others) only answer closed questions: they are chosen in the Decision block.
+  if (provider === "openrouter") return (await listModels()).map(m => ({ ...m, id: `openrouter:${m.id}`, name: m.nome })).filter(m => !decisionOnlyModel(m.id));
   // Replicate models are typed by name in the LLM block; there is no listed catalogue.
   if (provider === "replicate") return [];
-  // Jev has a fixed catalogue of decision models, chosen in the Decision block.
-  if (provider === "typesafe") return JEV_MODELS.map(m => ({ ...m, inputModalities: ["text"], parameters: [] }));
   const media = MEDIA_MODELS.filter(m => m.provider === provider);
   if (media.length) return media.map(m => ({ ...m, parameters: [] }));
   const p = aiProvider(provider)!;

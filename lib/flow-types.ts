@@ -3,7 +3,7 @@ import type { TokenUsage } from "./token-usage";
 import type { Attachment } from "./attachment-types";
 import { MEMORY_DEFAULTS } from "./memory-settings";
 import type { QueueStatus } from "./queue-status";
-import { defaultDecisionQuestions } from "./flow-decisions";
+import { DEFAULT_DECISION_MODEL, defaultDecisionQuestions } from "./flow-decisions";
 export const DEFAULT_SYSTEM = "Você é um assistente cuidadoso. Responda em português.";
 export const BLOCKS = {
   start: {
@@ -165,7 +165,7 @@ export function block(kind: Kind, id: string, x: number, y: number): Block {
       : kind === "condition"
         ? { value: "{{input}}", operator: "contains", compare: "urgente" }
         : kind === "decision"
-          ? { model: "typesafe:jev-latest", modelCredentialId: "", input: "{{input}}", questions: JSON.stringify(defaultDecisionQuestions()), minConfidence: "" }
+          ? { model: DEFAULT_DECISION_MODEL, modelCredentialId: "", input: "{{input}}", questions: JSON.stringify(defaultDecisionQuestions()), minConfidence: "" }
         : kind === "loop"
           ? { target: "", limit: "3", limitMessage: "" }
           : kind === "http"
