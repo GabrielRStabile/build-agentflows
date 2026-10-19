@@ -80,9 +80,9 @@ try {
     assert.equal(flow.status, 200);
     // Grafo com LLM que o navegador cria (e apaga) para conferir o aviso que impede fechar o diálogo do bloco.
     const llmGraph = { nodes: [block('start', 'start', 0, 0), block('llm', 'llm', 260, 0), block('end', 'end', 520, 0)], edges: [{ id: 'e1', source: 'start', target: 'llm' }, { id: 'e2', source: 'llm', target: 'end' }] };
-    // Grafo com Decisão: as opções padrão viram saídas, mais a Incerta.
-    const decisionGraph = { nodes: [block('start', 'start', 0, 0), block('decision', 'triagem', 260, 0), block('end', 'suporte', 560, -120), block('end', 'comercial', 560, 0), block('end', 'duvida', 560, 120)],
-      edges: [{ id: 'd1', source: 'start', target: 'triagem' }, { id: 'd2', source: 'triagem', target: 'suporte', sourceHandle: 'opt_suporte' }, { id: 'd3', source: 'triagem', target: 'comercial', sourceHandle: 'opt_comercial' }, { id: 'd4', source: 'triagem', target: 'duvida', sourceHandle: 'incerto' }] };
+    // Grafo com Decisão: uma saída só, com o JSON das respostas seguindo para a Resposta.
+    const decisionGraph = { nodes: [block('start', 'start', 0, 0), block('decision', 'triagem', 260, 0), block('end', 'resposta', 560, 0)],
+      edges: [{ id: 'd1', source: 'start', target: 'triagem' }, { id: 'd2', source: 'triagem', target: 'resposta' }] };
     assert.equal((await request(tokenB, '/api/flows/' + flow.body.id)).status, 404);
     assert.equal((await request('', '/api/flows')).status, 401);
     const configured = await request(tokenA, '/api/conexoes', { campos: { REPLICATE_API_TOKEN: 'container-private-replicate-token' } }, 'PUT');

@@ -1,5 +1,12 @@
 # Histórico de versões
 
+## 0.51.0 — 19/10/2026
+
+- Bloco Decisão com saída estruturada: uma saída só (sem uma seta por opção) e resultado em JSON com uma chave por pergunta — escolha devolve o texto da opção, sim ou não devolve `true`/`false` e nota devolve um número (média ponderada dos níveis, a partir de 0). "Formato do resultado" escolhe entre só as respostas ou completo, com `confidence` e `probabilities`.
+- Para desviar o caminho, a resposta vai para uma variável do Início e uma Condição decide depois. Abaixo da confiança mínima, ou com recusa do modelo, a resposta fica `null` e a variável não muda. A Decisão também pode encerrar o fluxo e entregar o JSON.
+- Campo "Modelo de IA" da Decisão no mesmo padrão do LLM e do Agente: fornecedor (OpenRouter ou OpenAI) e "Parâmetros de …" com credencial e modelo.
+- Fluxos da 0.49/0.50 mantêm só a conexão da primeira opção ao abrir; o que vinha pelas outras setas fica solto até ser religado por uma Condição. Sim/não passa a gravar `true`/`false` nas variáveis.
+
 ## 0.50.0 — 19/10/2026
 
 - Bloco Decisão com dois fornecedores, escolhidos no bloco (Fornecedor → Credencial → Modelo): **OpenRouter** (`POST /api/alpha/decisions`), com os modelos Jev da TypeSafe (`~typesafe/jev-latest`, 1.14 e 1.13) e `openai/gpt-6-luna-decisions`, usando a chave do OpenRouter (inclusive OAuth) e mostrando o custo informado; e **OpenAI** (Decisions API, `POST /v1/decisions`), com `gpt-6-luna`, usando qualquer credencial OpenAI, inclusive a compartilhada. Recusa do modelo segue pela saída Incerta.

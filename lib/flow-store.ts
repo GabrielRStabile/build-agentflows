@@ -96,7 +96,7 @@ export function validateGraph(value: unknown, executable = false): Graph {
     for (const n of g.nodes) {
       const out = g.edges.filter((e) => e.source === n.id);
       const k = n.data.kind;
-      const handles = (k === "agent" || k === "llm") && out.length === 0 ? [] : outputs(k, n.data.config).map((o) => o.id);
+      const handles = (k === "agent" || k === "llm" || k === "decision") && out.length === 0 ? [] : outputs(k, n.data.config).map((o) => o.id);
       if (
         out.length !== handles.length ||
         handles.some(
@@ -193,14 +193,14 @@ export function validateGraph(value: unknown, executable = false): Graph {
       );
     // Every block must have a route to an end. Repetir ends the flow when its limit is reached.
     const finishing = new Set(
-      g.nodes.filter((n) => ["end", "agent", "llm", "loop"].includes(n.data.kind) && !g.edges.some((e) => e.source === n.id)).map((n) => n.id),
+      g.nodes.filter((n) => ["end", "agent", "llm", "decision", "loop"].includes(n.data.kind) && !g.edges.some((e) => e.source === n.id)).map((n) => n.id),
     );
     for (let i = 0; i < g.nodes.length; i++)
       g.edges.forEach((e) => {
         if (finishing.has(e.target)) finishing.add(e.source);
       });
     if (finishing.size !== g.nodes.length)
-      throw new FlowError("Todo caminho precisa poder terminar em Agente, LLM, Resposta ou Repetir.");
+      throw new FlowError("Todo caminho precisa poder terminar em Agente, LLM, Decisão, Resposta ou Repetir.");
   }
   const result = structuredClone(g);
   for (const n of result.nodes) if (n.data.kind === "start") n.data.label = "Início";

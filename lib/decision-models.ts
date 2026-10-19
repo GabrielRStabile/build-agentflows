@@ -103,3 +103,28 @@ export async function runDecision({ key, model, state, questions, signal, fetche
     usage: input === undefined ? undefined : { input, output, total: input + output, ...(cost !== undefined ? { cost } : {}) },
   };
 }
+
+type ResultValue = string | number | boolean | null;
+const round = (value: number) => Math.round(value * 1000) / 1000;
+/**
+ * Resultado estruturado da Decisão, uma chave por pergunta: escolha → texto, sim/não → booleano, nota → número (média ponderada dos níveis, a partir de 0).
+ * Sem resposta válida ou com confiança abaixo do mínimo, a resposta é null. Os valores (sem null) também seguem para as variáveis do Início.
+ */
+export function decisionResult(questions: DecisionQuestion[], answers: DecisionAnswer[], minimum: number | undefined, format: "answers" | "full") {
+  const result: Record<string, unknown> = {};
+  const values: Record<string, string> = {};
+  for (const [index, q] of questions.entries()) {
+    const a = answers[index];
+    const valid = a.optionId !== DECISION_FALLBACK && (minimum === undefined || (a.confidence ?? 0) * 100 >= minimum);
+    const weighted = a.probabilities.some((p) => p.probability > 0) ? a.probabilities.reduce((sum, p, i) => sum + i * p.probability, 0) : undefined;
+    const score = a.score ?? weighted;
+    const answer: ResultValue = !valid ? null : q.type === "yesno" ? a.optionId === "true" : q.type === "score" ? (score === undefined ? null : round(score)) : a.value;
+    if (answer !== null) values[q.name] = String(answer);
+    if (format === "answers") { result[q.name] = answer; continue; }
+    const odds = Object.fromEntries(a.probabilities.map((p) => [p.value, round(p.probability)]));
+    result[q.name] = q.type === "yesno"
+      ? { answer, probability: a.probabilities.length ? round(a.probabilities[0].probability) : null }
+      : { answer, ...(q.type === "score" ? { level: valid ? a.value : null } : {}), confidence: a.confidence === undefined ? null : round(a.confidence), probabilities: odds };
+  }
+  return { result, values };
+}

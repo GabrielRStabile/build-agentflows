@@ -29,7 +29,7 @@ export const BLOCKS = {
   decision: {
     label: "Decisão",
     icon: "⋔",
-    help: "Classifica a solicitação com um modelo de decisão e segue pela opção escolhida.",
+    help: "Responde perguntas fechadas com um modelo de decisão e devolve as respostas em JSON.",
   },
   state: {
     label: "Atualizar estado",
@@ -165,7 +165,7 @@ export function block(kind: Kind, id: string, x: number, y: number): Block {
       : kind === "condition"
         ? { value: "{{input}}", operator: "contains", compare: "urgente" }
         : kind === "decision"
-          ? { model: DEFAULT_DECISION_MODEL, modelCredentialId: "", input: "{{input}}", questions: JSON.stringify(defaultDecisionQuestions()), minConfidence: "" }
+          ? { model: DEFAULT_DECISION_MODEL, modelCredentialId: "", input: "{{input}}", questions: JSON.stringify(defaultDecisionQuestions()), minConfidence: "", outputFormat: "answers" }
         : kind === "loop"
           ? { target: "", limit: "3", limitMessage: "" }
           : kind === "http"

@@ -18,7 +18,7 @@ export const DEFAULT_DECISION_MODEL = DECISION_MODELS[0].id;
 export const decisionProvider = (model = ""): DecisionProvider | undefined => DECISION_MODELS.find((m) => m.id === model)?.provider;
 /** Modelos que só respondem perguntas fechadas: o Agente e o LLM os recusam. O GPT-6 Luna direto na OpenAI também conversa. */
 export const decisionOnlyModel = (model = "") => /^openrouter:~?typesafe\//.test(model) || /^openrouter:[^:]*-decisions?$/.test(model);
-/** Saída usada quando a confiança fica abaixo do mínimo ou a resposta não corresponde a uma opção. */
+/** Marca a resposta que não corresponde a uma opção (recusa, valor fora da lista): vira null no resultado. */
 export const DECISION_FALLBACK = "incerto";
 export const YES_NO: DecisionOption[] = [{ id: "true", value: "Sim", description: "" }, { id: "false", value: "Não", description: "" }];
 export const MAX_DECISION_QUESTIONS = 20;
@@ -61,7 +61,7 @@ export function decisionQuestions(config: Record<string, string>): DecisionQuest
   if (new Set(variables).size !== variables.length) throw new Error("Cada variável recebe a resposta de uma pergunta só.");
   return questions;
 }
-/** Confiança mínima em porcentagem (0 a 100); em branco, qualquer resposta segue pela opção escolhida. */
+/** Confiança mínima em porcentagem (0 a 100); abaixo dela a resposta vira null. Em branco, vale qualquer resposta. */
 export function decisionMinConfidence(config: Record<string, string>): number | undefined {
   const raw = config.minConfidence?.trim();
   if (!raw) return undefined;
@@ -74,10 +74,8 @@ export function validateDecisionConfig(config: Record<string, string>) {
   if (!config.input?.trim()) throw new Error("Informe o conteúdo a avaliar na decisão.");
   decisionQuestions(config);
   decisionMinConfidence(config);
+  if (config.outputFormat && !DECISION_FORMATS.some(([id]) => id === config.outputFormat)) throw new Error("Escolha o formato do resultado da decisão.");
 }
-/** Saídas da decisão: uma por opção da primeira pergunta, mais a saída de resposta incerta. */
-export function decisionOutputs(config: Record<string, string>): { id: string; label: string }[] {
-  let questions: DecisionQuestion[];
-  try { questions = decisionQuestions(config); } catch { return [{ id: DECISION_FALLBACK, label: "Incerta" }]; }
-  return [...questions[0].options.map((o) => ({ id: o.id, label: o.value })), { id: DECISION_FALLBACK, label: "Incerta" }];
-}
+/** Formato do resultado: só as respostas ({"categoria": "suporte"}) ou completo, com confiança e probabilidades. */
+export const DECISION_FORMATS: [string, string][] = [["answers", "Só as respostas"], ["full", "Completo, com confiança e probabilidades"]];
+export const decisionFormat = (config: Record<string, string>) => config.outputFormat === "full" ? "full" : "answers";

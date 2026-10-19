@@ -1,5 +1,4 @@
 import { conditionCriteria, FALLBACK_HANDLE } from "./flow-conditions";
-import { decisionOutputs } from "./flow-decisions";
 import type { Graph, Kind, Link } from "./flow-types";
 export type Output = { id: string | null; label: string };
 // Saídas de cada tipo de bloco, na ordem em que aparecem no lado direito.
@@ -8,7 +7,6 @@ export function outputs(kind: Kind, config: Record<string, string> = {}): Output
     const criteria = conditionCriteria(config);
     return [...criteria.map((row, index) => ({ id: row.id, label: String(index + 1) })), { id: FALLBACK_HANDLE, label: String(criteria.length + 1) }];
   }
-  if (kind === "decision") return decisionOutputs(config);
   if (kind === "approval")
     return [
       { id: "yes", label: "Aprovar" },
@@ -33,6 +31,26 @@ export function loopTargets(g: Graph, loopId: string) {
 // Fluxos anteriores a 0.25.0 ligavam o Repetir por setas (saídas "repeat" e "done").
 // A seta Repetir vira o destino escolhido; a seta Concluir deixa de existir, porque o bloco encerra no limite.
 export function upgradeGraph(g: Graph): Graph {
+  return upgradeDecisions(upgradeLoops(g));
+}
+// Decisão das versões 0.49/0.50 tinha uma saída por opção da primeira pergunta, mais a Incerta. Agora tem uma saída só:
+// fica a conexão da primeira opção (ou a primeira encontrada) e as demais são removidas; o que vinha depois fica solto até o usuário reconectar.
+function upgradeDecisions(g: Graph): Graph {
+  const decisions = new Set(g.nodes.filter((n) => n?.data?.kind === "decision").map((n) => n.id));
+  if (!decisions.size || !g.edges.some((e) => decisions.has(e?.source) && e.sourceHandle)) return g;
+  const kept = new Map<string, string>();
+  for (const id of decisions) {
+    const out = g.edges.filter((e) => e.source === id);
+    if (!out.length || out.some((e) => !e.sourceHandle)) continue;
+    let first: string | undefined;
+    try { first = JSON.parse(g.nodes.find((n) => n.id === id)!.data.config.questions || "[]")[0]?.options?.[0]?.id; } catch { /* configuração inválida: vale a primeira conexão */ }
+    kept.set(id, (out.find((e) => e.sourceHandle === first) || out[0]).id);
+  }
+  const edges = g.edges.filter((e) => !decisions.has(e?.source) || !e.sourceHandle || kept.get(e.source) === e.id)
+    .map((e) => decisions.has(e?.source) && e.sourceHandle ? { ...e, sourceHandle: undefined } : e);
+  return { ...g, edges };
+}
+function upgradeLoops(g: Graph): Graph {
   const loops = new Map(g.nodes.filter((n) => n?.data?.kind === "loop").map((n) => [n.id, n]));
   if (!loops.size || !g.edges.some((e) => loops.has(e?.source) && (e.sourceHandle === "repeat" || e.sourceHandle === "done"))) return g;
   const targets = new Map<string, string>();
@@ -72,7 +90,7 @@ export function connectionProblem(g: Graph, c: Candidate): string | null {
   if (target.data.kind === "start") return "O Início não recebe conexões.";
   const handle = c.sourceHandle || null;
   if (!outputs(source.data.kind, source.data.config).some((o) => o.id === handle))
-    return source.data.kind === "condition" ? "Esta saída não existe mais. Confira os critérios do bloco." : source.data.kind === "decision" ? "Esta saída não existe mais. Confira as opções da primeira pergunta." : source.data.kind === "loop" ? "Repetir não tem saída: escolha dentro dele o bloco para onde voltar." : "A Resposta encerra o fluxo e não tem saída.";
+    return source.data.kind === "condition" ? "Esta saída não existe mais. Confira os critérios do bloco." : source.data.kind === "loop" ? "Repetir não tem saída: escolha dentro dele o bloco para onde voltar." : "A Resposta encerra o fluxo e não tem saída.";
   if (
     g.edges.some(
       (e) => e.source === c.source && (e.sourceHandle || null) === handle,

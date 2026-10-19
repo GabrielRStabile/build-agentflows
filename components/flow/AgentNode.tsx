@@ -17,6 +17,7 @@ import { ToolLogo } from "../ToolSelect";
 import { toolTitle } from "@/lib/tool-presentation";
 import { knowledgeBaseIds } from "@/lib/knowledge-settings";
 import { modelLabel, modelProvider } from "../ModelPicker";
+import { DECISION_MODELS, decisionProvider } from "@/lib/flow-decisions";
 export type VisualData = Block["data"] & {
   execution?: string;
   /** Shown under the block while the run waits in the queue. */
@@ -65,7 +66,7 @@ function AgentNodeView({ id, data, selected }: NodeProps<VisualNode>) {
     <div
       className={
         "af-node" +
-        (data.kind === "condition" || data.kind === "decision" ? " af-condition" : "") +
+        (data.kind === "condition" ? " af-condition" : "") +
         (selected ? " selected" : "") +
         (hover ? " hover" : "") +
         (data.execution ? " execution-" + data.execution : "")
@@ -167,9 +168,9 @@ function AgentNodeView({ id, data, selected }: NodeProps<VisualNode>) {
             </span>
           )}
           {data.kind === "decision" && (
-            <span className="af-pill" title="TypeSafe">
+            <span className="af-pill" title={decisionProvider(data.config.model) === "openai" ? "OpenAI" : "OpenRouter"}>
               <Icon name="link" size={13} />
-              {modelLabel(data.config.model)}
+              {DECISION_MODELS.find((m) => m.id === data.config.model)?.name || modelLabel(data.config.model)}
             </span>
           )}
           {data.kind === "loop" && (
@@ -208,7 +209,7 @@ function AgentNodeView({ id, data, selected }: NodeProps<VisualNode>) {
           position={Position.Right}
           id={o.id || undefined}
           className="af-handle-out"
-          title={data.kind === "condition" ? `Saída ${i + 1}: ${i === outs.length - 1 ? "quando nenhum critério é atendido" : `critério ${i + 1}`}` : data.kind === "decision" ? (i === outs.length - 1 ? "Saída Incerta: confiança abaixo do mínimo ou sem resposta válida" : `Saída ${o.label}`) : data.connected?.includes(o.id) ? "Saída conectada. Selecione a linha para remover a conexão." : "Arraste até a entrada de outro bloco para conectar"}
+          title={data.kind === "condition" ? `Saída ${i + 1}: ${i === outs.length - 1 ? "quando nenhum critério é atendido" : `critério ${i + 1}`}` : data.connected?.includes(o.id) ? "Saída conectada. Selecione a linha para remover a conexão." : "Arraste até a entrada de outro bloco para conectar"}
           aria-label={`Saída${o.label ? " " + o.label : ""} de ${data.label}`}
           style={{ top: `${(100 * (i + 1)) / (outs.length + 1)}%` }}
         >

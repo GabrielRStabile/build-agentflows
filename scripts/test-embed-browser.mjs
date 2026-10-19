@@ -67,7 +67,7 @@ export async function verifyEmbedBrowser(origin, fixture) {
     await other.goto(origin + "/flows/" + llmFlowId);
     await other.locator(".react-flow__node").filter({ hasText: /LLM/ }).first().dblclick();
     const dialog = other.locator("dialog.studio-modal[open]");
-    await dialog.getByRole("combobox", { name: "Fornecedor" }).click();
+    await dialog.getByRole("combobox", { name: "Fornecedor", exact: true }).click();
     await dialog.getByRole("option", { name: "Replicate" }).click();
     await dialog.getByRole("textbox", { name: "Modelo da Replicate" }).waitFor();
     await dialog.evaluate(el => { el.scrollTop = 0; });
@@ -90,31 +90,33 @@ export async function verifyEmbedBrowser(origin, fixture) {
     await dialog.waitFor({ state: "detached" });
     assert.equal(await other.evaluate(async (id) => (await fetch("/api/flows/" + id, { method: "DELETE" })).status, llmFlowId), 200);
 
-    // Decisão: fornecedor, credencial, modelo e perguntas no diálogo; cada opção da primeira pergunta vira uma saída.
+    // Decisão: fornecedor, credencial, modelo, perguntas e formato no diálogo; uma saída só, com o resultado em JSON.
     await other.setViewportSize({ width: 1280, height: 900 });
     const decisionFlowId = await other.evaluate(async (graph) => (await (await fetch("/api/flows", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Docker Decisão", description: "", graph }) })).json()).id, fixture.decisionGraph);
     assert.ok(decisionFlowId);
     await other.goto(origin + "/flows/" + decisionFlowId);
     const decisionNode = other.locator(".react-flow__node").filter({ hasText: /Decisão/ }).first();
-    await decisionNode.getByLabel("Saída Incerta de Decisão").waitFor({ state: "attached" });
+    await decisionNode.getByLabel("Saída de Decisão").waitFor({ state: "attached" });
     await decisionNode.dblclick();
-    await dialog.getByRole("combobox", { name: "Credencial OpenRouter" }).waitFor();
+    // Modelo de IA no mesmo padrão do LLM: fornecedor e "Parâmetros de …" com credencial e modelo.
+    await dialog.getByRole("button", { name: /Parâmetros de OpenRouter/ }).waitFor();
     assert.equal(await dialog.getByRole("combobox", { name: "Modelo de decisão" }).inputValue(), "openrouter:~typesafe/jev-latest");
-    // Trocar o fornecedor escolhe o modelo da OpenAI e a credencial passa a ser da OpenAI.
-    await dialog.getByRole("combobox", { name: "Fornecedor da decisão" }).selectOption("openai");
+    await dialog.getByRole("combobox", { name: "Fornecedor", exact: true }).click();
+    await other.getByRole("option", { name: /OpenAI/ }).click();
+    await dialog.getByRole("button", { name: /Parâmetros de OpenAI/ }).waitFor();
     assert.equal(await dialog.getByRole("combobox", { name: "Modelo de decisão" }).inputValue(), "openai:gpt-6-luna");
-    await dialog.getByRole("combobox", { name: "Credencial OpenAI" }).waitFor();
     assert.equal(await dialog.getByRole("textbox", { name: "Opção 1 da pergunta 1", exact: true }).inputValue(), "suporte");
     await dialog.getByRole("button", { name: "Adicionar opção" }).click();
     await close();
     await blocked.getByText(/Preencha todas as opções/).waitFor();
     await dialog.getByRole("textbox", { name: "Opção 3 da pergunta 1", exact: true }).fill("financeiro");
     assert.equal(await blocked.count(), 0);
+    await dialog.getByRole("combobox", { name: "Formato do resultado" }).selectOption("full");
+    await dialog.getByText(/"confidence": 0.85/).waitFor();
     await other.screenshot({ path: "/tmp/agentflows-decision-dialog.png" });
     await close();
     await dialog.waitFor({ state: "detached" });
-    await decisionNode.getByLabel("Saída financeiro de Decisão").waitFor({ state: "attached" });
-    assert.equal(await decisionNode.locator(".af-handle-out").count(), 4);
+    assert.equal(await decisionNode.locator(".af-handle-out").count(), 1, "mais opções não criam setas");
     await other.setViewportSize({ width: 390, height: 844 });
     await decisionNode.dblclick();
     await dialog.getByRole("group", { name: "Pergunta 1" }).waitFor();

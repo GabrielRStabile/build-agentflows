@@ -2,9 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createTenantTestContext, commitTestConfig } from "../scripts/tenant-test-context";
 import { saveToolCredential } from "./tool-credential-store";
-import { decisionOnlyModel, decisionOutputs, decisionQuestions, validateDecisionConfig, DECISION_FALLBACK, YES_NO, type DecisionQuestion } from "./flow-decisions";
-import { decisionAnswer, openAIQuestion, openRouterQuestion, runDecision, OPENAI_DECISIONS_URL, OPENROUTER_DECISIONS_URL } from "./decision-models";
+import { decisionOnlyModel, decisionQuestions, validateDecisionConfig, DECISION_FALLBACK, YES_NO, type DecisionQuestion } from "./flow-decisions";
+import { decisionAnswer, decisionResult, openAIQuestion, openRouterQuestion, runDecision, OPENAI_DECISIONS_URL, OPENROUTER_DECISIONS_URL } from "./decision-models";
 import { block, type Graph } from "./flow-types";
+import { outputs, upgradeGraph } from "./flow-graph";
 import { validateGraph } from "./flow-store";
 import { createFlow, saveFlow } from "./flow-service";
 import { startRun } from "./flow-runtime";
@@ -21,9 +22,9 @@ const mood: DecisionQuestion = { id: "q3", name: "humor", type: "score", instruc
 ] };
 const config = (questions: DecisionQuestion[], extra: Record<string, string> = {}) => ({ model: "openrouter:~typesafe/jev-latest", input: "{{input}}", questions: JSON.stringify(questions), ...extra });
 
-test("decisão valida as perguntas e cria uma saída por opção da primeira, mais a Incerta", () => {
-  assert.deepEqual(decisionOutputs(config([area, urgent])), [{ id: "opt_fin", label: "financeiro" }, { id: "opt_tec", label: "tecnico" }, { id: DECISION_FALLBACK, label: "Incerta" }]);
-  assert.deepEqual(decisionOutputs(config([urgent])).map((o) => o.id), ["true", "false", DECISION_FALLBACK]);
+test("decisão valida as perguntas e tem uma saída só", () => {
+  assert.deepEqual(outputs("decision", config([area, urgent])), [{ id: null, label: "" }]);
+  assert.throws(() => validateDecisionConfig(config([area], { outputFormat: "xml" })), /formato do resultado/);
   validateDecisionConfig(config([area, urgent, mood], { minConfidence: "70" }));
   assert.throws(() => validateDecisionConfig({ ...config([area]), model: "openai:gpt-6-luna-mini" }), /modelo de decisão/);
   assert.throws(() => validateDecisionConfig({ ...config([area]), model: "typesafe:jev-latest" }), /modelo de decisão/, "TypeSafe direto saiu da lista");
@@ -100,24 +101,57 @@ test("OpenAI: Decisions API com perguntas em lista, respostas por nome e recusa"
   assert.equal(decisionAnswer(urgent, { type: "predicate", name: "urgente", probability: 0.3 }).value, "Não");
 });
 
-test("motor segue pela opção do Jev, guarda variáveis e mantém a etapa anterior", async (t) => {
+test("resultado em JSON tipado por pergunta, com null abaixo da confiança mínima", () => {
+  const answers = [
+    decisionAnswer(area, { type: "choice", choice: "financeiro", probabilities: { financeiro: 0.85, tecnico: 0.15 }, confidence: 0.8 }),
+    decisionAnswer(urgent, { type: "noul", noul: 0.9 }),
+    decisionAnswer(mood, { type: "score", score: 1.1, probabilities: { 0: 0.1, 1: 0.7, 2: 0.2 }, confidence: 0.55 }),
+  ];
+  assert.deepEqual(decisionResult([area, urgent, mood], answers, undefined, "answers"), { result: { area: "financeiro", urgente: true, humor: 1.1 }, values: { area: "financeiro", urgente: "true", humor: "1.1" } });
+  assert.deepEqual(decisionResult([area, urgent, mood], answers, 60, "answers").result, { area: "financeiro", urgente: true, humor: null }, "nota com 55% de confiança fica null");
+  assert.deepEqual(decisionResult([area, urgent, mood], answers, 60, "full").result, {
+    area: { answer: "financeiro", confidence: 0.8, probabilities: { financeiro: 0.85, tecnico: 0.15 } },
+    urgente: { answer: true, probability: 0.9 },
+    humor: { answer: null, level: null, confidence: 0.55, probabilities: { Calmo: 0.1, Frustrado: 0.7, Furioso: 0.2 } },
+  });
+  const refused = decisionAnswer(area, { type: "refusal" });
+  assert.equal(refused.optionId, DECISION_FALLBACK);
+  assert.deepEqual(decisionResult([area], [refused], undefined, "answers"), { result: { area: null }, values: {} });
+  assert.equal(decisionResult([mood], [decisionAnswer(mood, { type: "score", probabilities: { 0: 0, 1: 0.5, 2: 0.5 } })], undefined, "answers").result.humor, 1.5, "sem nota, usa a média ponderada dos níveis");
+});
+
+test("fluxos antigos da Decisão ficam com a conexão da primeira opção", () => {
+  const decision = block("decision", "triagem", 0, 0); decision.data.config = config([area]);
+  const graph: Graph = { nodes: [block("start", "inicio", 0, 0), decision, block("end", "fin", 0, 0), block("end", "tec", 0, 0), block("end", "duvida", 0, 0)], edges: [
+    { id: "a", source: "inicio", target: "triagem" },
+    { id: "c", source: "triagem", target: "tec", sourceHandle: "opt_tec" },
+    { id: "b", source: "triagem", target: "fin", sourceHandle: "opt_fin" },
+    { id: "d", source: "triagem", target: "duvida", sourceHandle: DECISION_FALLBACK },
+  ] };
+  const upgraded = upgradeGraph(graph);
+  assert.deepEqual(upgraded.edges.map((e) => [e.id, e.sourceHandle]), [["a", undefined], ["b", undefined]]);
+  assert.equal(upgradeGraph(upgraded), upgraded, "migração idempotente");
+});
+
+test("motor devolve o JSON, guarda variáveis e a Decisão pode encerrar o fluxo", async (t) => {
   const tenant = await createTenantTestContext(); t.after(tenant.close);
   await tenant.asTenant(async () => {
     const c = saveToolCredential({ name: "OpenRouter", provider: "ai_openrouter", fields: { OPENROUTER_API_KEY: "chave-jev" } }); await commitTestConfig();
-    const start = block("start", "inicio", 0, 0); start.data.config.state = JSON.stringify({ area: "" });
+    const start = block("start", "inicio", 0, 0); start.data.config.state = JSON.stringify({ area: "", urgente: "" });
     const decision = block("decision", "triagem", 300, 0);
-    decision.data.config = { ...config([area, urgent], { minConfidence: "60" }), modelCredentialId: c.id };
-    const fin = block("end", "fin", 600, 0), tec = block("end", "tec", 600, 150), doubt = block("end", "duvida", 600, 300);
-    fin.data.config.text = "Financeiro: {{fluxo.area}} | {{last}} | {{nodes.triagem}}";
-    tec.data.config.text = "Técnico"; doubt.data.config.text = "Revisar: {{last}}";
-    const graph: Graph = { nodes: [start, decision, fin, tec, doubt], edges: [
+    decision.data.config = { ...config([{ ...area }, { ...urgent, variable: "urgente" }], { minConfidence: "60" }), modelCredentialId: c.id };
+    const route = block("condition", "rota", 600, 0);
+    route.data.config = { criteria: JSON.stringify([{ id: "fin", value: "{{fluxo.area}}", operator: "equals", compare: "financeiro" }]) };
+    const fin = block("end", "fin", 900, 0), other = block("end", "outro", 900, 150);
+    fin.data.config.text = "Financeiro (urgente: {{fluxo.urgente}}) | {{last}}";
+    other.data.config.text = "Outro: {{fluxo.area}}";
+    const graph: Graph = { nodes: [start, decision, route, fin, other], edges: [
       { id: "a", source: "inicio", target: "triagem" },
-      { id: "b", source: "triagem", target: "fin", sourceHandle: "opt_fin" },
-      { id: "c", source: "triagem", target: "tec", sourceHandle: "opt_tec" },
-      { id: "d", source: "triagem", target: "duvida", sourceHandle: DECISION_FALLBACK },
+      { id: "b", source: "triagem", target: "rota" },
+      { id: "c", source: "rota", target: "fin", sourceHandle: "fin" },
+      { id: "d", source: "rota", target: "outro", sourceHandle: "no" },
     ] };
     validateGraph(graph, true);
-    assert.throws(() => validateGraph({ ...graph, edges: graph.edges.filter((e) => e.id !== "d") }, true), /Conecte todas as saídas/);
     const missing = structuredClone(graph); missing.nodes[0].data.config.state = "{}";
     assert.throws(() => validateGraph(missing, true), /variável que não existe no Início/);
     const f = await createFlow("Triagem"); await saveFlow(f.id, { ...f, graph });
@@ -127,20 +161,28 @@ test("motor segue pela opção do Jev, guarda variáveis e mantém a etapa anter
       assert.equal(String(url), OPENROUTER_DECISIONS_URL);
       assert.equal(new Headers(init?.headers).get("authorization"), "Bearer chave-jev");
       requests.push(JSON.parse(String(init?.body)));
-      return Response.json({ answers: { area: { type: "choice", choice: "financeiro", probabilities: { financeiro: confidence, tecnico: 1 - confidence }, confidence }, urgente: { type: "noul", noul: 0.9 } }, usage: { input_tokens: 30, output_tokens: 2 } });
+      return Response.json({ answers: { area: { type: "choice", choice: "financeiro", probabilities: { financeiro: confidence, tecnico: 1 - confidence }, confidence }, urgente: { type: "noul", noul: 0.9 } }, usage: { input_tokens: 30, output_tokens: 2, cost: 0.000001 } });
     });
     const run = await startRun(f.id, "Meu pagamento falhou", false, false);
     assert.equal(run.status, "completed", run.error);
     assert.equal(requests[0].model, "~typesafe/jev-latest");
     assert.equal(requests[0].state, "Meu pagamento falhou");
-    assert.equal(run.output, "Financeiro: financeiro | Meu pagamento falhou | area: financeiro (confiança 85%)\nurgente: Sim (confiança 90%)");
+    assert.equal(run.output, 'Financeiro (urgente: true) | {\n  "area": "financeiro",\n  "urgente": true\n}', "{{Etapa anterior}} depois da Decisão é o JSON");
     const step = run.trace.find((trace) => trace.nodeId === "triagem")!;
-    assert.match(step.notes || "", /Probabilidades\narea: financeiro 85% · tecnico 15%/);
-    assert.deepEqual(step.usage, { input: 30, output: 2, total: 32 });
+    assert.match(step.notes || "", /Probabilidades\narea: financeiro 85% · tecnico 15% \(confiança 85%\)/);
+    assert.deepEqual(step.usage, { input: 30, output: 2, total: 32, cost: 0.000001 });
     confidence = 0.55;
     const unsure = await startRun(f.id, "Oi", false, false);
-    assert.match(unsure.output, /^Revisar: Oi$/, "abaixo da confiança mínima segue pela saída Incerta");
-    assert.match(unsure.trace.find((trace) => trace.nodeId === "triagem")!.output, /abaixo de 60%/);
+    assert.equal(unsure.output, "Outro: ", "abaixo da confiança mínima a resposta fica null e a variável não muda");
+    assert.match(unsure.trace.find((trace) => trace.nodeId === "triagem")!.notes || "", /abaixo de 60% de confiança: area/);
+    // Sem nada depois, a Decisão encerra o fluxo e entrega o JSON.
+    const alone: Graph = { nodes: [start, decision], edges: [{ id: "a", source: "inicio", target: "triagem" }] };
+    validateGraph(alone, true);
+    await saveFlow(f.id, { ...f, graph: alone });
+    confidence = 0.9;
+    const final = await startRun(f.id, "Pagamento", false, false);
+    assert.equal(final.status, "completed", final.error);
+    assert.deepEqual(JSON.parse(final.output), { area: "financeiro", urgente: true });
   });
 });
 
