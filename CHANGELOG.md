@@ -1,5 +1,9 @@
 # Histórico de versões
 
+## 0.51.1 — 21/10/2026
+
+- "Editar fluxo atual" no Fluxo com IA não falha mais com "A IA tentou adicionar um bloco inválido ou repetido." ao inserir uma etapa antes de um bloco existente: quando a IA repete o bloco que está religando, ele é tratado como ajuste desse bloco. As demais recusas dizem o motivo (bloco sem ID, tipo desconhecido, ID repetido), e a nova tentativa automática corrige com base nele.
+
 ## 0.51.0 — 19/10/2026
 
 - Bloco Decisão com saída estruturada: uma saída só (sem uma seta por opção) e resultado em JSON com uma chave por pergunta — escolha devolve o texto da opção, sim ou não devolve `true`/`false` e nota devolve um número (média ponderada dos níveis, a partir de 0). "Formato do resultado" escolhe entre só as respostas ou completo, com `confidence` e `probabilities`.
