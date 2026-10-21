@@ -147,6 +147,9 @@ export type Run = {
   conversation?: { input: string; output: string }[];
   // Sessão de conversa informada ou gerada pelo endereço publicado; liga execuções da mesma conversa.
   session?: string;
+  // Quem escreveu pelo WhatsApp. Só existe quando o Início declara whatsapp_telefone ou whatsapp_nome:
+  // fluxo que não pede o número não o guarda.
+  remetente?: { telefone: string; nome: string };
   output: string;
   error?: string;
   graph: Graph;

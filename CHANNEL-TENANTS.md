@@ -52,6 +52,18 @@ Duplicatas não gastam uma nova vaga nem a cota de criação de jobs. Corpos: 30
 no WhatsApp, 1 MiB na ElevenLabs, entrada do fluxo até 20 mil caracteres e até
 100 textos por lote. Conteúdo maior é recusado, sem truncar a entrada do fluxo.
 
+## Conversa por remetente
+
+Cada mensagem do WhatsApp entra numa sessão derivada da conta do provedor e do
+número de quem escreveu (`whatsapp:<sha-256>`, sem o telefone em claro). Como na
+sessão da integração HTTP, as execuções concluídas da mesma sessão viram o
+histórico da próxima, e a memória dos blocos LLM/Agente responde no contexto da
+conversa daquela pessoa — duas pessoas falando com o mesmo número não se misturam.
+
+O número e o nome do perfil só chegam ao fluxo quando o Início declara as
+variáveis `whatsapp_telefone` e/ou `whatsapp_nome` (`{{fluxo.whatsapp_telefone}}`).
+Fluxo que não as declara não guarda o telefone na execução.
+
 ## Entrega da resposta
 
 `channel_deliveries` pertence ao usuário, job e execução por chaves estrangeiras

@@ -216,3 +216,32 @@ test("banco recusa recibo associado ao job ou à execução de outro usuário", 
   assert.equal((await x.db.query("SELECT status FROM channel_deliveries WHERE job_id=$1", [a.id])).rows[0].status, "cancelled");
   assert.equal(x.calls.length, 0);
 });
+
+const zapiDe = (messageId: string, phone: string, senderName: string, message: string) => ({ ...zapi(messageId), phone, senderName, text: { message } });
+test("WhatsApp separa a conversa por remetente e só entrega o número ao fluxo que declara as variáveis", async t => {
+  const x = await setup(t);
+  const lastRun = async () => x.asTenant(async () => getTenantRun((await x.jobs()).at(-1)!.run_id));
+  await x.post(zapiDe("s-1", "5511999990000", "Ana", "Olá")); await x.drain();
+  assert.ok(!JSON.stringify(await lastRun()).includes("5511999990000"));
+  const flow = await x.asTenant(async () => {
+    const g = graph(false), start = g.nodes.find(n => n.id === "start")!, end = g.nodes.find(n => n.id === "end")!;
+    start.data.config.state = JSON.stringify({ whatsapp_telefone: "", whatsapp_nome: "" });
+    end.data.config.text = "{{fluxo.whatsapp_nome}} ({{fluxo.whatsapp_telefone}}): {{input}}";
+    const created = await createTenantFlow("Remetente", false, { name: "Remetente", description: "", graph: g });
+    setConfig("WHATSAPP_FLOW_ID", created.id);
+    return created;
+  });
+  const message = () => JSON.parse(String(x.calls.at(-1)?.init?.body)).message;
+  await x.post(zapiDe("s-2", "5511999990000", "Ana", "Primeira")); await x.drain();
+  const ana1 = await lastRun();
+  assert.equal(ana1.flowId, flow.id); assert.equal(message(), "Ana (5511999990000): Primeira");
+  await x.post(zapiDe("s-3", "5511888880000", "Bruno", "Sou outro")); await x.drain();
+  const bruno = await lastRun();
+  assert.equal(message(), "Bruno (5511888880000): Sou outro"); assert.equal(bruno.conversation, undefined);
+  await x.post(zapiDe("s-4", "5511999990000", "Ana", "Segunda")); await x.drain();
+  const ana2 = await lastRun();
+  assert.equal(message(), "Ana (5511999990000): Segunda");
+  assert.equal(ana2.session, ana1.session); assert.notEqual(ana2.session, bruno.session);
+  assert.ok(ana1.session && !ana1.session.includes("5511999990000"));
+  assert.deepEqual(ana2.conversation, [{ input: "Primeira", output: "Ana (5511999990000): Primeira" }]);
+});

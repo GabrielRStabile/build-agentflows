@@ -12,6 +12,7 @@ import { hashToken, seal, unseal, AuthError } from "./saas-security";
 import { FlowError } from "./flow-store";
 import { loadConfigState } from "./tenant-config-state";
 import { consumeRateLimit } from "./saas-rate-limit";
+import { sessionHistoryIds } from "./integration-session";
 import { assertJobLease, currentJobLease } from "./saas-job-context";
 import type { Channel } from "./channel-auth";
 import type { Sql } from "./saas-db";
@@ -26,7 +27,18 @@ export function textoDaLigacao(l: PosLigacao) {
     l.variaveis.contexto ? `Contexto da ligação: ${l.variaveis.contexto}` : "", "", "Transcrição:", l.transcricao || "(sem falas registradas)"]
     .filter((line, i, all) => line !== "" || (i > 0 && all[i - 1] !== "")).join("\n").trim();
 }
-async function enqueueEvent(channel: Channel, identity: string[], input: string, recipient?: string) {
+type Conversa = { session: string; remetente: NonNullable<Run["remetente"]> };
+const VARIAVEIS_DO_REMETENTE = ["whatsapp_telefone", "whatsapp_nome"];
+function pedeRemetente(run: Run) {
+  const start = run.graph.nodes.find(n => n.data.kind === "start");
+  try {
+    const state = JSON.parse(start?.data.config.state || "{}") as Record<string, unknown>;
+    return VARIAVEIS_DO_REMETENTE.some(key => Object.hasOwn(state, key));
+  } catch {
+    return false;
+  }
+}
+async function enqueueEvent(channel: Channel, identity: string[], input: string, recipient?: string, conversa?: Conversa) {
   const { db, user } = currentTenant();
   const flowId = getConfig(`${channel.toUpperCase()}_FLOW_ID`);
   if (!flowId) return null;
@@ -35,7 +47,10 @@ async function enqueueEvent(channel: Channel, identity: string[], input: string,
   const previous = (await db.query<{ run_id: string }>("SELECT run_id FROM channel_events WHERE user_id=$1 AND event_key=$2", [user.id, key])).rows[0];
   if (previous) return { runId: previous.run_id, duplicate: true };
   // Build before opening the transaction: graph and credential reads use the request's connection.
-  const run = await buildRun(flowId, input, true);
+  // As execuções concluídas do mesmo remetente viram o histórico, como na sessão da integração HTTP.
+  const history = conversa ? await sessionHistoryIds(flowId, conversa.session) : undefined;
+  const run = await buildRun(flowId, input, true, undefined, undefined, history, undefined, undefined, conversa?.session);
+  if (conversa && pedeRemetente(run)) run.remetente = conversa.remetente;
   run.queued = true;
   const result = await db.transaction(async sql => {
     await queueLock(sql);
@@ -65,7 +80,9 @@ export async function processarWhatsApp(m: Recebida) {
   const account = m.provedor === "zapi" ? getConfig("ZAPI_INSTANCE_ID") : m.provedor === "meta" ? getConfig("WHATSAPP_PHONE_NUMBER_ID") : getConfig("ZAPPERHUB_URL") || "https://api.zapperapi.com";
   if ((m.provedor === "meta" || m.provedor === "zapi") && (!m.conta || m.conta !== account)) throw new AuthError("Número de WhatsApp não autorizado.", 403);
   if (!m.id || m.id.length > 256 || !/^\d{10,15}$/.test(m.de)) throw new FlowError("Mensagem sem identificador ou remetente válido.");
-  return enqueueEvent("whatsapp", [m.provedor, account || "", m.de, m.id], m.texto, m.de);
+  // A sessão é o hash da conta e do número: liga a conversa sem gravar o telefone em claro.
+  const session = `whatsapp:${hashToken(JSON.stringify([m.provedor, account || "", m.de]))}`;
+  return enqueueEvent("whatsapp", [m.provedor, account || "", m.de, m.id], m.texto, m.de, { session, remetente: { telefone: m.de, nome: m.nome || "" } });
 }
 
 /** Persist a visible receipt in the same transaction as the delivery state. */
