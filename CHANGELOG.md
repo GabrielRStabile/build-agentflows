@@ -1,5 +1,10 @@
 # Histórico de versões
 
+## 0.52.0 — 21/10/2026
+
+- WhatsApp com conversa por pessoa: cada mensagem entra numa sessão do número de quem escreveu (guardada como hash, sem o telefone em claro), e as respostas anteriores dessa pessoa viram o histórico, como na sessão do endereço publicado. A memória dos blocos LLM e Agente passa a funcionar no canal, e duas pessoas falando com o mesmo número não se misturam mais.
+- O Início pode declarar `whatsapp_telefone` e `whatsapp_nome` para receber quem escreveu (`{{fluxo.whatsapp_telefone}}`, `{{fluxo.whatsapp_nome}}`). Fluxo que não declara essas variáveis não guarda o número na execução.
+
 ## 0.51.1 — 21/10/2026
 
 - "Editar fluxo atual" no Fluxo com IA não falha mais com "A IA tentou adicionar um bloco inválido ou repetido." ao inserir uma etapa antes de um bloco existente: quando a IA repete o bloco que está religando, ele é tratado como ajuste desse bloco. As demais recusas dizem o motivo (bloco sem ID, tipo desconhecido, ID repetido), e a nova tentativa automática corrige com base nele.
