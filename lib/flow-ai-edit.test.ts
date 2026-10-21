@@ -43,12 +43,26 @@ test("rejeita blocos inexistentes e conexões inválidas sem tocar no canvas", (
   const current = context(), before = structuredClone(current);
   for (const patch of [
     { updates: [{ id: "ausente", label: "X" }] },
-    { additions: [{ id: "analista", kind: "agent" }] },
+    { additions: [{ id: "analista", kind: "llm" }] },
+    { additions: [{ id: "novo", kind: "agent" }, { id: "novo", kind: "agent" }] },
+    { additions: [{ id: "x", kind: "pesquisador" }] },
+    { removals: ["analista"], additions: [{ id: "analista", kind: "agent" }] },
     { connections: { add: [{ source: "inicio", target: "analista" }] } },
     { connections: { remove: ["ausente"] } },
     { removals: ["inicio"] },
   ]) assert.throws(() => applyFlowPatch(current, JSON.stringify({ summary: "Ajuste", ...patch })));
   assert.deepEqual(current, before);
+});
+test("bloco existente repetido em additions ao inserir uma etapa antes dele vira atualização", () => {
+  const current = context();
+  const result = applyFlowPatch(current, JSON.stringify({
+    summary: "Adicionei um pesquisador antes do analista.",
+    additions: [{ id: "pesquisador", kind: "agent", label: "Pesquisador", config: { system: "Pesquise o tema." } }, { id: "analista", kind: "agent", label: "Analista" }],
+    connections: { remove: ["conexao_original"], add: [{ source: "inicio", target: "pesquisador" }, { source: "pesquisador", target: "analista" }] },
+  }));
+  assert.deepEqual(result.graph.nodes.slice(0, 2), current.graph.nodes.map((n) => n.id === "analista" ? { ...n, data: { ...n.data, label: "Analista" } } : n));
+  assert.deepEqual(result.graph.nodes.map((n) => n.id), ["inicio", "analista", "pesquisador"]);
+  assert.doesNotThrow(() => validateGraph(result.graph, true));
 });
 test("conversa usa proposta anterior como contexto e tenta reparar uma resposta inválida", async () => {
   const first = await editFlow("Seja breve", context(), [], async () => '{"summary":"Agora é breve.","updates":[{"id":"analista","config":{"system":"Seja breve"}}]}');

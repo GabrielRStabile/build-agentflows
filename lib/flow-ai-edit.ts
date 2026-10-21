@@ -12,7 +12,7 @@ MODO EDIÇÃO: o formato de resposta anterior é substituído pelo formato abaix
 Você conversa sobre um fluxo existente. Use o canvas enviado como fonte atual, inclusive alterações ainda não salvas. O histórico serve apenas para entender referências e preferências; nunca restaure uma versão antiga por causa dele.
 Retorne apenas alterações pontuais solicitadas. Não reescreva nem remova blocos, modelos, ferramentas, critérios, variáveis ou conexões que não precisam mudar. Preserve IDs e IDs de critérios existentes. Não altere o nome do fluxo sem pedido explícito.
 Se precisar esclarecer algo, retorne summary com a pergunta e listas vazias. O usuário poderá responder na próxima mensagem.
-Cada adição deve ter um ID novo; atualizações devem usar IDs existentes. Remover um bloco também remove suas conexões. Para substituir uma conexão, remova seu ID e adicione a nova. Não há posição no formato: o editor preserva a organização atual.
+Cada adição deve ter um ID novo; atualizações devem usar IDs existentes. Não repita em additions blocos que já estão no canvas: para inserir uma etapa entre dois blocos, adicione só a nova e troque as conexões. Remover um bloco também remove suas conexões. Para substituir uma conexão, remova seu ID e adicione a nova. Não há posição no formato: o editor preserva a organização atual.
 Responda com JSON:
 {"summary":"Explique brevemente o que mudou ou faça uma pergunta", "updates":[{"id":"id_existente","label":"opcional","config":{"system":"somente os campos alterados"}}], "additions":[{"id":"novo_id","kind":"agent","label":"Nome","config":{}}], "removals":[], "connections":{"add":[{"source":"inicio","target":"novo_id","handle":null}],"remove":[]}, "name":"opcional, apenas se solicitado", "description":"opcional"}
 Use listas vazias para operações não necessárias. Campos config são strings; criteria e stateUpdates podem ser listas JSON, state pode ser objeto JSON.
@@ -54,7 +54,17 @@ export function applyFlowPatch(context: FlowContext, answer: string): EditedFlow
     node.data.config = mergeConfig(node.data.config, update.config);
   }
   for (const addition of additions) {
-    if (!addition || !Object.hasOwn(BLOCKS, addition.kind) || existing.has(addition.id) || nodes.some((n) => n.id === addition.id)) throw new FlowError("A IA tentou adicionar um bloco inválido ou repetido.");
+    if (!addition || typeof addition.id !== "string" || !addition.id.trim()) throw new FlowError("A IA tentou adicionar um bloco sem ID.");
+    if (!Object.hasOwn(BLOCKS, addition.kind)) throw new FlowError(`A IA tentou adicionar um bloco de tipo desconhecido: ${String(addition.kind)}.`);
+    const current = nodes.find((n) => n.id === addition.id);
+    // Ao inserir um bloco no meio do caminho, a IA costuma repetir em additions o bloco que ela religa; vira atualização.
+    if (current && existing.has(current.id) && current.data.kind === addition.kind && !updates.some((u) => u.id === current.id)) {
+      if (addition.label !== undefined) current.data.label = addition.label;
+      current.data.config = mergeConfig(current.data.config, addition.config);
+      continue;
+    }
+    if (current) throw new FlowError(`A IA tentou adicionar o bloco "${addition.id}", que já existe com outro tipo ou foi repetido.`);
+    if (existing.has(addition.id)) throw new FlowError(`A IA removeu e adicionou o bloco "${addition.id}"; use um ID novo.`);
     const node = block(addition.kind, addition.id, 0, 0);
     if (addition.label !== undefined) node.data.label = addition.label;
     node.data.config = mergeConfig(node.data.config, addition.config);
