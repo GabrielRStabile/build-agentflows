@@ -151,7 +151,12 @@ export const channelEvents = pgTable("channel_events", {
   channel: text("channel").notNull(), reply_ciphertext: text("reply_ciphertext"), created_at: time("created_at").notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.user_id, t.event_key] }), uniqueIndex("channel_events_run").on(t.user_id, t.run_id),
   foreignKey({ columns: [t.user_id, t.run_id], foreignColumns: [runs.user_id, runs.id] }).onDelete("cascade"),
-  check("channel_events_channel", sql`${t.channel} IN ('whatsapp','elevenlabs')`)]);
+  check("channel_events_channel", sql`${t.channel} IN ('whatsapp','elevenlabs','email')`)]);
+// Caixa de entrada lida por IMAP: uma por conta, com o cursor (UIDVALIDITY + último UID) e a próxima leitura.
+export const emailInboxes = pgTable("email_inboxes", {
+  user_id: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  body: jsonb("body").notNull().default(sql`'{}'::jsonb`), next_poll_at: time("next_poll_at").notNull().defaultNow(),
+}, (t) => [index("email_inboxes_due").on(t.next_poll_at)]);
 export const channelDeliveries = pgTable("channel_deliveries", {
   user_id: uuid("user_id").notNull(), job_id: uuid("job_id").notNull(), run_id: text("run_id").notNull(),
   status: text("status").notNull().default("pending"), updated_at: time("updated_at").notNull().defaultNow(),

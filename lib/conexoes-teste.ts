@@ -11,6 +11,7 @@ export async function testarConexao(id: string): Promise<Resultado> {
   if (id.startsWith("mcp:")) return testarMCP(id.slice(4));
   if (id === "whatsapp") return (await import("./whatsapp")).testarWhatsApp();
   if (id === "elevenlabs") return (await import("./elevenlabs")).testarElevenLabs();
+  if (id === "email") return (await import("./email-entrada")).testarEmail();
   throw new FlowError("Conexão desconhecida.");
 }
 async function testarOpenRouter(): Promise<Resultado> {

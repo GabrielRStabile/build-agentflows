@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
     "sharp",
     "@brave/brave-search-mcp-server",
     "@modelcontextprotocol/server-postgres",
+    "imapflow",
   ],
   outputFileTracingIncludes: {
     "/*": [

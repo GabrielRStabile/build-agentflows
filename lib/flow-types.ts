@@ -163,6 +163,9 @@ export type Run = {
   // Quem escreveu pelo WhatsApp. Só existe quando o Início declara whatsapp_telefone ou whatsapp_nome:
   // fluxo que não pede o número não o guarda.
   remetente?: { telefone: string; nome: string };
+  // E-mail que disparou a execução. Mesma regra: só existe quando o Início declara email_remetente,
+  // email_nome ou email_assunto.
+  email?: { remetente: string; nome: string; assunto: string };
   output: string;
   error?: string;
   graph: Graph;
