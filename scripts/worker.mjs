@@ -11,6 +11,7 @@ import { deliverAuthMail, senderStatus } from "../lib/saas-mail.ts";
 import { cleanupAuth } from "../lib/saas-auth.ts";
 import { runBudgetMs } from "../lib/run-limits.ts";
 import { dispatchDueSchedules } from "../lib/tenant-schedules.ts";
+import { dispatchDueInboxes } from "../lib/email-entrada.ts";
 
 // A deploy stops claiming new jobs but lets active runs finish (LIMITE_EXECUCAO_SEGUNDOS, 180 s by default);
 // only after DRAIN_MS are they aborted. Keep stop_grace_period above DRAIN_MS + EXIT_MARGIN_MS.
@@ -20,6 +21,7 @@ const log = (evento, extra) => console.log(JSON.stringify({ evento, ...extra, em
 const db = saasDatabase(), id = randomUUID(), stop = new AbortController(), drain = new AbortController();
 const active = new Set();
 let mail = Promise.resolve(), sendingMail = false, lastMaintenance = 0, lastSchedules = 0, hint;
+let inboxes = Promise.resolve(), readingInboxes = false, lastInboxes = 0;
 for (const signal of ["SIGTERM", "SIGINT"]) process.once(signal, () => {
   stop.abort();
   setTimeout(() => drain.abort(), DRAIN_MS).unref();
@@ -44,6 +46,13 @@ try {
         lastSchedules = Date.now();
         const agendados = await dispatchDueSchedules(db);
         if (agendados) log("agendamentos_disparados", { quantidade: agendados });
+      }
+      // Caixas de e-mail vinculadas a fluxos: IMAP leva segundos, então roda fora do laço, uma rodada por vez.
+      if (!readingInboxes && Date.now() - lastInboxes > 5000) {
+        readingInboxes = true; lastInboxes = Date.now();
+        inboxes = dispatchDueInboxes(db).then((lidas) => { if (lidas) log("caixas_lidas", { quantidade: lidas }); })
+          .catch(() => console.error("Não foi possível ler as caixas de e-mail."))
+          .finally(() => { readingInboxes = false; });
       }
       if (!sendingMail && process.env.RESEND_API_KEY && process.env.RESEND_FROM) {
         sendingMail = true;
@@ -73,7 +82,7 @@ try {
   }
 } finally {
   const deadline = setTimeout(() => process.exit(1), DRAIN_MS + EXIT_MARGIN_MS); deadline.unref();
-  await Promise.allSettled([...active, mail]);
+  await Promise.allSettled([...active, mail, inboxes]);
   await db.query("DELETE FROM worker_heartbeats WHERE id=$1", [id]);
   closeQueue(); await db.close(); clearTimeout(deadline);
 }

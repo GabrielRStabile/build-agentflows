@@ -404,6 +404,8 @@ export async function execute(r: Run, externalSignal?: AbortSignal): Promise<Run
         r.state = JSON.parse(c.state || "{}");
         if (r.remetente) for (const [key, value] of [["whatsapp_telefone", r.remetente.telefone], ["whatsapp_nome", r.remetente.nome]])
           if (Object.hasOwn(r.state, key)) r.state[key] = value;
+        if (r.email) for (const [key, value] of [["email_remetente", r.email.remetente], ["email_nome", r.email.nome], ["email_assunto", r.email.assunto]])
+          if (Object.hasOwn(r.state, key)) r.state[key] = value;
         output = r.input;
       }
       if (k === "end") {

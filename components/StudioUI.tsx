@@ -84,6 +84,7 @@ export type IconName =
   | "history"
   | "chevron"
   | "whatsapp"
+  | "mail"
   | "call"
   | "mic"
   | "speaker"
@@ -268,6 +269,7 @@ const paths: Record<string, ReactNode> = {
   speaker: (
     <path d="M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
   ),
+  mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></>,
   whatsapp: (
     <>
       <path d="M3 21l1.6-4.6A8.5 8.5 0 1 1 8 19.6z" />

@@ -12,7 +12,7 @@ export async function PUT(req: Request) {
   return requestApi(req, async () => {
     const b = await body(req);
     const campos = b.campos as Record<string, unknown> | undefined;
-    for (const key of ["WHATSAPP_FLOW_ID", "ELEVENLABS_FLOW_ID"]) {
+    for (const key of ["WHATSAPP_FLOW_ID", "ELEVENLABS_FLOW_ID", "EMAIL_FLOW_ID"]) {
       const id = campos?.[key];
       if (typeof id === "string" && id) {
         await getTenantFlow(id);
@@ -23,6 +23,12 @@ export async function PUT(req: Request) {
       }
     }
     salvarCampos(campos, b.aceiteWhatsApp);
+    // Caixa de e-mail: a leitura é do worker. Salvar põe a caixa na fila na mesma transação da configuração.
+    if (campos && Object.keys(campos).some((k) => k.startsWith("EMAIL_"))) {
+      const { agendarLeitura } = await import("@/lib/email-entrada");
+      const { user, config } = currentTenant();
+      config.guards.push((sql) => agendarLeitura(sql, user.id));
+    }
     // Ao salvar o WhatsApp, o endereço de avisos é cadastrado no provedor (Z-API e ZapperHub).
     let aviso: string | null = null;
     if (campos && Object.keys(campos).some((k) => /^(WHATSAPP_|ZAPI_|ZAPPERHUB_)/.test(k))) {

@@ -6,6 +6,7 @@ import { Icon, Modal, request } from "./StudioUI";
 const TABS = [
   ["whatsapp", "WhatsApp"],
   ["calls", "Ligações"],
+  ["email", "E-mail"],
   ["dev", "cURL"],
   ["mcp", "Conector MCP"],
 ] as const;
@@ -18,6 +19,7 @@ type CampoStatus = {
   tipo: "text" | "secret" | "select";
   opcional?: boolean;
   ajuda?: string;
+  placeholder?: string;
   mascarado: string | null;
   valor?: string;
 };
@@ -25,6 +27,12 @@ type Channels = {
   whatsapp: { provedor: string | null; configurado: boolean; fluxo: string | null };
   elevenlabs: { configurado: boolean };
   ligacao: { configurada: boolean; fluxo: string | null; campos: CampoStatus[]; aviso: string };
+  email: {
+    configurado: boolean;
+    fluxo: string | null;
+    campos: CampoStatus[];
+    situacao: { lidaEm: string | null; recebidas: number; ignoradas: number; ultimaIgnorada: string | null; erro: string | null } | null;
+  };
 };
 // Diálogo de implantação: canais, código de acesso e um exemplo por
 // linguagem para chamar a configuração salva do fluxo.
@@ -52,7 +60,8 @@ export function IntegrationDialog({
     [flows, setFlows] = useState<Flow[]>([]),
     [drafts, setDrafts] = useState<Record<string, string>>({}),
     [phone, setPhone] = useState(""),
-    [called, setCalled] = useState("");
+    [called, setCalled] = useState(""),
+    [mailTest, setMailTest] = useState<{ ok: boolean; mensagem: string } | null>(null);
   const loadChannels = () =>
     Promise.all([request<Channels>("/api/conexoes"), request<Flow[]>("/api/flows")])
       .then(([c, f]) => {
@@ -274,6 +283,109 @@ ${authenticated ? "# Envie o mesmo cabeçalho Authorization." : "# Acesso públi
                   </button>
                 )}
               </div>
+            </>
+          )}
+        </section>
+      ) : tab === "email" ? (
+        <section className="integration-section">
+          <h3>Receber por e-mail</h3>
+          {!channels ? (
+            <p>Consultando conexões…</p>
+          ) : (
+            <>
+              <p>
+                Cada e-mail novo que chega na pasta escolhida executa o fluxo vinculado. A entrada
+                traz remetente, assunto e texto; os anexos aparecem só pelo nome. A caixa é lida a
+                cada minuto, só para leitura: nada é marcado como lido, movido ou apagado. E-mails
+                que já estavam lá antes de vincular não disparam o fluxo.
+              </p>
+              <div className="node-fields">
+                {channels.email.campos.map((c) => (
+                  <label key={c.chave}>
+                    {c.rotulo}
+                    <input
+                      type={c.tipo === "secret" ? "password" : "text"}
+                      autoComplete="off"
+                      value={drafts[c.chave] ?? (c.tipo === "secret" ? "" : c.valor || "")}
+                      placeholder={c.tipo === "secret" ? c.mascarado || "" : c.placeholder || ""}
+                      onChange={(e) => setDrafts({ ...drafts, [c.chave]: e.target.value })}
+                    />
+                    {c.ajuda && <small>{c.ajuda}</small>}
+                  </label>
+                ))}
+              </div>
+              <p className="connection-note">
+                Para usar no fluxo, declare no Início as variáveis <code>email_remetente</code>,{" "}
+                <code>email_nome</code> e <code>email_assunto</code> (por exemplo,{" "}
+                <code>{"{{fluxo.email_remetente}}"}</code>). A resposta não volta por e-mail: o
+                fluxo decide o que fazer com o resultado.
+              </p>
+              <p className="connection-note">
+                {channels.email.fluxo === flow.id
+                  ? "Este fluxo recebe os e-mails da caixa."
+                  : channels.email.fluxo
+                    ? `Hoje os e-mails vão para “${flowName(channels.email.fluxo)}”.`
+                    : "Nenhum fluxo recebe os e-mails ainda."}
+              </p>
+              {channels.email.situacao && (
+                <p className={`connection-result ${channels.email.situacao.erro ? "fail" : "ok"}`}>
+                  {channels.email.situacao.erro
+                    ? `Última leitura falhou: ${channels.email.situacao.erro}`
+                    : channels.email.situacao.lidaEm
+                      ? `Lida às ${new Date(channels.email.situacao.lidaEm).toLocaleTimeString("pt-BR")}. ${channels.email.situacao.recebidas} e-mail(s) recebido(s) desde que foi vinculada.`
+                      : "Aguardando a primeira leitura (até um minuto)."}
+                  {channels.email.situacao.ignoradas > 0 && ` ${channels.email.situacao.ignoradas} ignorado(s); o último: ${channels.email.situacao.ultimaIgnorada}.`}
+                </p>
+              )}
+              {publishHint}
+              <div className="studio-actions">
+                <button
+                  className="studio-button"
+                  disabled={busy || !Object.keys(drafts).some((k) => k.startsWith("EMAIL_"))}
+                  onClick={() =>
+                    saveChannel(
+                      Object.fromEntries(
+                        Object.entries(drafts)
+                          .filter(([k]) => k.startsWith("EMAIL_"))
+                          .map(([k, v]) => [k, v === "" ? null : v]),
+                      ),
+                    )
+                  }
+                >
+                  Salvar dados do e-mail
+                </button>
+                <button
+                  className="studio-button subtle"
+                  disabled={busy || !channels.email.configurado}
+                  onClick={() =>
+                    act(async () => {
+                      setMailTest(null);
+                      setMailTest(await request<{ ok: boolean; mensagem: string }>("/api/conexoes/testar", "POST", { id: "email" }));
+                    })
+                  }
+                >
+                  Testar conexão
+                </button>
+                {channels.email.fluxo === flow.id ? (
+                  <button
+                    className="studio-button danger"
+                    disabled={busy}
+                    onClick={() => saveChannel({ EMAIL_FLOW_ID: null })}
+                  >
+                    Desvincular do e-mail
+                  </button>
+                ) : (
+                  <button
+                    className="studio-button primary"
+                    disabled={busy || !flow.published || !channels.email.configurado}
+                    onClick={() => saveChannel({ EMAIL_FLOW_ID: flow.id })}
+                  >
+                    <Icon name="mail" size={16} />
+                    Vincular este fluxo ao e-mail
+                  </button>
+                )}
+              </div>
+              {mailTest && <p className={`connection-result ${mailTest.ok ? "ok" : "fail"}`}>{mailTest.mensagem}</p>}
             </>
           )}
         </section>

@@ -9,6 +9,7 @@ import { FlowError } from "./flow-store";
 import { TOOL_CREDENTIAL_KEYS } from "./tool-credentials";
 import { MEDIA_PROVIDERS } from "./media-models";
 import { mediaCredentials } from "./media-credentials";
+import { currentTenant } from "./tenant-context";
 export type Campo = {
   chave: string;
   rotulo: string;
@@ -44,10 +45,20 @@ export const LIGACAO_CAMPOS: Campo[] = [
   { chave: "ELEVENLABS_PHONE_NUMBER_ID", rotulo: "Número para ligações", tipo: "text", ajuda: "Identificador do número importado na ElevenLabs (Twilio ou SIP)." },
   { chave: "ELEVENLABS_WEBHOOK_SECRET", rotulo: "Segredo do aviso de fim de ligação", tipo: "secret", opcional: true, ajuda: "Copie do aviso pós-ligação em Conversational AI › Settings." },
 ];
+// E-mail de entrada: caixa lida por IMAP pelo worker (lib/email-entrada.ts), configurada em Implantar › E-mail.
+export const EMAIL_CAMPOS: Campo[] = [
+  { chave: "EMAIL_IMAP_HOST", rotulo: "Servidor IMAP", tipo: "text", placeholder: "imap.gmail.com", ajuda: "Gmail: imap.gmail.com · Yahoo: imap.mail.yahoo.com · iCloud: imap.mail.me.com · Zoho: imap.zoho.com." },
+  { chave: "EMAIL_IMAP_PORTA", rotulo: "Porta", tipo: "text", opcional: true, placeholder: "993" },
+  { chave: "EMAIL_IMAP_USUARIO", rotulo: "Endereço de e-mail", tipo: "text", placeholder: "voce@empresa.com" },
+  { chave: "EMAIL_IMAP_SENHA", rotulo: "Senha de app", tipo: "secret", ajuda: "Não é a senha normal da conta. No Gmail, crie em myaccount.google.com/apppasswords (exige verificação em duas etapas). Contas Microsoft (Outlook, Hotmail, 365) não aceitam mais senha de app por IMAP." },
+  { chave: "EMAIL_IMAP_PASTA", rotulo: "Pasta", tipo: "text", opcional: true, placeholder: "INBOX", ajuda: "Pasta lida pelo fluxo. Use um marcador ou filtro do provedor para mandar só os e-mails certos para ela." },
+];
 const CHAVES_LIVRES = new Set([
   ...WHATSAPP_CAMPOS.map((c) => c.chave),
   ...ELEVENLABS_CAMPOS.map((c) => c.chave),
   ...LIGACAO_CAMPOS.map((c) => c.chave),
+  ...EMAIL_CAMPOS.map((c) => c.chave),
+  "EMAIL_FLOW_ID",
   "ELEVENLABS_VOICE_ID",
   "WHATSAPP_FLOW_ID",
   "ELEVENLABS_FLOW_ID",
@@ -64,6 +75,8 @@ export function salvarCampos(campos: unknown, aceiteWhatsApp?: unknown) {
     if (!CHAVES_LIVRES.has(chave)) throw new FlowError(`Campo desconhecido: ${chave}.`);
     if (valor !== null && (typeof valor !== "string" || valor.length > 4000))
       throw new FlowError(`Valor inválido em ${chave}.`);
+    if (chave.startsWith("EMAIL_IMAP_") && typeof valor === "string" && /[\r\n]/.test(valor))
+      throw new FlowError("Os dados do e-mail não podem ter quebras de linha.");
     if (MEDIA_PROVIDERS.some((provider) => provider.key === chave) && typeof valor === "string" && (!valor.trim() || /[\r\n]/.test(valor)))
       throw new FlowError("Cole uma chave de imagem válida, sem quebras de linha.");
   }
@@ -175,6 +188,9 @@ export function whatsappConfigurado() {
   if (p === "zapperhub") return !!getConfig("ZAPPERHUB_KEY");
   return false;
 }
+export function emailConfigurado() {
+  return !!(getConfig("EMAIL_IMAP_HOST") && getConfig("EMAIL_IMAP_USUARIO") && getConfig("EMAIL_IMAP_SENHA"));
+}
 export function elevenLabsConfigurado() {
   return !!getConfig("ELEVENLABS_API_KEY");
 }
@@ -213,6 +229,12 @@ export async function statusConexoes(origem: string) {
       fluxo: getConfig("ELEVENLABS_FLOW_ID") || null,
       campos: statusCampos(ELEVENLABS_CAMPOS),
       aviso: `${origem}/webhook/elevenlabs?chave=${channelKey("elevenlabs")}`,
+    },
+    email: {
+      configurado: emailConfigurado(),
+      fluxo: getConfig("EMAIL_FLOW_ID") || null,
+      campos: statusCampos(EMAIL_CAMPOS),
+      situacao: await (await import("./email-entrada")).situacaoDaCaixa(currentTenant().db, currentTenant().user.id),
     },
     ligacao: {
       configurada: ligacaoConfigurada(),

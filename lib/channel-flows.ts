@@ -17,28 +17,32 @@ import { assertJobLease, currentJobLease } from "./saas-job-context";
 import type { Channel } from "./channel-auth";
 import type { Sql } from "./saas-db";
 import type { Run } from "./flow-types";
+import { EMAIL_CHAVES, textoDoEmail, type EmailRecebido } from "./email-entrada";
 
-const keys = (channel: Channel) => channel === "whatsapp"
+type Canal = Channel | "email";
+
+const keys = (channel: Canal) => channel === "email" ? EMAIL_CHAVES : channel === "whatsapp"
   ? ["WHATSAPP_PROVEDOR", "WHATSAPP_FLOW_ID", "WHATSAPP_WEBHOOK_CHAVE", "WHATSAPP_ACEITE", "WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_APP_SECRET", "ZAPI_INSTANCE_ID", "ZAPI_TOKEN", "ZAPI_CLIENT_TOKEN", "ZAPPERHUB_URL", "ZAPPERHUB_KEY"]
   : ["ELEVENLABS_FLOW_ID", "ELEVENLABS_WEBHOOK_CHAVE", "ELEVENLABS_WEBHOOK_SECRET", "ELEVENLABS_AGENT_ID"];
-const fingerprint = (channel: Channel, read: (key: string) => string | undefined = getConfig) => hashToken(JSON.stringify(keys(channel).map(key => [key, read(key) || ""])));
+const fingerprint = (channel: Canal, read: (key: string) => string | undefined = getConfig) => hashToken(JSON.stringify(keys(channel).map(key => [key, read(key) || ""])));
 export function textoDaLigacao(l: PosLigacao) {
   return [l.telefone ? `Telefone: ${l.telefone}` : "", l.resumo ? `Resumo: ${l.resumo}` : "",
     l.variaveis.contexto ? `Contexto da ligação: ${l.variaveis.contexto}` : "", "", "Transcrição:", l.transcricao || "(sem falas registradas)"]
     .filter((line, i, all) => line !== "" || (i > 0 && all[i - 1] !== "")).join("\n").trim();
 }
-type Conversa = { session: string; remetente: NonNullable<Run["remetente"]> };
+type Conversa = { session: string; remetente?: NonNullable<Run["remetente"]>; email?: NonNullable<Run["email"]> };
 const VARIAVEIS_DO_REMETENTE = ["whatsapp_telefone", "whatsapp_nome"];
-function pedeRemetente(run: Run) {
+const VARIAVEIS_DO_EMAIL = ["email_remetente", "email_nome", "email_assunto"];
+function declara(run: Run, variaveis: string[]) {
   const start = run.graph.nodes.find(n => n.data.kind === "start");
   try {
     const state = JSON.parse(start?.data.config.state || "{}") as Record<string, unknown>;
-    return VARIAVEIS_DO_REMETENTE.some(key => Object.hasOwn(state, key));
+    return variaveis.some(key => Object.hasOwn(state, key));
   } catch {
     return false;
   }
 }
-async function enqueueEvent(channel: Channel, identity: string[], input: string, recipient?: string, conversa?: Conversa) {
+async function enqueueEvent(channel: Canal, identity: string[], input: string, recipient?: string, conversa?: Conversa) {
   const { db, user } = currentTenant();
   const flowId = getConfig(`${channel.toUpperCase()}_FLOW_ID`);
   if (!flowId) return null;
@@ -50,7 +54,8 @@ async function enqueueEvent(channel: Channel, identity: string[], input: string,
   // As execuções concluídas do mesmo remetente viram o histórico, como na sessão da integração HTTP.
   const history = conversa ? await sessionHistoryIds(flowId, conversa.session) : undefined;
   const run = await buildRun(flowId, input, true, undefined, undefined, history, undefined, undefined, conversa?.session);
-  if (conversa && pedeRemetente(run)) run.remetente = conversa.remetente;
+  if (conversa?.remetente && declara(run, VARIAVEIS_DO_REMETENTE)) run.remetente = conversa.remetente;
+  if (conversa?.email && declara(run, VARIAVEIS_DO_EMAIL)) run.email = conversa.email;
   run.queued = true;
   const result = await db.transaction(async sql => {
     await queueLock(sql);
@@ -83,6 +88,13 @@ export async function processarWhatsApp(m: Recebida) {
   // A sessão é o hash da conta e do número: liga a conversa sem gravar o telefone em claro.
   const session = `whatsapp:${hashToken(JSON.stringify([m.provedor, account || "", m.de]))}`;
   return enqueueEvent("whatsapp", [m.provedor, account || "", m.de, m.id], m.texto, m.de, { session, remetente: { telefone: m.de, nome: m.nome || "" } });
+}
+/** Cada e-mail novo da caixa lida pelo worker. A conversa é por remetente, como no WhatsApp; nada é respondido
+ * por este canal: o que fazer com a saída é decisão do fluxo. */
+export async function processarEmail(m: EmailRecebido) {
+  const conta = [getConfig("EMAIL_IMAP_HOST") || "", (getConfig("EMAIL_IMAP_USUARIO") || "").toLowerCase()];
+  const session = `email:${hashToken(JSON.stringify([...conta, m.de.endereco.toLowerCase()]))}`;
+  return enqueueEvent("email", [...conta, m.id], textoDoEmail(m), undefined, { session, email: { remetente: m.de.endereco, nome: m.de.nome, assunto: m.assunto } });
 }
 
 /** Persist a visible receipt in the same transaction as the delivery state. */
