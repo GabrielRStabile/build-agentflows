@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## 0.56.0 — 30/10/2026
+
+- **E-mail como entrada de fluxo** (Implantar › E-mail): conecte uma caixa por IMAP com senha de app (servidor, endereço, senha de app e pasta, que é opcional e por padrão INBOX) e vincule o fluxo. Cada e-mail novo vira uma execução, com a entrada `De`, `Assunto`, `Data` e o texto. HTML vira texto, e os anexos aparecem só pelo nome. A resposta não volta por e-mail: o fluxo decide o que fazer com o resultado.
+- O Início recebe `email_remetente`, `email_nome` e `email_assunto` quando declara essas variáveis (`{{fluxo.email_remetente}}`). Fluxo que não as declara não guarda o remetente. A conversa é por remetente, como no WhatsApp: a memória dos blocos responde no contexto das mensagens anteriores da mesma pessoa.
+- A caixa é lida pelo worker a cada minuto, só para leitura: nada é marcado como lido, movido ou apagado. O que já estava na caixa ao vincular não dispara o fluxo, e trocar servidor, conta, senha, pasta ou fluxo recomeça a leitura do ponto atual. Cada leitura entrega até 10 e-mails, em ordem, e o restante fica para a seguinte. Fila cheia ou cota do mês param a leitura sem pular o e-mail.
+- Ficam de fora os e-mails enviados pela própria conta (evita laço quando o fluxo escreve para a caixa), as respostas automáticas de ausência e os textos acima de 20 mil caracteres. A mesma mensagem (mesmo `Message-ID`) não executa duas vezes. Implantar mostra a última leitura, quantos e-mails entraram, o último ignorado e o motivo, e tem o botão "Testar conexão".
+- Segurança: o servidor IMAP precisa ser um nome público. O DNS é resolvido e conferido uma vez e a conexão vai ao endereço conferido, com o certificado validado pelo nome informado. Só as portas 993 (TLS) e 143 (STARTTLS obrigatório). A senha de app fica cifrada com as demais credenciais da conta.
+- Contas Microsoft (Outlook, Hotmail, 365) não aceitam senha de app por IMAP desde que a Microsoft desligou a autenticação básica, e o campo avisa isso.
+
 ## 0.55.2 — 27/10/2026
 
 - Habilidades do Agente: o botão "Adicionar habilidade" segue o padrão de "Adicionar ferramenta" e "Adicionar base de conhecimento" (largura total, no fim da seção). Com habilidades da conta ainda fora do agente, ele abre o menu para enviar um arquivo ou escolher uma delas; sem elas, abre direto o seletor de arquivos.
