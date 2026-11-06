@@ -1,5 +1,11 @@
 # Histórico de versões
 
+## 0.57.0 — 06/11/2026
+
+- **Biblioteca de modelos.** "Comece com um modelo" deixa de ser uma grade de três cartões e vira uma biblioteca: áreas na coluna lateral (com a contagem de cada uma), busca por tarefa que ignora acento e maiúsculas ("reuniao" acha "reunião") e "Sugeridos para começar" no topo. Sem resultado, a tela oferece limpar a busca ou começar do zero.
+- Cada modelo abre um detalhe antes de virar fluxo: o que cada bloco faz, na ordem, o que você informa na primeira mensagem e o que vai precisar (a conexão de IA e, nos modelos com Decisão, uma credencial do OpenRouter ou da OpenAI). "Usar este modelo" cria o fluxo; "Voltar aos modelos" volta para a lista.
+- Nove modelos novos, um por área: triagem de currículos com aprovação (RH), análise de reembolso (Financeiro), revisor de contrato em duas etapas (Jurídico), preparação de reunião com cliente (Vendas), plano de aula com quiz (Educação), redator e crítico com revisão automática (Marketing), análise de feedback (Customer Success), comparador de propostas de fornecedores (Compras) e da reunião ao plano de ação (Gestão). Os três modelos anteriores continuam.
+
 ## 0.56.0 — 30/10/2026
 
 - **E-mail como entrada de fluxo** (Implantar › E-mail): conecte uma caixa por IMAP com senha de app (servidor, endereço, senha de app e pasta, que é opcional e por padrão INBOX) e vincule o fluxo. Cada e-mail novo vira uma execução, com a entrada `De`, `Assunto`, `Data` e o texto. HTML vira texto, e os anexos aparecem só pelo nome. A resposta não volta por e-mail: o fluxo decide o que fazer com o resultado.
