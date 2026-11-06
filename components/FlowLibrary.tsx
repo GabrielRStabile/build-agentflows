@@ -2,13 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Flow, Kind } from "@/lib/flow-types";
+import type { Flow } from "@/lib/flow-types";
 import { BLOCKS } from "@/lib/flow-types";
-import { PRESETS, NODE_STYLE } from "@/lib/flow-presets";
+import { NODE_STYLE } from "@/lib/flow-presets";
 import { portableGraph } from "@/lib/flow-portable";
 import { Icon, IconButton, Modal, StudioShell, announcePlanLimit, request } from "./StudioUI";
 import type { AccountUsage } from "@/lib/saas-plan";
 import { ChatGPTConnection, useChatGPT } from "./ChatGPTConnection";
+import { PresetLibrary } from "./PresetLibrary";
 export function FlowLibrary() {
   const router = useRouter(),
     file = useRef<HTMLInputElement>(null),
@@ -422,46 +423,12 @@ export function FlowLibrary() {
         />
       )}
       {templates && (
-        <Modal
-          title="Comece com um modelo"
+        <PresetLibrary
+          busy={busy}
           onClose={() => setTemplates(false)}
-          wide
-        >
-          <p className="modal-lead">
-            Escolha um ponto de partida. Cada bloco pode ser adaptado ao seu
-            processo.
-          </p>
-          <div className="preset-grid">
-            {PRESETS.map((p) => (
-              <button
-                key={p.id}
-                className="preset-card"
-                disabled={busy}
-                onClick={() => create(p.id)}
-              >
-                <span className="preset-category">{p.category}</span>
-                <div className="preset-chain">
-                  {p.kinds.map((k: Kind, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        color: "white",
-                        background: NODE_STYLE[k].color,
-                      }}
-                    >
-                      <Icon name={k} size={22} />
-                    </span>
-                  ))}
-                </div>
-                <h3>{p.name}</h3>
-                <p>{p.description}</p>
-                <strong>
-                  Usar este modelo <Icon name="plus" size={15} />
-                </strong>
-              </button>
-            ))}
-          </div>
-        </Modal>
+          onPick={(id) => create(id)}
+          onBlank={() => create()}
+        />
       )}
       {toDelete && (
         <Modal title="Excluir Fluxo Agêntico" onClose={() => setToDelete(null)}>
